@@ -1,6 +1,6 @@
 # Product Overview
 
-Paca is a collaborative task management platform for humans and AI agents working on the same board.
+Paca is a lightweight open-source collaborative task management platform for humans and AI agents working on the same board.
 
 ## Core Model
 

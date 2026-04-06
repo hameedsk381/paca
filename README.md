@@ -4,7 +4,7 @@
 
 <h1 align="center">Paca</h1>
 
-<p align="center"><strong>The open-source collaborative task management engine</strong></p>
+<p align="center"><strong>The lightweight open-source collaborative task management engine</strong></p>
 
 <p align="center">
 	Seamlessly orchestrate workflows between human intelligence and AI agents.<br />
