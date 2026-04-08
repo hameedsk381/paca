@@ -48,6 +48,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { usePermissions } from "@/hooks/use-permissions";
 import { ApiErrorCode, getApiErrorCode } from "@/lib/api-error";
 import { currentUserQueryOptions } from "@/lib/auth-api";
+import { cn } from "@/lib/utils";
 import {
 	deleteProject,
 	type ProjectMember,
