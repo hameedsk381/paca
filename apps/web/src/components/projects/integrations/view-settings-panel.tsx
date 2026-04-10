@@ -15,6 +15,9 @@ const COLUMN_BY_OPTIONS = ["Status", "Assignee", "Priority"];
 const SWIMLANE_OPTIONS = ["None", "Assignee", "Priority", "Type"];
 const SLICE_BY_OPTIONS = ["None", "Assignee", "Priority", "Type"];
 
+/** Converts a display label to a stable storage key: "Story Points" → "story_points" */
+const labelToKey = (label: string) => label.toLowerCase().replace(/\s+/g, "_");
+
 interface ViewSettingsPanelProps {
 	view: IntegrationView | null;
 	open: boolean;
@@ -49,18 +52,20 @@ function SettingSelect({
 }: {
 	value: string | undefined;
 	options: string[];
-	onChange: (v: string) => void;
+	onChange: (v: string | undefined) => void;
 	placeholder?: string;
 }) {
 	return (
 		<select
 			value={value ?? ""}
-			onChange={(e) => onChange(e.target.value)}
+			onChange={(e) =>
+				onChange(e.target.value === "" ? undefined : e.target.value)
+			}
 			className="flex-1 rounded-md border border-border bg-background px-2 py-1 text-xs outline-none focus:ring-2 focus:ring-primary/30 min-w-0"
 		>
 			<option value="">{placeholder}</option>
 			{options.map((o) => (
-				<option key={o} value={o.toLowerCase()}>
+				<option key={o} value={labelToKey(o)}>
 					{o}
 				</option>
 			))}
@@ -118,7 +123,13 @@ export function ViewSettingsPanel({
 	};
 
 	const update = (patch: Partial<ViewConfig>) => {
-		setDraft((prev) => ({ ...prev, ...patch }));
+		setDraft((prev) => {
+			const next = { ...prev, ...patch };
+			for (const key of Object.keys(patch) as (keyof ViewConfig)[]) {
+				if (patch[key] === undefined) delete next[key];
+			}
+			return next;
+		});
 	};
 
 	const handleSave = async () => {
