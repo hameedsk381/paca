@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertCircle } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
 	createTask,
 	sprintsQueryOptions,
@@ -8,6 +8,7 @@ import {
 	taskQueryOptions,
 	updateTask,
 } from "@/lib/integration-api";
+import { customFieldsQueryOptions } from "@/lib/project-api";
 import { cn } from "@/lib/utils";
 import { getTaskTypeIconComponent } from "../../task-types/task-type-icons";
 import { getPriority } from "../priority";
@@ -15,11 +16,10 @@ import { ActivityPane } from "./activity-pane";
 import { AttachmentsSection } from "./attachments-section";
 import { ChecklistsSection } from "./checklists-section";
 import { DescriptionSection } from "./description-section";
+import { mapApiFieldToUi } from "./helpers";
 import { PropertiesPanel } from "./properties-panel";
 import { SubtasksSection } from "./subtasks-section";
-// Sub-components
 import { TaskHeader } from "./task-header";
-// Types
 import type { ActivityEntry, TaskDetailModalProps } from "./types";
 
 // Re-exports for consumers
@@ -42,7 +42,6 @@ export function TaskDetailModal({
 	statuses,
 	taskTypes,
 	members = [],
-	customFields = [],
 	projectName,
 	integrationName,
 	projectId,
@@ -71,6 +70,16 @@ export function TaskDetailModal({
 		...sprintsQueryOptions(projectId ?? ""),
 		enabled: !!projectId && (open || mode === "page"),
 	});
+
+	// Fetch custom field definitions from API
+	const { data: apiCustomFields = [] } = useQuery({
+		...customFieldsQueryOptions(projectId ?? ""),
+		enabled: !!projectId && (open || mode === "page"),
+	});
+	const customFieldDefs = useMemo(
+		() => apiCustomFields.map(mapApiFieldToUi),
+		[apiCustomFields],
+	);
 
 	const status = statuses.find((s) => s.id === task?.status_id);
 	const taskType = taskTypes.find((t) => t.id === task?.task_type_id);
@@ -264,7 +273,8 @@ export function TaskDetailModal({
 								taskTypes={taskTypes}
 								members={members}
 								sprints={sprints}
-								initialCustomFields={customFields}
+								projectId={projectId}
+								initialCustomFields={customFieldDefs}
 								canEdit={canEdit}
 								onUpdate={handleUpdate}
 							/>

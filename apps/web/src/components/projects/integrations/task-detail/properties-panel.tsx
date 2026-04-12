@@ -27,6 +27,7 @@ type UpdatePayload = Partial<{
 	due_date: string | null;
 	tags: string[];
 	sprint_id: string | null;
+	custom_fields: Record<string, unknown>;
 }>;
 
 interface PropertiesPanelProps {
@@ -40,6 +41,7 @@ interface PropertiesPanelProps {
 	taskTypes?: TaskType[];
 	members?: ProjectMember[];
 	sprints?: Sprint[];
+	projectId?: string;
 	initialCustomFields?: CustomFieldDef[];
 	canEdit?: boolean;
 	onUpdate?: (payload: UpdatePayload) => void;
@@ -63,6 +65,7 @@ export function PropertiesPanel({
 	taskTypes = [],
 	members = [],
 	sprints = [],
+	projectId,
 	initialCustomFields = [],
 	canEdit = true,
 	onUpdate,
@@ -233,7 +236,7 @@ export function PropertiesPanel({
 									...task.custom_fields,
 									[cf.field_key]: v,
 								},
-							} as unknown as UpdatePayload);
+							});
 						}}
 						customOptions={cf.options}
 						canEdit={canEdit}
@@ -255,6 +258,7 @@ export function PropertiesPanel({
 			<AddFieldDialog
 				open={addFieldOpen}
 				onOpenChange={setAddFieldOpen}
+				projectId={projectId}
 				onAdd={(field) => setLocalCustomFields((prev) => [...prev, field])}
 			/>
 		</>

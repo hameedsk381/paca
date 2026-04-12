@@ -1,11 +1,16 @@
 import { X } from "lucide-react";
 import { useState } from "react";
+import {
+	createCustomFieldDefinition,
+	customFieldsQueryOptions,
+} from "@/lib/project-api";
+import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
-import { slugify } from "./helpers";
+import { mapApiFieldToUi, mapUiFieldTypeToApi, slugify } from "./helpers";
 import type { CustomFieldDef } from "./types";
 
-type FieldType = "Text" | "Number" | "Date" | "Checkbox" | "Select";
-const FIELD_TYPES: FieldType[] = [
+type UiFieldType = "Text" | "Number" | "Date" | "Checkbox" | "Select";
+const FIELD_TYPES: UiFieldType[] = [
 	"Text",
 	"Number",
 	"Date",
@@ -16,19 +21,23 @@ const FIELD_TYPES: FieldType[] = [
 interface AddFieldDialogProps {
 	open: boolean;
 	onOpenChange: (v: boolean) => void;
+	projectId?: string;
 	onAdd: (field: CustomFieldDef) => void;
 }
 
 export function AddFieldDialog({
 	open,
 	onOpenChange,
+	projectId,
 	onAdd,
 }: AddFieldDialogProps) {
+	const qc = useQueryClient();
 	const [displayName, setDisplayName] = useState("");
 	const [fieldKey, setFieldKey] = useState("");
 	const [keyManual, setKeyManual] = useState(false);
-	const [fieldType, setFieldType] = useState<FieldType>("Text");
+	const [fieldType, setFieldType] = useState<UiFieldType>("Text");
 	const [required, setRequired] = useState(false);
+	const [submitting, setSubmitting] = useState(false);
 
 	const reset = () => {
 		setDisplayName("");
@@ -36,22 +45,50 @@ export function AddFieldDialog({
 		setKeyManual(false);
 		setFieldType("Text");
 		setRequired(false);
+		setSubmitting(false);
 	};
 
 	if (!open) return null;
 
-	const handleCreate = () => {
+	const handleCreate = async () => {
 		if (!displayName.trim()) return;
-		onAdd({
-			id: crypto.randomUUID(),
-			display_name: displayName.trim(),
-			field_key: fieldKey || slugify(displayName),
-			field_type: fieldType,
-			required,
-			options: [],
-		});
-		reset();
-		onOpenChange(false);
+		const key = fieldKey || slugify(displayName);
+		const apiFieldType = mapUiFieldTypeToApi(fieldType);
+
+		if (projectId) {
+			setSubmitting(true);
+			try {
+				const created = await createCustomFieldDefinition(projectId, {
+					display_name: displayName.trim(),
+					field_key: key,
+					field_type: apiFieldType,
+					is_required: required,
+					options: fieldType === "Select" ? [] : undefined,
+				});
+				const mapped = mapApiFieldToUi(created);
+				onAdd(mapped);
+				await qc.invalidateQueries({
+					queryKey: customFieldsQueryOptions(projectId).queryKey,
+				});
+				reset();
+				onOpenChange(false);
+			} catch (err) {
+				console.error("Failed to create custom field:", err);
+			} finally {
+				setSubmitting(false);
+			}
+		} else {
+			onAdd({
+				id: crypto.randomUUID(),
+				display_name: displayName.trim(),
+				field_key: key,
+				field_type: fieldType,
+				required,
+				options: [],
+			});
+			reset();
+			onOpenChange(false);
+		}
 	};
 
 	return (
@@ -194,11 +231,11 @@ export function AddFieldDialog({
 					</button>
 					<button
 						type="button"
-						disabled={!displayName.trim()}
+						disabled={!displayName.trim() || submitting}
 						onClick={handleCreate}
 						className="rounded-lg bg-primary px-4 py-2 text-[13px] font-semibold text-primary-foreground disabled:opacity-40 hover:bg-primary/90 transition-all duration-150 shadow-sm disabled:shadow-none"
 					>
-						Create field
+						{submitting ? "Creating…" : "Create field"}
 					</button>
 				</div>
 			</div>
