@@ -1,3 +1,6 @@
+import type { CustomFieldDefinition, FieldType } from "@/lib/project-api";
+import type { CustomFieldDef } from "./types";
+
 export function formatDate(iso: string): string {
 	return new Date(iso).toLocaleDateString("en-US", {
 		month: "long",
@@ -28,9 +31,6 @@ export function slugify(s: string): string {
 		.replace(/_+/g, "_")
 		.slice(0, 64);
 }
-
-import type { CustomFieldDefinition, FieldType } from "@/lib/project-api";
-import type { CustomFieldDef } from "./types";
 
 const API_TO_UI_FIELD_TYPE: Record<FieldType, CustomFieldDef["field_type"]> = {
 	text: "Text",
