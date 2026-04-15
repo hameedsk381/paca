@@ -43,7 +43,7 @@ const COMING_SOON_FEATURES = [
 
 const PROJECT_PAGES = [
 	{
-		to: "/projects/$projectId/interactions",
+		to: "/projects/$projectId/interactions/backlog",
 		icon: BookOpen,
 		label: "Interactions",
 		description: "Product backlog & sprints",
