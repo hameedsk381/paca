@@ -37,7 +37,7 @@ export function StartSprintModal({
 	);
 	const [submitting, setSubmitting] = useState(false);
 
-	// Reset form when the sprint prop changes or the modal closes
+	// Reset form to the current sprint values when the modal closes
 	useEffect(() => {
 		if (!open) {
 			const today = new Date().toISOString().slice(0, 10);
