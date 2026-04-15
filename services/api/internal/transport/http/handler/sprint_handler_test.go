@@ -186,16 +186,34 @@ func TestCreateSprint_SeedsDefaultViews(t *testing.T) {
 	if boardView.Config.ColumnBy != "status" {
 		t.Errorf("expected board column_by=status, got %q", boardView.Config.ColumnBy)
 	}
-	if len(boardView.Config.Filters.TaskTypeIDs) == 0 {
-		t.Error("expected board view to seed task type filters")
+	// Board view must use the "normal" virtual group to include all non-system types.
+	if boardView.Config.Filters == nil || boardView.Config.Filters.TaskTypes == nil {
+		t.Error("expected board view to have a task type filter")
+	} else {
+		normalEntry, ok := boardView.Config.Filters.TaskTypes.Items["normal"]
+		if !ok || !normalEntry.IsNested() || !normalEntry.Config().All {
+			t.Error("expected board view task types to use the all-normal group")
+		}
 	}
-	if len(boardView.Config.Filters.SprintIDs) != 1 || boardView.Config.Filters.SprintIDs[0] != sprintID.String() {
-		t.Errorf("expected board sprint filter [%s], got %+v", sprintID, boardView.Config.Filters.SprintIDs)
+	// Board view must include the sprint in its sprints filter.
+	if boardView.Config.Filters == nil || boardView.Config.Filters.Sprints == nil {
+		t.Errorf("expected board view to have a sprint filter")
+	} else {
+		sprintEntry, ok := boardView.Config.Filters.Sprints.Items[sprintID.String()]
+		if !ok || sprintEntry.IsNested() || !sprintEntry.Flag() {
+			t.Errorf("expected board sprint filter to include %s, got %+v", sprintID, boardView.Config.Filters.Sprints)
+		}
 	}
 	if tableView.Config.ColumnBy != "status" {
 		t.Errorf("expected table column_by=status, got %q", tableView.Config.ColumnBy)
 	}
-	if len(tableView.Config.Filters.SprintIDs) != 1 || tableView.Config.Filters.SprintIDs[0] != sprintID.String() {
-		t.Errorf("expected table sprint filter [%s], got %+v", sprintID, tableView.Config.Filters.SprintIDs)
+	// Table view must also include the sprint in its sprints filter.
+	if tableView.Config.Filters == nil || tableView.Config.Filters.Sprints == nil {
+		t.Errorf("expected table view to have a sprint filter")
+	} else {
+		sprintEntry, ok := tableView.Config.Filters.Sprints.Items[sprintID.String()]
+		if !ok || sprintEntry.IsNested() || !sprintEntry.Flag() {
+			t.Errorf("expected table sprint filter to include %s, got %+v", sprintID, tableView.Config.Filters.Sprints)
+		}
 	}
 }

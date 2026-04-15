@@ -466,9 +466,7 @@ function ProjectInteractionsSection({ projectId }: { projectId: string }) {
 										>
 											<KanbanSquare className="size-4" />
 											<span className="flex-1 truncate">{sprint.name}</span>
-											{sprint.status === "active" && (
-												<span className="ml-auto flex size-1.5 shrink-0 rounded-full bg-emerald-500" />
-											)}
+
 										</SidebarMenuButton>
 									</SidebarMenuItem>
 								);

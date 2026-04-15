@@ -329,11 +329,31 @@ func TestCreateProject_SeedsDefaultViews(t *testing.T) {
 	if timelineView.ViewType != sprintdom.ViewTypeRoadmap {
 		t.Fatalf("expected roadmap timeline view, got %+v", timelineView.ViewType)
 	}
-	if len(backlogView.Config.Filters.TaskTypeIDs) != 2 {
-		t.Fatalf("expected non-system task type defaults on backlog view, got %+v", backlogView.Config.Filters.TaskTypeIDs)
+	// Backlog view must use the "normal" virtual group to include all non-system
+	// types dynamically.
+	if backlogView.Config.Filters == nil || backlogView.Config.Filters.TaskTypes == nil {
+		t.Fatalf("expected backlog view to have a task type filter, got %+v", backlogView.Config.Filters)
 	}
-	if len(timelineView.Config.Filters.TaskTypeIDs) != 1 {
-		t.Fatalf("expected epic-only timeline default, got %+v", timelineView.Config.Filters.TaskTypeIDs)
+	normalEntry, hasNormal := backlogView.Config.Filters.TaskTypes.Items["normal"]
+	if !hasNormal || !normalEntry.IsNested() || !normalEntry.Config().All {
+		t.Fatalf("expected backlog view task types to use the all-normal group, got %+v", backlogView.Config.Filters.TaskTypes)
+	}
+	// Timeline view must have exactly one explicit task type ID (Epic) and no
+	// virtual groups.
+	if timelineView.Config.Filters == nil || timelineView.Config.Filters.TaskTypes == nil {
+		t.Fatalf("expected timeline view to have a task type filter, got %+v", timelineView.Config.Filters)
+	}
+	if _, hasNormalTimeline := timelineView.Config.Filters.TaskTypes.Items["normal"]; hasNormalTimeline {
+		t.Fatalf("expected no normal group in timeline view task types")
+	}
+	epicCount := 0
+	for _, entry := range timelineView.Config.Filters.TaskTypes.Items {
+		if !entry.IsNested() && entry.Flag() {
+			epicCount++
+		}
+	}
+	if epicCount != 1 {
+		t.Fatalf("expected epic-only timeline default (1 explicit ID), got %+v", timelineView.Config.Filters.TaskTypes)
 	}
 }
 

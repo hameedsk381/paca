@@ -39,7 +39,6 @@ interface BoardViewProps {
 	canCreate: boolean;
 	canEdit: boolean;
 	searchQuery: string;
-	assigneeFilter: string | null;
 	tasksQueryKey: unknown[];
 	onCreateTask: (
 		statusId: string,
@@ -69,7 +68,6 @@ export function BoardView({
 	canCreate,
 	canEdit,
 	searchQuery,
-	assigneeFilter,
 	tasksQueryKey,
 	onCreateTask,
 	onTaskClick,
@@ -161,10 +159,9 @@ export function BoardView({
 					)
 						return false;
 				}
-				if (assigneeFilter && t.assignee_id !== assigneeFilter) return false;
 				return true;
 			}),
-		[tasks, searchQuery, assigneeFilter, taskIdPrefix],
+		[tasks, searchQuery, taskIdPrefix],
 	);
 
 	// ── Column tasks helper ───────────────────────────────────────────────────

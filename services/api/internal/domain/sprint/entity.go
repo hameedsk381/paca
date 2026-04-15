@@ -2,6 +2,8 @@
 package sprintdom
 
 import (
+	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -73,13 +75,87 @@ var ValidViewTypes = map[ViewType]bool{
 	ViewTypeRoadmap: true,
 }
 
-// ViewFilters holds the saved per-view filter settings.  When non-nil and
-// non-empty, these are applied when fetching tasks for the view.
+// FilterEntry is a discriminated union stored inside a FilterConfig's Items
+// map.  It represents either a plain boolean (include/exclude a specific item
+// by ID) or a nested FilterConfig (for named virtual groups such as "normal"
+// in task-type filters, which expands to all non-system types).
+//
+// JSON encoding: a boolean entry marshals as JSON true/false; a nested
+// FilterConfig entry marshals as a JSON object.
+type FilterEntry struct {
+	flag   bool
+	nested *FilterConfig
+}
+
+// FilterEntryInclude returns a FilterEntry that includes the item.
+func FilterEntryInclude() FilterEntry { return FilterEntry{flag: true} }
+
+// FilterEntryExclude returns a FilterEntry that excludes the item.
+func FilterEntryExclude() FilterEntry { return FilterEntry{flag: false} }
+
+// FilterEntryNested returns a FilterEntry wrapping a nested FilterConfig.
+func FilterEntryNested(c FilterConfig) FilterEntry { return FilterEntry{nested: &c, flag: false} }
+
+// IsNested reports whether this entry holds a nested FilterConfig.
+func (e FilterEntry) IsNested() bool { return e.nested != nil }
+
+// Flag returns the boolean flag value.  Only meaningful when IsNested is false.
+func (e FilterEntry) Flag() bool { return e.flag }
+
+// Config returns the nested FilterConfig pointer.  Only meaningful when IsNested is true.
+func (e FilterEntry) Config() *FilterConfig { return e.nested }
+
+// MarshalJSON encodes a boolean entry as JSON true/false and a nested entry as
+// a JSON object.
+func (e FilterEntry) MarshalJSON() ([]byte, error) {
+	if e.nested != nil {
+		return json.Marshal(e.nested)
+	}
+	return json.Marshal(e.flag)
+}
+
+// UnmarshalJSON decodes JSON true/false into a boolean entry and a JSON object
+// into a nested FilterConfig entry.
+func (e *FilterEntry) UnmarshalJSON(data []byte) error {
+	var b bool
+	if err := json.Unmarshal(data, &b); err == nil {
+		e.flag = b
+		e.nested = nil
+		return nil
+	}
+	var c FilterConfig
+	if err := json.Unmarshal(data, &c); err != nil {
+		return fmt.Errorf("FilterEntry: expected bool or object: %w", err)
+	}
+	e.nested = &c
+	return nil
+}
+
+// FilterConfig is a recursive, dimension-agnostic filter selector stored
+// inside a view's config.  It applies uniformly to task types, statuses,
+// assignees, sprints, and any future filter dimension.
+//
+// Semantics:
+//   - All=true  → start with every item included; Items entries act as
+//     exclusion (false) or sub-group overrides.
+//   - All=false → start with nothing included; Items entries act as inclusions.
+//
+// Item keys are either entity IDs (UUID strings) or named virtual groups.
+// The "normal" key in a task-type filter expands to all non-system types on
+// the client side, enabling dynamic inclusion without hard-coded ID snapshots.
+type FilterConfig struct {
+	All   bool                   `json:"all"`
+	Items map[string]FilterEntry `json:"items,omitempty"`
+}
+
+// ViewFilters holds the saved per-view filter configuration.
+// Each dimension is an optional FilterConfig selector.  A nil dimension means
+// no filter is applied for that dimension (i.e. include everything).
 type ViewFilters struct {
-	SprintIDs   []string `json:"sprint_ids,omitempty"`
-	StatusIDs   []string `json:"status_ids,omitempty"`
-	AssigneeIDs []string `json:"assignee_ids,omitempty"`
-	TaskTypeIDs []string `json:"task_type_ids,omitempty"`
+	TaskTypes *FilterConfig `json:"task_types,omitempty"`
+	Statuses  *FilterConfig `json:"statuses,omitempty"`
+	Assignees *FilterConfig `json:"assignees,omitempty"`
+	Sprints   *FilterConfig `json:"sprints,omitempty"`
 }
 
 // ViewConfig holds the display settings for a sprint view.

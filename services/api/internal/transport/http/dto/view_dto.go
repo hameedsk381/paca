@@ -25,13 +25,12 @@ type UpdateViewRequest struct {
 	Position *float64            `json:"position"`
 }
 
-// ViewConfigDTO is the JSON representation of sprintdom.ViewConfig.
-type ViewFiltersDTO struct {
-	StatusIDs   []string `json:"status_ids,omitempty"`
-	AssigneeIDs []string `json:"assignee_ids,omitempty"`
-	TaskTypeIDs []string `json:"task_type_ids,omitempty"`
-}
+// ViewFiltersDTO is the JSON representation of sprintdom.ViewFilters.
+// Each dimension is an optional FilterConfig selector that the client uses to
+// determine which entity IDs to include when querying tasks.
+type ViewFiltersDTO = sprintdom.ViewFilters
 
+// ViewConfigDTO is the JSON representation of sprintdom.ViewConfig.
 type ViewConfigDTO struct {
 	Fields    []string        `json:"fields,omitempty"`
 	ColumnBy  string          `json:"column_by,omitempty"`
@@ -70,16 +69,7 @@ func ViewFromEntity(v *sprintdom.SprintView) ViewResponse {
 			SortBy:    v.Config.SortBy,
 			FieldSum:  v.Config.FieldSum,
 			SliceBy:   v.Config.SliceBy,
-			Filters: func() *ViewFiltersDTO {
-				if v.Config.Filters == nil {
-					return nil
-				}
-				return &ViewFiltersDTO{
-					StatusIDs:   v.Config.Filters.StatusIDs,
-					AssigneeIDs: v.Config.Filters.AssigneeIDs,
-					TaskTypeIDs: v.Config.Filters.TaskTypeIDs,
-				}
-			}(),
+			Filters:   v.Config.Filters,
 		},
 		Position:  v.Position,
 		CreatedAt: v.CreatedAt,
@@ -99,16 +89,7 @@ func toViewConfig(d *ViewConfigDTO) sprintdom.ViewConfig {
 		SortBy:    d.SortBy,
 		FieldSum:  d.FieldSum,
 		SliceBy:   d.SliceBy,
-		Filters: func() *sprintdom.ViewFilters {
-			if d.Filters == nil {
-				return nil
-			}
-			return &sprintdom.ViewFilters{
-				StatusIDs:   d.Filters.StatusIDs,
-				AssigneeIDs: d.Filters.AssigneeIDs,
-				TaskTypeIDs: d.Filters.TaskTypeIDs,
-			}
-		}(),
+		Filters:   d.Filters,
 	}
 }
 

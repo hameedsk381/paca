@@ -105,7 +105,6 @@ function renderBoard(
 			canCreate={false}
 			canEdit={true}
 			searchQuery=""
-			assigneeFilter={null}
 			tasksQueryKey={["tasks"]}
 			onCreateTask={vi.fn()}
 			onTaskClick={vi.fn()}

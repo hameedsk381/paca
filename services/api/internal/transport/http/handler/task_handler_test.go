@@ -351,9 +351,6 @@ func TestTaskHandler_ListTasks_UsesUnifiedFilters(t *testing.T) {
 	if svc.lastFilter.SprintID == nil || *svc.lastFilter.SprintID != sprintID {
 		t.Fatalf("expected sprint filter %s, got %+v", sprintID, svc.lastFilter.SprintID)
 	}
-	if svc.lastFilter.ExcludeSystemTypes {
-		t.Fatal("expected ExcludeSystemTypes=false; task type filtering should come from explicit filters")
-	}
 	if len(svc.lastFilter.StatusIDs) != 1 || svc.lastFilter.StatusIDs[0] != statusID {
 		t.Fatalf("unexpected status ids: %+v", svc.lastFilter.StatusIDs)
 	}
@@ -396,9 +393,6 @@ func TestTaskHandler_ListTasks_SprintNullMeansBacklog(t *testing.T) {
 	if !svc.lastFilter.BacklogOnly {
 		t.Fatal("expected BacklogOnly=true when sprint_id=null")
 	}
-	if svc.lastFilter.ExcludeSystemTypes {
-		t.Fatal("expected ExcludeSystemTypes=false; backlog filtering should come from explicit filters")
-	}
 }
 
 func TestTaskHandler_ListTasks_TaskTypeIDsDriveFiltering(t *testing.T) {
@@ -410,9 +404,6 @@ func TestTaskHandler_ListTasks_TaskTypeIDsDriveFiltering(t *testing.T) {
 	w := doTaskRequest(r, http.MethodGet, fmt.Sprintf("/projects/%s/tasks?task_type_ids=%s", projectID, taskTypeID), nil)
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
-	}
-	if svc.lastFilter.EpicsOnly {
-		t.Fatal("expected EpicsOnly=false; timeline filtering should come from task_type_ids")
 	}
 	if len(svc.lastFilter.TaskTypeIDs) != 1 || svc.lastFilter.TaskTypeIDs[0] != taskTypeID {
 		t.Fatalf("unexpected task type ids: %+v", svc.lastFilter.TaskTypeIDs)

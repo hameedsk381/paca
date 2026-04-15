@@ -12,7 +12,6 @@ import {
 	Map as MapIcon,
 	Plus,
 	Search,
-	SlidersHorizontal,
 	X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -25,11 +24,7 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-	Popover,
-	PopoverContent,
-	PopoverTrigger,
-} from "@/components/ui/popover";
+
 import {
 	allTasksQueryOptions,
 	bulkMoveViewTaskPositions,
@@ -37,9 +32,12 @@ import {
 	createTask,
 	createViewByContext,
 	deleteViewById,
+	type FilterConfig,
 	type InteractionView,
 	layoutToViewType,
 	reorderViewsByContext,
+	resolveFilterConfig,
+	resolveTaskTypeFilter,
 	sprintsQueryOptions,
 	type Task,
 	updateSprint,
@@ -60,8 +58,6 @@ import {
 } from "@/lib/project-api";
 
 import {
-	getColumnGroupDefs,
-	getTaskColumnKeys,
 	sortTasksByConfig,
 	type TaskFieldUpdate,
 	type ViewContext,
@@ -132,11 +128,28 @@ export function InteractionLayout({
 			}
 			if (next.filters === undefined) {
 				const filters: NonNullable<ViewConfig["filters"]> = {};
-				if (defaultPageTaskTypeIds.length > 0) {
-					filters.task_type_ids = defaultPageTaskTypeIds;
+				if (context === "timeline") {
+					// Timeline: show only explicit epic-type task types
+					if (defaultPageTaskTypeIds.length > 0) {
+						const items: Record<string, boolean> = {};
+						for (const id of defaultPageTaskTypeIds) items[id] = true;
+						const taskTypesConfig: FilterConfig = { all: false, items };
+						filters.task_types = taskTypesConfig;
+					}
+				} else {
+					// All other contexts: use the "normal" virtual group
+					const taskTypesConfig: FilterConfig = {
+						all: false,
+						items: { normal: { all: true } },
+					};
+					filters.task_types = taskTypesConfig;
 				}
 				if (sprintId) {
-					filters.sprint_ids = [sprintId];
+					const sprintsConfig: FilterConfig = {
+						all: false,
+						items: { [sprintId]: true },
+					};
+					filters.sprints = sprintsConfig;
 				}
 				if (Object.keys(filters).length > 0) {
 					next.filters = filters;
@@ -276,21 +289,28 @@ export function InteractionLayout({
 	// all non-system types are available.  This lets views on any page control
 	// which types can be created without hard-coding page-level rules.
 	const creatableTaskTypes = useMemo(() => {
-		const filterIds = activeViewConfig?.filters?.task_type_ids;
-		if (filterIds?.length) {
-			return taskTypes.filter((tt) => filterIds.includes(tt.id));
+		const filterConfig = activeViewConfig?.filters?.task_types;
+		if (filterConfig) {
+			const resolvedIds = resolveTaskTypeFilter(filterConfig, taskTypes);
+			if (resolvedIds.length > 0) {
+				return taskTypes.filter((tt) => resolvedIds.includes(tt.id));
+			}
 		}
 		return taskTypes.filter((tt) => !tt.is_system);
-	}, [taskTypes, activeViewConfig?.filters?.task_type_ids]);
+	}, [taskTypes, activeViewConfig?.filters?.task_types]);
 	const isManualSort =
 		!activeViewConfig?.sort_by ||
 		activeViewConfig?.sort_by?.toLowerCase() === "manual";
 	const [searchQuery, setSearchQuery] = useState("");
 	const [searchOpen, setSearchOpen] = useState(false);
 	const searchRef = useRef<HTMLInputElement>(null);
-	const [assigneeFilter, setAssigneeFilter] = useState<string | null>(null);
-	const [filterOpen, setFilterOpen] = useState(false);
 	const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+
+	const { data: members = [] } = useQuery(
+		projectMembersQueryOptions(projectId),
+	);
+
+	const { data: sprints = [] } = useQuery(sprintsQueryOptions(projectId));
 
 	const isRealView = !!activeViewId && !activeViewId.startsWith("__default-");
 	const effectiveViewId = isManualSort && isRealView ? activeViewId : undefined;
@@ -299,27 +319,32 @@ export function InteractionLayout({
 		() => ({
 			sprint_ids:
 				activeViewConfig?.filters !== undefined
-					? activeViewConfig.filters?.sprint_ids
+					? activeViewConfig.filters.sprints
+						? resolveFilterConfig(activeViewConfig.filters.sprints, sprints.map((s) => s.id))
+						: undefined
 					: sprintId
 						? [sprintId]
 						: undefined,
-			status_ids: activeViewConfig?.filters?.status_ids,
-			assignee_ids: assigneeFilter
-				? [assigneeFilter]
-				: activeViewConfig?.filters?.assignee_ids,
-			task_type_ids:
-				activeViewConfig?.filters !== undefined
-					? activeViewConfig.filters?.task_type_ids
-					: defaultPageTaskTypeIds,
+			status_ids: activeViewConfig?.filters?.statuses
+				? resolveFilterConfig(activeViewConfig.filters.statuses, statuses.map((s) => s.id))
+				: undefined,
+			assignee_ids: activeViewConfig?.filters?.assignees
+				? resolveFilterConfig(activeViewConfig.filters.assignees, members.map((m) => m.id))
+				: undefined,
+			task_type_ids: (() => {
+				if (!activeViewConfig?.filters) return defaultPageTaskTypeIds;
+				if (!activeViewConfig.filters.task_types) return undefined;
+				return resolveTaskTypeFilter(activeViewConfig.filters.task_types, taskTypes);
+			})(),
 		}),
 		[
 			activeViewConfig?.filters,
-			activeViewConfig?.filters?.sprint_ids,
-			activeViewConfig?.filters?.status_ids,
-			activeViewConfig?.filters?.assignee_ids,
-			assigneeFilter,
 			defaultPageTaskTypeIds,
+			members,
+			sprints,
 			sprintId,
+			statuses,
+			taskTypes,
 		],
 	);
 	const tasksQueryOpts = allTasksQueryOptions(projectId, {
@@ -353,12 +378,6 @@ export function InteractionLayout({
 	const tasksLoading = tasksQuery.isLoading;
 	const tasksListQueryKey = ["projects", projectId, "tasks"];
 
-	const { data: members = [] } = useQuery(
-		projectMembersQueryOptions(projectId),
-	);
-
-	const { data: sprints = [] } = useQuery(sprintsQueryOptions(projectId));
-
 	const viewCtx: ViewContext = useMemo(
 		() => ({ statuses, taskTypes, members, customFields, sprints }),
 		[statuses, taskTypes, members, customFields, sprints],
@@ -382,28 +401,6 @@ export function InteractionLayout({
 		() => (selectedTaskId ? (sortedTasks.find((t) => t.id === selectedTaskId) ?? null) : null),
 		[selectedTaskId, sortedTasks],
 	);
-
-	// Slice-by filter
-	const [sliceValue, setSliceValue] = useState<string | null>(null);
-	const activeSliceBy = activeViewConfig?.slice_by;
-	// biome-ignore lint/correctness/useExhaustiveDependencies: reset slice when the field changes
-	useEffect(() => {
-		setSliceValue(null);
-	}, [activeSliceBy]);
-
-	const sliceFilteredTasks = useMemo(() => {
-		if (!activeSliceBy || activeSliceBy === "none" || !sliceValue)
-			return sortedTasks;
-		return sortedTasks.filter((t) =>
-			getTaskColumnKeys(t, activeSliceBy, viewCtx).includes(sliceValue),
-		);
-	}, [sortedTasks, activeSliceBy, sliceValue, viewCtx]);
-
-	// Build slice options
-	const sliceOptions = useMemo(() => {
-		if (!activeSliceBy || activeSliceBy === "none") return [];
-		return getColumnGroupDefs(activeSliceBy, viewCtx);
-	}, [activeSliceBy, viewCtx]);
 
 	const restoredFromUrl = useRef(false);
 	useEffect(() => {
@@ -883,94 +880,6 @@ export function InteractionLayout({
 						</button>
 					)}
 
-					{/* Assignee filter */}
-					<Popover open={filterOpen} onOpenChange={setFilterOpen}>
-						<PopoverTrigger
-							render={
-								<button
-									type="button"
-									className={cn(
-										"flex size-7 items-center justify-center rounded-md transition-all duration-150",
-										assigneeFilter
-											? "bg-primary/8 text-primary/80"
-											: "text-muted-foreground/60 hover:text-foreground hover:bg-muted/60",
-									)}
-								/>
-							}
-						>
-							<SlidersHorizontal className="size-3.5" />
-						</PopoverTrigger>
-						<PopoverContent
-							side="bottom"
-							align="end"
-							className="w-52 p-1 rounded-xl border border-border/40 shadow-lg"
-							sideOffset={6}
-						>
-							<div className="px-3 py-2 border-b border-border/30">
-								<p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/70">
-									Filter by assignee
-								</p>
-							</div>
-							<div className="flex flex-col py-1 max-h-52 overflow-y-auto">
-								<button
-									type="button"
-									onClick={() => {
-										setAssigneeFilter(null);
-										setFilterOpen(false);
-									}}
-									className={cn(
-										"flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] hover:bg-muted/60 transition-colors duration-100 text-left",
-										!assigneeFilter && "text-primary font-medium",
-									)}
-								>
-									All assignees
-								</button>
-								{members.map((m) => (
-									<button
-										key={m.id}
-										type="button"
-										onClick={() => {
-											setAssigneeFilter(m.id);
-											setFilterOpen(false);
-										}}
-										className={cn(
-											"flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] hover:bg-muted/60 transition-colors duration-100 text-left",
-											assigneeFilter === m.id &&
-												"text-primary font-medium",
-										)}
-									>
-										<div className="flex size-5 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-primary/20 to-primary/10 text-primary text-[10px] font-bold ring-1 ring-primary/20">
-											{(m.full_name || m.username).slice(0, 1).toUpperCase()}
-										</div>
-										<span className="truncate">
-											{m.full_name || m.username}
-										</span>
-									</button>
-								))}
-								{members.length === 0 && (
-									<p className="px-3 py-2 text-[12px] text-muted-foreground/50">
-										No members
-									</p>
-								)}
-							</div>
-							{assigneeFilter && (
-								<div className="border-t border-border/30 p-1">
-									<button
-										type="button"
-										onClick={() => {
-											setAssigneeFilter(null);
-											setFilterOpen(false);
-										}}
-										className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] text-muted-foreground/80 hover:bg-muted/60 hover:text-foreground transition-colors duration-100"
-									>
-										<X className="size-3.5 text-muted-foreground/80 shrink-0" />
-										Clear filter
-									</button>
-								</div>
-							)}
-						</PopoverContent>
-					</Popover>
-
 					{activeView && (
 						<ViewSettingsPanel
 							projectId={projectId}
@@ -987,42 +896,6 @@ export function InteractionLayout({
 				</div>
 			</div>
 
-			{/* Slice-by selector strip */}
-			{activeSliceBy && activeSliceBy !== "none" && sliceOptions.length > 0 && (
-				<div className="flex shrink-0 items-center gap-1.5 overflow-x-auto px-4 py-1.5 border-b border-border/20 bg-muted/10">
-					<span className="text-[11px] font-semibold text-muted-foreground/60 shrink-0 mr-1">
-						Slice:
-					</span>
-					<button
-						type="button"
-						onClick={() => setSliceValue(null)}
-						className={cn(
-							"shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-semibold transition-all duration-150",
-							!sliceValue
-								? "bg-primary text-primary-foreground"
-								: "bg-muted/40 text-muted-foreground hover:bg-muted/70",
-						)}
-					>
-						All
-					</button>
-					{sliceOptions.map((opt) => (
-						<button
-							key={opt.key}
-							type="button"
-							onClick={() => setSliceValue(sliceValue === opt.key ? null : opt.key)}
-							className={cn(
-								"shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-semibold transition-all duration-150",
-								sliceValue === opt.key
-									? "bg-primary text-primary-foreground"
-									: "bg-muted/40 text-muted-foreground hover:bg-muted/70",
-							)}
-						>
-							{opt.label}
-						</button>
-					))}
-				</div>
-			)}
-
 			{/* View content */}
 			<div className="flex flex-1 flex-col overflow-hidden">
 				{tasksLoading ? (
@@ -1033,7 +906,7 @@ export function InteractionLayout({
 					<BoardView
 						projectId={projectId}
 						taskIdPrefix={taskIdPrefix}
-						tasks={sliceFilteredTasks}
+						tasks={sortedTasks}
 						statuses={statuses}
 						taskTypes={creatableTaskTypes}
 						members={members}
@@ -1043,7 +916,6 @@ export function InteractionLayout({
 						canCreate={canCreate}
 						canEdit={canEdit}
 						searchQuery={searchQuery}
-						assigneeFilter={assigneeFilter}
 						tasksQueryKey={tasksListQueryKey}
 						onCreateTask={handleCreateTask}
 						onTaskClick={handleTaskClick}
@@ -1054,19 +926,18 @@ export function InteractionLayout({
 					/>
 				) : activeView?.layout === "Roadmap" ? (
 					<RoadmapView
-						tasks={sliceFilteredTasks}
+						tasks={sortedTasks}
 						taskIdPrefix={taskIdPrefix}
 						statuses={statuses}
 						taskTypes={creatableTaskTypes}
 						searchQuery={searchQuery}
-						assigneeFilter={assigneeFilter}
 						canCreate={canCreate}
 						onCreateTask={handleCreateTask}
 						onTaskClick={handleTaskClick}
 					/>
 				) : (
 					<ListView
-						tasks={sliceFilteredTasks}
+						tasks={sortedTasks}
 						taskIdPrefix={taskIdPrefix}
 						statuses={statuses}
 						taskTypes={creatableTaskTypes}
@@ -1075,7 +946,6 @@ export function InteractionLayout({
 						viewConfig={activeViewConfig}
 						canCreate={canCreate}
 						searchQuery={searchQuery}
-						assigneeFilter={assigneeFilter}
 						onCreateTask={handleCreateTask}
 						onTaskClick={handleTaskClick}
 						manualSort={isManualSort}

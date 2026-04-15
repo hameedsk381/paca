@@ -1454,3 +1454,234 @@ func TestIntegrationTimelineViews_AuthzGuard(t *testing.T) {
 		t.Fatalf("expected 403, got %d", w.Code)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// ViewFilters roundtrip tests
+// ---------------------------------------------------------------------------
+
+// TestIntegrationViews_FiltersRoundtrip_AllNormalMode creates a sprint view
+// with a task_types FilterConfig using the "normal" virtual group plus an
+// explicit Epic ID, then GETs the view back and asserts the filter fields are
+// preserved.
+func TestIntegrationViews_FiltersRoundtrip_AllNormalMode(t *testing.T) {
+	projectID := uuid.New()
+	store := &projectPermStore{
+		projectPerms: map[uuid.UUID][]authz.Permission{
+			projectID: {authz.PermissionSprintsRead, authz.PermissionSprintsWrite},
+		},
+	}
+	sprintRepo := newFakeSprintRepoIT()
+	viewRepo := newFakeViewRepoIT()
+	r := buildViewTestRouter(viewRepo, sprintRepo, store)
+	tok := issueViewToken(t, uuid.NewString())
+	sprintID := seedSprintIT(t, sprintRepo, projectID)
+
+	epicID := strings.ToLower(uuid.NewString())
+	itemBase := fmt.Sprintf("/api/v1/projects/%s/views", projectID)
+	base := fmt.Sprintf("%s?context=sprint&sprint_id=%s", itemBase, sprintID)
+
+	createW := serve(r, authedJSONReq(t.Context(), http.MethodPost, base, tok, map[string]any{
+		"name":      "Board View",
+		"view_type": "board",
+		"config": map[string]any{
+			"column_by": "status",
+			"filters": map[string]any{
+				"task_types": map[string]any{
+					"all": false,
+					"items": map[string]any{
+						"normal": map[string]any{"all": true},
+						epicID:   true,
+					},
+				},
+				"sprints": map[string]any{
+					"all":   false,
+					"items": map[string]any{sprintID.String(): true},
+				},
+			},
+		},
+	}))
+	if createW.Code != http.StatusCreated {
+		t.Fatalf("create view: expected 201, got %d (%s)", createW.Code, createW.Body.String())
+	}
+	viewID := viewIDFrom(t, createW.Body.Bytes())
+
+	// GET the view and check filter fields are present and unchanged.
+	getW := serve(r, authedJSONReq(t.Context(), http.MethodGet, itemBase+"/"+viewID, tok, nil))
+	if getW.Code != http.StatusOK {
+		t.Fatalf("get view: expected 200, got %d (%s)", getW.Code, getW.Body.String())
+	}
+
+	var getResp struct {
+		Data map[string]any `json:"data"`
+	}
+	if err := json.Unmarshal(getW.Body.Bytes(), &getResp); err != nil {
+		t.Fatalf("decode get response: %v", err)
+	}
+
+	cfg, _ := getResp.Data["config"].(map[string]any)
+	if cfg == nil {
+		t.Fatal("expected config in response")
+	}
+	filters, _ := cfg["filters"].(map[string]any)
+	if filters == nil {
+		t.Fatal("expected filters in config")
+	}
+
+	// task_types must round-trip as an object with "normal" group and explicit epic ID.
+	taskTypes, _ := filters["task_types"].(map[string]any)
+	if taskTypes == nil {
+		t.Fatal("expected task_types in filters")
+	}
+	items, _ := taskTypes["items"].(map[string]any)
+	if items == nil {
+		t.Fatal("expected task_types.items in filters")
+	}
+	normalGroup, _ := items["normal"].(map[string]any)
+	if normalGroup == nil {
+		t.Fatalf("expected task_types.items.normal group, got %v", items)
+	}
+	if normalGroup["all"] != true {
+		t.Errorf("task_types.items.normal.all: want true, got %v", normalGroup["all"])
+	}
+	if items[epicID] != true {
+		t.Errorf("task_types.items[epicID]: want true, got %v", items[epicID])
+	}
+
+	// sprints must round-trip.
+	sprintsFilter, _ := filters["sprints"].(map[string]any)
+	if sprintsFilter == nil {
+		t.Fatal("expected sprints in filters")
+	}
+	sprintItems, _ := sprintsFilter["items"].(map[string]any)
+	if sprintItems == nil || sprintItems[sprintID.String()] != true {
+		t.Errorf("sprints.items[sprintID]: want true, got %v", sprintItems)
+	}
+}
+
+// TestIntegrationViews_FiltersRoundtrip_SprintIDs verifies that a sprints
+// FilterConfig with multiple explicit IDs is persisted and returned unchanged.
+func TestIntegrationViews_FiltersRoundtrip_SprintIDs(t *testing.T) {
+	projectID := uuid.New()
+	store := &projectPermStore{
+		projectPerms: map[uuid.UUID][]authz.Permission{
+			projectID: {authz.PermissionSprintsRead, authz.PermissionSprintsWrite},
+		},
+	}
+	sprintRepo := newFakeSprintRepoIT()
+	viewRepo := newFakeViewRepoIT()
+	r := buildViewTestRouter(viewRepo, sprintRepo, store)
+	tok := issueViewToken(t, uuid.NewString())
+	sprintID := seedSprintIT(t, sprintRepo, projectID)
+	sprint2ID := uuid.New()
+
+	itemBase := fmt.Sprintf("/api/v1/projects/%s/views", projectID)
+	base := fmt.Sprintf("%s?context=sprint&sprint_id=%s", itemBase, sprintID)
+
+	createW := serve(r, authedJSONReq(t.Context(), http.MethodPost, base, tok, map[string]any{
+		"name":      "Multi-sprint View",
+		"view_type": "table",
+		"config": map[string]any{
+			"filters": map[string]any{
+				"sprints": map[string]any{
+					"all": false,
+					"items": map[string]any{
+						sprintID.String():  true,
+						sprint2ID.String(): true,
+					},
+				},
+			},
+		},
+	}))
+	if createW.Code != http.StatusCreated {
+		t.Fatalf("create: expected 201, got %d (%s)", createW.Code, createW.Body.String())
+	}
+	viewID := viewIDFrom(t, createW.Body.Bytes())
+
+	getW := serve(r, authedJSONReq(t.Context(), http.MethodGet, itemBase+"/"+viewID, tok, nil))
+	if getW.Code != http.StatusOK {
+		t.Fatalf("get: expected 200, got %d (%s)", getW.Code, getW.Body.String())
+	}
+
+	var getResp struct {
+		Data map[string]any `json:"data"`
+	}
+	if err := json.Unmarshal(getW.Body.Bytes(), &getResp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	cfg, _ := getResp.Data["config"].(map[string]any)
+	filters, _ := cfg["filters"].(map[string]any)
+	if filters == nil {
+		t.Fatal("expected filters")
+	}
+	sprintsFilter, _ := filters["sprints"].(map[string]any)
+	if sprintsFilter == nil {
+		t.Fatal("expected sprints filter")
+	}
+	sprintItems, _ := sprintsFilter["items"].(map[string]any)
+	if len(sprintItems) != 2 {
+		t.Errorf("sprints.items: want 2 entries, got %d: %v", len(sprintItems), sprintItems)
+	}
+}
+
+// TestIntegrationViews_UpdateConfig_TaskTypes verifies that PATCHing a view
+// with a task_types FilterConfig persists the new config and returns it.
+func TestIntegrationViews_UpdateConfig_TaskTypes(t *testing.T) {
+	projectID := uuid.New()
+	store := &projectPermStore{
+		projectPerms: map[uuid.UUID][]authz.Permission{
+			projectID: {authz.PermissionSprintsRead, authz.PermissionSprintsWrite},
+		},
+	}
+	sprintRepo := newFakeSprintRepoIT()
+	viewRepo := newFakeViewRepoIT()
+	r := buildViewTestRouter(viewRepo, sprintRepo, store)
+	tok := issueViewToken(t, uuid.NewString())
+	sprintID := seedSprintIT(t, sprintRepo, projectID)
+	itemBase := fmt.Sprintf("/api/v1/projects/%s/views", projectID)
+	base := fmt.Sprintf("%s?context=sprint&sprint_id=%s", itemBase, sprintID)
+
+	createW := serve(r, authedJSONReq(t.Context(), http.MethodPost, base, tok, map[string]any{
+		"name":      "Table View",
+		"view_type": "table",
+	}))
+	if createW.Code != http.StatusCreated {
+		t.Fatalf("create: expected 201, got %d", createW.Code)
+	}
+	viewID := viewIDFrom(t, createW.Body.Bytes())
+
+	// PATCH to add a task_types FilterConfig using the "normal" group.
+	patchW := serve(r, authedJSONReq(t.Context(), http.MethodPatch, itemBase+"/"+viewID, tok, map[string]any{
+		"config": map[string]any{
+			"filters": map[string]any{
+				"task_types": map[string]any{
+					"all":   false,
+					"items": map[string]any{"normal": map[string]any{"all": true}},
+				},
+			},
+		},
+	}))
+	if patchW.Code != http.StatusOK {
+		t.Fatalf("patch: expected 200, got %d (%s)", patchW.Code, patchW.Body.String())
+	}
+
+	var patchResp struct {
+		Data map[string]any `json:"data"`
+	}
+	if err := json.Unmarshal(patchW.Body.Bytes(), &patchResp); err != nil {
+		t.Fatalf("decode patch response: %v", err)
+	}
+	cfg, _ := patchResp.Data["config"].(map[string]any)
+	filters, _ := cfg["filters"].(map[string]any)
+	if filters == nil {
+		t.Fatal("expected filters after patch")
+	}
+	taskTypes, _ := filters["task_types"].(map[string]any)
+	if taskTypes == nil {
+		t.Fatal("expected task_types in filters after patch")
+	}
+	items, _ := taskTypes["items"].(map[string]any)
+	normalGroup, _ := items["normal"].(map[string]any)
+	if normalGroup == nil || normalGroup["all"] != true {
+		t.Errorf("task_types.items.normal after patch: want {all:true}, got %v", items["normal"])
+	}
+}

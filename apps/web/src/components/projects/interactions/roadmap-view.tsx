@@ -14,7 +14,6 @@ interface RoadmapViewProps {
 	statuses: TaskStatus[];
 	taskTypes: TaskType[];
 	searchQuery: string;
-	assigneeFilter: string | null;
 	canCreate?: boolean;
 	onCreateTask?: (
 		statusId: string,
@@ -39,7 +38,6 @@ export function RoadmapView({
 	statuses,
 	taskTypes,
 	searchQuery,
-	assigneeFilter,
 	canCreate = false,
 	onCreateTask,
 	onTaskClick,
@@ -56,7 +54,6 @@ export function RoadmapView({
 			)
 				return false;
 		}
-		if (assigneeFilter && t.assignee_id !== assigneeFilter) return false;
 		return true;
 	});
 

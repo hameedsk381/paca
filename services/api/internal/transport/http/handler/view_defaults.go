@@ -31,34 +31,62 @@ func filterTaskTypeIDs(taskTypes []*taskdom.TaskType, include func(*taskdom.Task
 	return ids
 }
 
-func defaultNonSystemTaskTypeIDs(taskTypes []*taskdom.TaskType) []string {
-	return filterTaskTypeIDs(taskTypes, func(taskType *taskdom.TaskType) bool {
-		return !taskType.IsSystem
-	})
-}
-
 func defaultEpicTaskTypeIDs(taskTypes []*taskdom.TaskType) []string {
 	return filterTaskTypeIDs(taskTypes, func(taskType *taskdom.TaskType) bool {
 		return taskType.IsSystem && taskType.Name == "Epic"
 	})
 }
 
-func newDefaultFilters(taskTypeIDs, sprintIDs []string) *sprintdom.ViewFilters {
-	filters := &sprintdom.ViewFilters{}
-	if len(taskTypeIDs) > 0 {
-		filters.TaskTypeIDs = taskTypeIDs
+// newNormalTypeFilter returns a FilterConfig that selects all non-system task
+// types via the "normal" virtual group key.  Clients expand this group to the
+// current set of non-system types at query time, so newly added types are
+// automatically included without requiring stored-view updates.
+func newNormalTypeFilter() *sprintdom.FilterConfig {
+	return &sprintdom.FilterConfig{
+		All: false,
+		Items: map[string]sprintdom.FilterEntry{
+			"normal": sprintdom.FilterEntryNested(sprintdom.FilterConfig{All: true}),
+		},
 	}
-	if len(sprintIDs) > 0 {
-		filters.SprintIDs = sprintIDs
-	}
-	if len(filters.TaskTypeIDs) == 0 && len(filters.SprintIDs) == 0 {
+}
+
+// newExplicitIDFilter returns a FilterConfig that selects exactly the given
+// IDs.  Returns nil when ids is empty.
+func newExplicitIDFilter(ids []string) *sprintdom.FilterConfig {
+	if len(ids) == 0 {
 		return nil
 	}
-	return filters
+	items := make(map[string]sprintdom.FilterEntry, len(ids))
+	for _, id := range ids {
+		items[id] = sprintdom.FilterEntryInclude()
+	}
+	return &sprintdom.FilterConfig{All: false, Items: items}
+}
+
+// newDefaultFilters builds a ViewFilters from the given parameters.
+// includeAllNormal selects all non-system types via the "normal" group.
+// taskTypeIDs adds explicit type IDs (used for the timeline Epic-only default).
+// sprintIDs restricts the filter to specific sprints.
+func newDefaultFilters(includeAllNormal bool, taskTypeIDs, sprintIDs []string) *sprintdom.ViewFilters {
+	var taskTypes *sprintdom.FilterConfig
+	if includeAllNormal {
+		taskTypes = newNormalTypeFilter()
+	} else {
+		taskTypes = newExplicitIDFilter(taskTypeIDs)
+	}
+
+	sprints := newExplicitIDFilter(sprintIDs)
+
+	if taskTypes == nil && sprints == nil {
+		return nil
+	}
+	return &sprintdom.ViewFilters{
+		TaskTypes: taskTypes,
+		Sprints:   sprints,
+	}
 }
 
 func defaultProjectViewInputs(projectID uuid.UUID, taskTypes []*taskdom.TaskType) []sprintdom.CreateViewInput {
-	nonSystemTaskTypeIDs := defaultNonSystemTaskTypeIDs(taskTypes)
 	epicTaskTypeIDs := defaultEpicTaskTypeIDs(taskTypes)
 	return []sprintdom.CreateViewInput{
 		{
@@ -69,7 +97,9 @@ func defaultProjectViewInputs(projectID uuid.UUID, taskTypes []*taskdom.TaskType
 			ViewContext: sprintdom.ViewContextBacklog,
 			Config: sprintdom.ViewConfig{
 				ColumnBy: "sprint",
-				Filters:  newDefaultFilters(nonSystemTaskTypeIDs, nil),
+				// Use the "normal" virtual group so newly added task types are
+				// automatically included without requiring a view update.
+				Filters: newDefaultFilters(true, nil, nil),
 			},
 		},
 		{
@@ -79,14 +109,15 @@ func defaultProjectViewInputs(projectID uuid.UUID, taskTypes []*taskdom.TaskType
 			Position:    0,
 			ViewContext: sprintdom.ViewContextTimeline,
 			Config: sprintdom.ViewConfig{
-				Filters: newDefaultFilters(epicTaskTypeIDs, nil),
+				// Timeline shows only Epics; Epic is a fixed system type so
+				// explicit IDs are stable over the project lifetime.
+				Filters: newDefaultFilters(false, epicTaskTypeIDs, nil),
 			},
 		},
 	}
 }
 
 func defaultSprintViewInputs(projectID, sprintID uuid.UUID, taskTypes []*taskdom.TaskType) []sprintdom.CreateViewInput {
-	nonSystemTaskTypeIDs := defaultNonSystemTaskTypeIDs(taskTypes)
 	sprintIDs := []string{sprintID.String()}
 	return []sprintdom.CreateViewInput{
 		{
@@ -98,7 +129,7 @@ func defaultSprintViewInputs(projectID, sprintID uuid.UUID, taskTypes []*taskdom
 			ViewContext: sprintdom.ViewContextSprint,
 			Config: sprintdom.ViewConfig{
 				ColumnBy: "status",
-				Filters:  newDefaultFilters(nonSystemTaskTypeIDs, sprintIDs),
+				Filters:  newDefaultFilters(true, nil, sprintIDs),
 			},
 		},
 		{
@@ -110,7 +141,7 @@ func defaultSprintViewInputs(projectID, sprintID uuid.UUID, taskTypes []*taskdom
 			ViewContext: sprintdom.ViewContextSprint,
 			Config: sprintdom.ViewConfig{
 				ColumnBy: "status",
-				Filters:  newDefaultFilters(nonSystemTaskTypeIDs, sprintIDs),
+				Filters:  newDefaultFilters(true, nil, sprintIDs),
 			},
 		},
 	}

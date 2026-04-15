@@ -30,7 +30,6 @@ export interface ListViewProps {
 	viewConfig?: ViewConfig;
 	canCreate: boolean;
 	searchQuery: string;
-	assigneeFilter: string | null;
 	onCreateTask: (
 		statusId: string,
 		title: string,
@@ -70,7 +69,6 @@ export function ListView({
 	viewConfig,
 	canCreate,
 	searchQuery,
-	assigneeFilter,
 	onCreateTask,
 	onTaskClick,
 	manualSort,
@@ -111,10 +109,9 @@ export function ListView({
 					)
 						return false;
 				}
-				if (assigneeFilter && t.assignee_id !== assigneeFilter) return false;
 				return true;
 			}),
-		[tasks, searchQuery, assigneeFilter, taskIdPrefix],
+		[tasks, searchQuery, taskIdPrefix],
 	);
 
 	const groupDefs = useMemo(

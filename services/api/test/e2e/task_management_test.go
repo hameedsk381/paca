@@ -409,7 +409,7 @@ func TestE2ESprintView_SprintTasks(t *testing.T) {
 
 	t.Run("get_sprint_tasks_returns_only_sprint_tasks", func(t *testing.T) {
 		req := mustRequest(env.ctx, t, http.MethodGet,
-			fmt.Sprintf("%s/api/v1/projects/%s/sprints/%s/tasks", env.base, projID, sprintID), nil)
+			fmt.Sprintf("%s/api/v1/projects/%s/tasks?sprint_id=%s", env.base, projID, sprintID), nil)
 		req.Header.Set("Authorization", "Bearer "+token)
 		resp := mustDo(t, client, req)
 		defer func() { _ = resp.Body.Close() }()
@@ -454,7 +454,7 @@ func TestE2ESprintView_Backlog(t *testing.T) {
 
 	t.Run("backlog_returns_only_sprintless_tasks", func(t *testing.T) {
 		req := mustRequest(env.ctx, t, http.MethodGet,
-			fmt.Sprintf("%s/api/v1/projects/%s/product-backlog", env.base, projID), nil)
+			fmt.Sprintf("%s/api/v1/projects/%s/tasks?sprint_id=null", env.base, projID), nil)
 		req.Header.Set("Authorization", "Bearer "+token)
 		resp := mustDo(t, client, req)
 		defer func() { _ = resp.Body.Close() }()
@@ -517,8 +517,8 @@ func TestE2ETaskList_WithViewID(t *testing.T) {
 		if groupKey != nil {
 			body["group_key"] = *groupKey
 		}
-		url := fmt.Sprintf("%s/api/v1/projects/%s/sprints/%s/views/%s/task-positions/%s",
-			env.base, projID, sprintID, viewID, taskID)
+		url := fmt.Sprintf("%s/api/v1/projects/%s/views/%s/task-positions/%s",
+			env.base, projID, viewID, taskID)
 		req := mustRequest(env.ctx, t, http.MethodPut, url, jsonBody(t, body))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Authorization", "Bearer "+token)
@@ -653,8 +653,8 @@ func TestE2ESprintTasks_WithViewID(t *testing.T) {
 		if groupKey != nil {
 			body["group_key"] = *groupKey
 		}
-		url := fmt.Sprintf("%s/api/v1/projects/%s/sprints/%s/views/%s/task-positions/%s",
-			env.base, projID, sprintID, viewID, taskID)
+		url := fmt.Sprintf("%s/api/v1/projects/%s/views/%s/task-positions/%s",
+			env.base, projID, viewID, taskID)
 		req := mustRequest(env.ctx, t, http.MethodPut, url, jsonBody(t, body))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Authorization", "Bearer "+token)
@@ -669,7 +669,7 @@ func TestE2ESprintTasks_WithViewID(t *testing.T) {
 
 	t.Run("with_view_id_positions_returned", func(t *testing.T) {
 		req := mustRequest(env.ctx, t, http.MethodGet,
-			fmt.Sprintf("%s/api/v1/projects/%s/sprints/%s/tasks?view_id=%s", env.base, projID, sprintID, viewID), nil)
+			fmt.Sprintf("%s/api/v1/projects/%s/tasks?sprint_id=%s&view_id=%s", env.base, projID, sprintID, viewID), nil)
 		req.Header.Set("Authorization", "Bearer "+token)
 		resp := mustDo(t, client, req)
 		defer func() { _ = resp.Body.Close() }()
@@ -703,7 +703,7 @@ func TestE2ESprintTasks_WithViewID(t *testing.T) {
 
 	t.Run("without_view_id_no_positions", func(t *testing.T) {
 		req := mustRequest(env.ctx, t, http.MethodGet,
-			fmt.Sprintf("%s/api/v1/projects/%s/sprints/%s/tasks", env.base, projID, sprintID), nil)
+			fmt.Sprintf("%s/api/v1/projects/%s/tasks?sprint_id=%s", env.base, projID, sprintID), nil)
 		req.Header.Set("Authorization", "Bearer "+token)
 		resp := mustDo(t, client, req)
 		defer func() { _ = resp.Body.Close() }()
@@ -722,7 +722,7 @@ func TestE2ESprintTasks_WithViewID(t *testing.T) {
 
 	t.Run("invalid_view_id_returns_400", func(t *testing.T) {
 		req := mustRequest(env.ctx, t, http.MethodGet,
-			fmt.Sprintf("%s/api/v1/projects/%s/sprints/%s/tasks?view_id=not-a-uuid", env.base, projID, sprintID), nil)
+			fmt.Sprintf("%s/api/v1/projects/%s/tasks?sprint_id=%s&view_id=not-a-uuid", env.base, projID, sprintID), nil)
 		req.Header.Set("Authorization", "Bearer "+token)
 		resp := mustDo(t, client, req)
 		defer func() { _ = resp.Body.Close() }()
@@ -731,7 +731,7 @@ func TestE2ESprintTasks_WithViewID(t *testing.T) {
 
 	t.Run("unknown_view_id_returns_404", func(t *testing.T) {
 		req := mustRequest(env.ctx, t, http.MethodGet,
-			fmt.Sprintf("%s/api/v1/projects/%s/sprints/%s/tasks?view_id=%s", env.base, projID, sprintID, uuid.New()), nil)
+			fmt.Sprintf("%s/api/v1/projects/%s/tasks?sprint_id=%s&view_id=%s", env.base, projID, sprintID, uuid.New()), nil)
 		req.Header.Set("Authorization", "Bearer "+token)
 		resp := mustDo(t, client, req)
 		defer func() { _ = resp.Body.Close() }()
@@ -781,7 +781,7 @@ func TestE2EBacklog_WithViewID(t *testing.T) {
 		if groupKey != nil {
 			body["group_key"] = *groupKey
 		}
-		url := fmt.Sprintf("%s/api/v1/projects/%s/product-backlog/views/%s/task-positions/%s",
+		url := fmt.Sprintf("%s/api/v1/projects/%s/views/%s/task-positions/%s",
 			env.base, projID, viewID, taskID)
 		req := mustRequest(env.ctx, t, http.MethodPut, url, jsonBody(t, body))
 		req.Header.Set("Content-Type", "application/json")
@@ -797,7 +797,7 @@ func TestE2EBacklog_WithViewID(t *testing.T) {
 
 	t.Run("with_view_id_positions_returned", func(t *testing.T) {
 		req := mustRequest(env.ctx, t, http.MethodGet,
-			fmt.Sprintf("%s/api/v1/projects/%s/product-backlog?view_id=%s", env.base, projID, viewID), nil)
+			fmt.Sprintf("%s/api/v1/projects/%s/tasks?sprint_id=null&view_id=%s", env.base, projID, viewID), nil)
 		req.Header.Set("Authorization", "Bearer "+token)
 		resp := mustDo(t, client, req)
 		defer func() { _ = resp.Body.Close() }()
@@ -831,7 +831,7 @@ func TestE2EBacklog_WithViewID(t *testing.T) {
 
 	t.Run("without_view_id_no_positions", func(t *testing.T) {
 		req := mustRequest(env.ctx, t, http.MethodGet,
-			fmt.Sprintf("%s/api/v1/projects/%s/product-backlog", env.base, projID), nil)
+			fmt.Sprintf("%s/api/v1/projects/%s/tasks?sprint_id=null", env.base, projID), nil)
 		req.Header.Set("Authorization", "Bearer "+token)
 		resp := mustDo(t, client, req)
 		defer func() { _ = resp.Body.Close() }()
@@ -850,7 +850,7 @@ func TestE2EBacklog_WithViewID(t *testing.T) {
 
 	t.Run("invalid_view_id_returns_400", func(t *testing.T) {
 		req := mustRequest(env.ctx, t, http.MethodGet,
-			fmt.Sprintf("%s/api/v1/projects/%s/product-backlog?view_id=not-a-uuid", env.base, projID), nil)
+			fmt.Sprintf("%s/api/v1/projects/%s/tasks?sprint_id=null&view_id=not-a-uuid", env.base, projID), nil)
 		req.Header.Set("Authorization", "Bearer "+token)
 		resp := mustDo(t, client, req)
 		defer func() { _ = resp.Body.Close() }()
@@ -859,7 +859,7 @@ func TestE2EBacklog_WithViewID(t *testing.T) {
 
 	t.Run("unknown_view_id_returns_404", func(t *testing.T) {
 		req := mustRequest(env.ctx, t, http.MethodGet,
-			fmt.Sprintf("%s/api/v1/projects/%s/product-backlog?view_id=%s", env.base, projID, uuid.New()), nil)
+			fmt.Sprintf("%s/api/v1/projects/%s/tasks?sprint_id=null&view_id=%s", env.base, projID, uuid.New()), nil)
 		req.Header.Set("Authorization", "Bearer "+token)
 		resp := mustDo(t, client, req)
 		defer func() { _ = resp.Body.Close() }()

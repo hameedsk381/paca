@@ -304,6 +304,25 @@ func (h *TaskHandler) ListTasks(c *gin.Context) {
 		filter.ParentTaskID = &id
 	}
 
+	var posMap map[uuid.UUID]*sprintdom.ViewTaskPosition
+	if raw := c.Query("view_id"); raw != "" {
+		viewID, err := uuid.Parse(raw)
+		if err != nil {
+			presenter.Error(c, apierr.New(apierr.CodeBadRequest, "invalid view_id"))
+			return
+		}
+		positions, err := h.viewSvc.ListTaskPositions(c.Request.Context(), viewID)
+		if err != nil {
+			presenter.Error(c, err)
+			return
+		}
+		posMap = make(map[uuid.UUID]*sprintdom.ViewTaskPosition, len(positions))
+		for _, p := range positions {
+			cp := p
+			posMap[p.TaskID] = cp
+		}
+	}
+
 	tasks, total, err := h.svc.ListTasks(c.Request.Context(), projectID, filter, page, pageSize)
 	if err != nil {
 		presenter.Error(c, err)
@@ -312,7 +331,12 @@ func (h *TaskHandler) ListTasks(c *gin.Context) {
 
 	resp := make([]dto.TaskResponse, 0, len(tasks))
 	for _, t := range tasks {
-		resp = append(resp, dto.TaskFromEntity(t))
+		r := dto.TaskFromEntity(t)
+		if pos, ok := posMap[t.ID]; ok {
+			r.ViewPosition = &pos.Position
+			r.ViewGroupKey = pos.GroupKey
+		}
+		resp = append(resp, r)
 	}
 	presenter.OK(c, gin.H{"items": resp, "total": total, "page": page, "page_size": pageSize})
 }
@@ -620,7 +644,7 @@ func (h *TaskHandler) ListBacklogTasks(c *gin.Context) {
 	}
 
 	page, pageSize := pagingParams(c)
-	filter := taskdom.TaskFilter{BacklogOnly: true, ExcludeSystemTypes: true}
+	filter := taskdom.TaskFilter{BacklogOnly: true}
 	if raw := c.Query("status_id"); raw != "" {
 		if id, err := uuid.Parse(raw); err == nil {
 			filter.StatusID = &id
@@ -680,7 +704,13 @@ func (h *TaskHandler) ListTimelineTasks(c *gin.Context) {
 	}
 
 	page, pageSize := pagingParams(c)
-	filter := taskdom.TaskFilter{EpicsOnly: true}
+	filter := taskdom.TaskFilter{}
+	if ids, err := parseQueryUUIDs(c.Query("task_type_ids")); err != nil {
+		presenter.Error(c, apierr.New(apierr.CodeBadRequest, "invalid task_type_ids"))
+		return
+	} else if len(ids) > 0 {
+		filter.TaskTypeIDs = ids
+	}
 	if raw := c.Query("status_id"); raw != "" {
 		if id, err := uuid.Parse(raw); err == nil {
 			filter.StatusID = &id

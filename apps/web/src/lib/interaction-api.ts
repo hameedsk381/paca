@@ -67,11 +67,40 @@ interface TaskPositionListResult {
 // ── View types ─────────────────────────────────────────────────────────────────
 export type ViewType = "table" | "board" | "roadmap";
 
+/**
+ * A single entry in a FilterConfig's `items` map.
+ * - `true`  → include this item / group
+ * - `false` → exclude this item / group
+ * - `FilterConfig` → recursively apply a sub-selector (used for named groups
+ *   such as `"normal"` in task-type filters)
+ */
+export type FilterEntry = boolean | FilterConfig;
+
+/**
+ * A generic, recursive filter selector stored per view dimension.
+ *
+ * - `all: true`  → include everything by default; `items` act as exclusion overrides.
+ * - `all: false` → include nothing by default; `items` act as inclusions.
+ *
+ * Item keys are either entity IDs (UUIDs) or named virtual groups.
+ * The `"normal"` key in a task-types filter expands client-side to all
+ * non-system type IDs, enabling dynamic inclusion without hard-coded snapshots.
+ */
+export interface FilterConfig {
+	all: boolean;
+	items?: Record<string, FilterEntry>;
+}
+
+/**
+ * Per-view filter configuration stored in the database.
+ * Each dimension uses an optional FilterConfig selector; absent means no filter
+ * (include everything) for that dimension.
+ */
 export interface ViewFilters {
-	sprint_ids?: string[];
-	status_ids?: string[];
-	assignee_ids?: string[];
-	task_type_ids?: string[];
+	task_types?: FilterConfig;
+	statuses?: FilterConfig;
+	assignees?: FilterConfig;
+	sprints?: FilterConfig;
 }
 
 export interface ViewConfig {
@@ -85,6 +114,63 @@ export interface ViewConfig {
 }
 
 export type ViewLayout = "Board" | "Table" | "Roadmap";
+
+// ── Filter resolver helpers ───────────────────────────────────────────────────
+
+/**
+ * Resolves a generic FilterConfig to an array of IDs from `allIds`.
+ * Does not handle virtual group keys — use domain-specific resolvers for those.
+ */
+export function resolveFilterConfig(config: FilterConfig, allIds: string[]): string[] {
+	const included = new Set<string>(config.all ? allIds : []);
+	for (const [key, entry] of Object.entries(config.items ?? {})) {
+		const include = entry === true || (typeof entry === "object" && entry.all);
+		if (include) included.add(key);
+		else included.delete(key);
+	}
+	return Array.from(included);
+}
+
+/**
+ * Resolves a task-types FilterConfig to an explicit list of task type IDs.
+ *
+ * The virtual key `"normal"` expands to all non-system type IDs so newly
+ * created task types are automatically included without updating stored views.
+ */
+export function resolveTaskTypeFilter(
+	config: FilterConfig,
+	taskTypes: { id: string; is_system?: boolean }[],
+): string[] {
+	const normalTypeIds = taskTypes.filter((t) => !t.is_system).map((t) => t.id);
+	const allIds = taskTypes.map((t) => t.id);
+
+	const included = new Set<string>(config.all ? allIds : []);
+
+	for (const [key, entry] of Object.entries(config.items ?? {})) {
+		if (key === "normal") {
+			if (entry === true) {
+				for (const id of normalTypeIds) included.add(id);
+			} else if (entry === false) {
+				for (const id of normalTypeIds) included.delete(id);
+			} else {
+				// Nested FilterConfig: resolve within the normal-type subset
+				const subIds = resolveFilterConfig(entry, normalTypeIds);
+				if (config.all) {
+					// Replace the normal-type portion with the sub-config result
+					for (const id of normalTypeIds) included.delete(id);
+				}
+				for (const id of subIds) included.add(id);
+			}
+		} else {
+			// Direct UUID key
+			const include = entry === true || (typeof entry === "object" && entry.all);
+			if (include) included.add(key);
+			else included.delete(key);
+		}
+	}
+
+	return Array.from(included);
+}
 
 export interface InteractionView {
 	id: string;
@@ -453,17 +539,10 @@ export const viewTaskPositionsQueryOptions = (
 export const sprintTasksQueryOptions = (
 	projectId: string,
 	sprintId: string,
-	filters?: ViewFilters,
 ) =>
 	queryOptions({
-		queryKey: ["projects", projectId, "sprints", sprintId, "tasks", filters],
-		queryFn: () =>
-			listSprintTasks(projectId, sprintId, {
-				sprintIds: filters?.sprint_ids,
-				statusIds: filters?.status_ids,
-				assigneeIds: filters?.assignee_ids,
-				taskTypeIds: filters?.task_type_ids,
-			}),
+		queryKey: ["projects", projectId, "sprints", sprintId, "tasks"],
+		queryFn: () => listSprintTasks(projectId, sprintId),
 		staleTime: 15_000,
 	});
 

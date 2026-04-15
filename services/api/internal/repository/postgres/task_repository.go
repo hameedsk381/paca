@@ -289,12 +289,6 @@ func (r *TaskRepository) ListTasks(ctx context.Context, projectID uuid.UUID, fil
 	if len(filter.TaskTypeIDs) > 0 {
 		q = q.Where("task_type_id IN ?", uuidSliceToStrSlice(filter.TaskTypeIDs))
 	}
-	if filter.ExcludeSystemTypes {
-		q = q.Where("task_type_id IS NULL OR task_type_id NOT IN (SELECT id FROM task_types WHERE is_system = true)")
-	}
-	if filter.EpicsOnly {
-		q = q.Where("task_type_id IN (SELECT id FROM task_types WHERE is_system = true AND name = 'Epic')")
-	}
 
 	var total int64
 	if err := q.Count(&total).Error; err != nil {
