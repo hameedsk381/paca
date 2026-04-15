@@ -18,7 +18,7 @@ type projectRecord struct {
 	ID           string `gorm:"primarykey;type:uuid"`
 	Name         string `gorm:"not null"`
 	Description  string
-	TaskIDPrefix string `gorm:"column:task_id_prefix;not null;default:''"`
+	TaskIDPrefix string  `gorm:"column:task_id_prefix;not null;default:''"`
 	Settings     []byte  `gorm:"type:jsonb;not null"`
 	CreatedBy    *string `gorm:"type:uuid"`
 	CreatedAt    time.Time

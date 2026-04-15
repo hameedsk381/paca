@@ -48,10 +48,7 @@ import {
 import { usePermissions } from "@/hooks/use-permissions";
 import type { ThemeMode } from "@/hooks/use-theme-mode";
 import { useThemeMode } from "@/hooks/use-theme-mode";
-import {
-	sprintsQueryOptions,
-	updateTask,
-} from "@/lib/interaction-api";
+import { sprintsQueryOptions, updateTask } from "@/lib/interaction-api";
 import { projectQueryOptions, projectsQueryOptions } from "@/lib/project-api";
 import { cn } from "@/lib/utils";
 
@@ -382,47 +379,46 @@ function ProjectInteractionsSection({ projectId }: { projectId: string }) {
 	};
 
 	return (
-		<>
-			<SidebarGroup>
-				<SidebarGroupLabel
-					className="flex cursor-pointer items-center justify-between hover:text-sidebar-foreground transition-colors"
-					onClick={toggle}
-				>
-					<span>Integrations</span>
-					<ChevronRight
-						className={cn(
-							"size-3.5 transition-transform duration-200 text-sidebar-foreground/40",
-							!collapsed && "rotate-90",
-						)}
-					/>
-				</SidebarGroupLabel>
+		<SidebarGroup>
+			<SidebarGroupLabel
+				className="flex cursor-pointer items-center justify-between hover:text-sidebar-foreground transition-colors"
+				onClick={toggle}
+			>
+				<span>Integrations</span>
+				<ChevronRight
+					className={cn(
+						"size-3.5 transition-transform duration-200 text-sidebar-foreground/40",
+						!collapsed && "rotate-90",
+					)}
+				/>
+			</SidebarGroupLabel>
 
-				{!collapsed && (
-					<SidebarGroupContent>
-						<SidebarMenu>
-							{/* Product Backlog — always shown */}
-							<SidebarMenuItem
-								onDragOver={(e) => handleInteractionDragOver(e, "backlog")}
-								onDragLeave={handleInteractionDragLeave}
-								onDrop={(e) => handleInteractionDrop(e, null)}
+			{!collapsed && (
+				<SidebarGroupContent>
+					<SidebarMenu>
+						{/* Product Backlog — always shown */}
+						<SidebarMenuItem
+							onDragOver={(e) => handleInteractionDragOver(e, "backlog")}
+							onDragLeave={handleInteractionDragLeave}
+							onDrop={(e) => handleInteractionDrop(e, null)}
+						>
+							<SidebarMenuButton
+								isActive={isBacklogActive}
+								tooltip="Product Backlog"
+								render={<Link to={backlogHref} />}
+								className={cn(
+									"relative transition-all duration-150",
+									isBacklogActive
+										? "bg-primary/10 text-primary font-medium before:absolute before:left-0 before:inset-y-2 before:w-0.75 before:rounded-full before:bg-primary"
+										: "hover:bg-sidebar-accent/60",
+									dragOverInteractionId === "backlog" &&
+										"ring-2 ring-primary/40 bg-primary/5 text-primary",
+								)}
 							>
-								<SidebarMenuButton
-									isActive={isBacklogActive}
-									tooltip="Product Backlog"
-									render={<Link to={backlogHref} />}
-									className={cn(
-										"relative transition-all duration-150",
-										isBacklogActive
-											? "bg-primary/10 text-primary font-medium before:absolute before:left-0 before:inset-y-2 before:w-0.75 before:rounded-full before:bg-primary"
-											: "hover:bg-sidebar-accent/60",
-										dragOverInteractionId === "backlog" &&
-											"ring-2 ring-primary/40 bg-primary/5 text-primary",
-									)}
-								>
-									<BookOpen className="size-4" />
-									<span>Product Backlog</span>
-								</SidebarMenuButton>
-							</SidebarMenuItem>
+								<BookOpen className="size-4" />
+								<span>Product Backlog</span>
+							</SidebarMenuButton>
+						</SidebarMenuItem>
 						{/* Timeline */}
 						<SidebarMenuItem>
 							<SidebarMenuButton
@@ -440,42 +436,40 @@ function ProjectInteractionsSection({ projectId }: { projectId: string }) {
 								<span>Timeline</span>
 							</SidebarMenuButton>
 						</SidebarMenuItem>
-							{/* Open sprints */}
-							{openSprints.map((sprint) => {
-								const sprintHref = `/projects/${projectId}/interactions/sprints/${sprint.id}`;
-								const isActive = location.startsWith(sprintHref);
-								return (
-									<SidebarMenuItem
-										key={sprint.id}
-										onDragOver={(e) => handleInteractionDragOver(e, sprint.id)}
-										onDragLeave={handleInteractionDragLeave}
-										onDrop={(e) => handleInteractionDrop(e, sprint.id)}
+						{/* Open sprints */}
+						{openSprints.map((sprint) => {
+							const sprintHref = `/projects/${projectId}/interactions/sprints/${sprint.id}`;
+							const isActive = location.startsWith(sprintHref);
+							return (
+								<SidebarMenuItem
+									key={sprint.id}
+									onDragOver={(e) => handleInteractionDragOver(e, sprint.id)}
+									onDragLeave={handleInteractionDragLeave}
+									onDrop={(e) => handleInteractionDrop(e, sprint.id)}
+								>
+									<SidebarMenuButton
+										isActive={isActive}
+										tooltip={sprint.name}
+										render={<Link to={sprintHref} />}
+										className={cn(
+											"relative transition-all duration-150",
+											isActive
+												? "bg-primary/10 text-primary font-medium before:absolute before:left-0 before:inset-y-2 before:w-0.75 before:rounded-full before:bg-primary"
+												: "hover:bg-sidebar-accent/60",
+											dragOverInteractionId === sprint.id &&
+												"ring-2 ring-primary/40 bg-primary/5 text-primary",
+										)}
 									>
-										<SidebarMenuButton
-											isActive={isActive}
-											tooltip={sprint.name}
-											render={<Link to={sprintHref} />}
-											className={cn(
-												"relative transition-all duration-150",
-												isActive
-													? "bg-primary/10 text-primary font-medium before:absolute before:left-0 before:inset-y-2 before:w-0.75 before:rounded-full before:bg-primary"
-													: "hover:bg-sidebar-accent/60",
-												dragOverInteractionId === sprint.id &&
-													"ring-2 ring-primary/40 bg-primary/5 text-primary",
-											)}
-										>
-											<KanbanSquare className="size-4" />
-											<span className="flex-1 truncate">{sprint.name}</span>
-
-										</SidebarMenuButton>
-									</SidebarMenuItem>
-								);
-							})}
-						</SidebarMenu>
-					</SidebarGroupContent>
-				)}
-			</SidebarGroup>
-		</>
+										<KanbanSquare className="size-4" />
+										<span className="flex-1 truncate">{sprint.name}</span>
+									</SidebarMenuButton>
+								</SidebarMenuItem>
+							);
+						})}
+					</SidebarMenu>
+				</SidebarGroupContent>
+			)}
+		</SidebarGroup>
 	);
 }
 

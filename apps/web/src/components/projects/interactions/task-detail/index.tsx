@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
 import { AlertCircle } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "@tanstack/react-router";
 import {
 	createTask,
 	epicTasksQueryOptions,
@@ -118,7 +118,11 @@ export function TaskDetailModal({
 	// For normal tasks: fetch all epics to populate the Epic picker
 	const { data: epicTasks = [] } = useQuery({
 		...epicTasksQueryOptions(projectId ?? "", epicType?.id ?? ""),
-		enabled: !!projectId && !!epicType?.id && taskRole === "normal" && (open || mode === "page"),
+		enabled:
+			!!projectId &&
+			!!epicType?.id &&
+			taskRole === "normal" &&
+			(open || mode === "page"),
 	});
 
 	// For subtasks: fetch parent task to display its title
@@ -135,7 +139,10 @@ export function TaskDetailModal({
 	// ── Navigation ────────────────────────────────────────────────────────────
 	function navigateToTask(taskId: string) {
 		if (!projectId) return;
-		navigate({ to: "/projects/$projectId/tasks/$taskId", params: { projectId, taskId } });
+		navigate({
+			to: "/projects/$projectId/tasks/$taskId",
+			params: { projectId, taskId },
+		});
 	}
 
 	// ── Update mutation ────────────────────────────────────────────────────────
@@ -357,20 +364,23 @@ export function TaskDetailModal({
 									if (!projectId) return;
 									updateTask(projectId, subtaskId, payload).then(() => {
 										qc.invalidateQueries({
-											queryKey: subtasksQueryOptions(projectId, task.id).queryKey,
+											queryKey: subtasksQueryOptions(projectId, task.id)
+												.queryKey,
 										});
 									});
 								}}
 								onSubtaskCreate={(payload) => {
 									if (!projectId) return;
-									const todoStatus = statuses.find((s) => s.category === "todo") ?? statuses[0];
+									const todoStatus =
+										statuses.find((s) => s.category === "todo") ?? statuses[0];
 									createTask(projectId, {
 										...payload,
 										status_id: todoStatus?.id ?? payload.status_id ?? null,
 										parent_task_id: task.id,
 									}).then(() => {
 										qc.invalidateQueries({
-											queryKey: subtasksQueryOptions(projectId, task.id).queryKey,
+											queryKey: subtasksQueryOptions(projectId, task.id)
+												.queryKey,
 										});
 									});
 								}}
@@ -450,7 +460,6 @@ export function TaskDetailModal({
 			>
 				{content}
 			</div>
-
 		</>
 	);
 }

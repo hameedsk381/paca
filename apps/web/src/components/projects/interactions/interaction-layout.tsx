@@ -5,6 +5,7 @@ import { useNavigate } from "@tanstack/react-router";
 // inside (0, POSITION_MAX) by always taking midpoints toward the boundaries, so
 // positions can never go negative and never overflow float64.
 const POSITION_MAX = Number.MAX_SAFE_INTEGER; // 2^53 − 1 ≈ 9 × 10^15
+
 import {
 	ChevronDown,
 	KanbanSquare,
@@ -14,8 +15,8 @@ import {
 	Search,
 	X,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
 	DropdownMenu,
@@ -58,14 +59,7 @@ import {
 	taskStatusesQueryOptions,
 	taskTypesQueryOptions,
 } from "@/lib/project-api";
-
-import {
-	sortTasksByConfig,
-	type TaskFieldUpdate,
-	type ViewContext,
-} from "./view-utils";
 import { cn } from "@/lib/utils";
-
 import { BoardView } from "./board-view";
 import { ListView } from "./list-view";
 import { NewViewPopover } from "./new-view-popover";
@@ -73,6 +67,11 @@ import { RenameViewDialog } from "./rename-view-dialog";
 import { RoadmapView } from "./roadmap-view";
 import { TaskDetailModal } from "./task-detail-modal";
 import { ViewSettingsPanel } from "./view-settings-panel";
+import {
+	sortTasksByConfig,
+	type TaskFieldUpdate,
+	type ViewContext,
+} from "./view-utils";
 
 interface InteractionLayoutProps {
 	projectId: string;
@@ -126,7 +125,8 @@ export function InteractionLayout({
 			const next: ViewConfig = { ...(baseConfig ?? {}) };
 			if (!next.column_by) {
 				if (sprintId) next.column_by = "status";
-				else if (context !== "timeline" && layout === "Table") next.column_by = "sprint";
+				else if (context !== "timeline" && layout === "Table")
+					next.column_by = "sprint";
 			}
 			if (next.filters === undefined) {
 				const filters: NonNullable<ViewConfig["filters"]> = {};
@@ -165,12 +165,18 @@ export function InteractionLayout({
 		customFieldsQueryOptions(projectId),
 	);
 
-	const viewsQuery = useQuery(viewsByContextQueryOptions(projectId, context, sprintId));
+	const viewsQuery = useQuery(
+		viewsByContextQueryOptions(projectId, context, sprintId),
+	);
 
 	const serverViews = viewsQuery.data ?? [];
 	const views = serverViews.length > 0 ? serverViews : [];
 
-	const viewsQueryKey = viewsByContextQueryOptions(projectId, context, sprintId).queryKey;
+	const viewsQueryKey = viewsByContextQueryOptions(
+		projectId,
+		context,
+		sprintId,
+	).queryKey;
 
 	const seedingRef = useRef(false);
 	useEffect(() => {
@@ -185,16 +191,26 @@ export function InteractionLayout({
 		const seed =
 			context === "sprint" && sprintId
 				? Promise.all([
-						createViewByContext(projectId, context, {
-							name: "Board",
-							view_type: "board",
-							config: buildDefaultViewConfig("Board"),
-						}, sprintId),
-						createViewByContext(projectId, context, {
-							name: "Table",
-							view_type: "table",
-							config: buildDefaultViewConfig("Table"),
-						}, sprintId),
+						createViewByContext(
+							projectId,
+							context,
+							{
+								name: "Board",
+								view_type: "board",
+								config: buildDefaultViewConfig("Board"),
+							},
+							sprintId,
+						),
+						createViewByContext(
+							projectId,
+							context,
+							{
+								name: "Table",
+								view_type: "table",
+								config: buildDefaultViewConfig("Table"),
+							},
+							sprintId,
+						),
 					])
 				: context === "timeline"
 					? createViewByContext(projectId, context, {
@@ -329,21 +345,33 @@ export function InteractionLayout({
 			sprint_ids:
 				activeViewConfig?.filters !== undefined
 					? activeViewConfig.filters.sprints
-						? resolveFilterConfig(activeViewConfig.filters.sprints, sprints.map((s) => s.id))
+						? resolveFilterConfig(
+								activeViewConfig.filters.sprints,
+								sprints.map((s) => s.id),
+							)
 						: undefined
 					: sprintId
 						? [sprintId]
 						: undefined,
 			status_ids: activeViewConfig?.filters?.statuses
-				? resolveFilterConfig(activeViewConfig.filters.statuses, statuses.map((s) => s.id))
+				? resolveFilterConfig(
+						activeViewConfig.filters.statuses,
+						statuses.map((s) => s.id),
+					)
 				: undefined,
 			assignee_ids: activeViewConfig?.filters?.assignees
-				? resolveFilterConfig(activeViewConfig.filters.assignees, members.map((m) => m.id))
+				? resolveFilterConfig(
+						activeViewConfig.filters.assignees,
+						members.map((m) => m.id),
+					)
 				: undefined,
 			task_type_ids: (() => {
 				if (!activeViewConfig?.filters) return defaultPageTaskTypeIds;
 				if (!activeViewConfig.filters.task_types) return undefined;
-				return resolveTaskTypeFilter(activeViewConfig.filters.task_types, taskTypes);
+				return resolveTaskTypeFilter(
+					activeViewConfig.filters.task_types,
+					taskTypes,
+				);
 			})(),
 		}),
 		[
@@ -357,7 +385,8 @@ export function InteractionLayout({
 		],
 	);
 	const tasksQueryOpts = allTasksQueryOptions(projectId, {
-		sprintId: context !== "timeline" && !hasExplicitFilterConfig ? sprintId : undefined,
+		sprintId:
+			context !== "timeline" && !hasExplicitFilterConfig ? sprintId : undefined,
 		sprintIds: apiFilters.sprint_ids,
 		statusIds: apiFilters.status_ids,
 		assigneeIds: apiFilters.assignee_ids,
@@ -385,7 +414,10 @@ export function InteractionLayout({
 		});
 	}, [effectiveViewId, taskPositionsQuery.data, tasks]);
 	const tasksLoading = tasksQuery.isLoading;
-	const tasksListQueryKey = ["projects", projectId, "tasks"];
+	const tasksListQueryKey = useMemo(
+		() => ["projects", projectId, "tasks"],
+		[projectId],
+	);
 
 	const viewCtx: ViewContext = useMemo(
 		() => ({ statuses, taskTypes, members, customFields, sprints }),
@@ -407,7 +439,10 @@ export function InteractionLayout({
 	}, [isManualSort, tasksWithViewPositions, activeViewConfig, viewCtx]);
 
 	const selectedTask = useMemo(
-		() => (selectedTaskId ? (sortedTasks.find((t) => t.id === selectedTaskId) ?? null) : null),
+		() =>
+			selectedTaskId
+				? (sortedTasks.find((t) => t.id === selectedTaskId) ?? null)
+				: null,
 		[selectedTaskId, sortedTasks],
 	);
 
@@ -508,7 +543,12 @@ export function InteractionLayout({
 		// The creatableTaskTypes list is already filtered by the active view config,
 		// so this naturally handles Epic-only views (e.g. Timeline).
 		const effectiveTaskTypeId = taskTypeId ?? creatableTaskTypes[0]?.id ?? null;
-		await createTaskMutation.mutateAsync({ title, statusId, taskTypeId: effectiveTaskTypeId, extraFields });
+		await createTaskMutation.mutateAsync({
+			title,
+			statusId,
+			taskTypeId: effectiveTaskTypeId,
+			extraFields,
+		});
 	};
 
 	const handleReorderTask = useCallback(
@@ -534,7 +574,7 @@ export function InteractionLayout({
 			);
 			const lastExplicit = reordered
 				.filter((t) => t.view_position != null)
-				.reduce((max, t) => Math.max(max, t.view_position!), 0);
+				.reduce((max, t) => Math.max(max, t.view_position as number), 0);
 			const virtualPosMap = new Map<string, number>();
 			nullNonMoved.forEach((t, i) => {
 				virtualPosMap.set(
@@ -594,7 +634,10 @@ export function InteractionLayout({
 					await qc.invalidateQueries({ queryKey: tasksListQueryKey });
 					if (effectiveViewId) {
 						await qc.invalidateQueries({
-							queryKey: viewTaskPositionsQueryOptions(projectId, effectiveViewId).queryKey,
+							queryKey: viewTaskPositionsQueryOptions(
+								projectId,
+								effectiveViewId,
+							).queryKey,
 						});
 					}
 				})
@@ -609,7 +652,10 @@ export function InteractionLayout({
 				.then((updatedTask) => {
 					// Write the server response directly into the per-task cache so the
 					// detail modal immediately shows the updated value without a separate fetch.
-					qc.setQueryData(["projects", projectId, "tasks", taskId], updatedTask);
+					qc.setQueryData(
+						["projects", projectId, "tasks", taskId],
+						updatedTask,
+					);
 					return qc.invalidateQueries({ queryKey: tasksListQueryKey });
 				})
 				.catch(console.error);
@@ -621,7 +667,12 @@ export function InteractionLayout({
 		mutationFn: (payload: { name: string; layout: ViewLayout }) => {
 			const view_type = layoutToViewType(payload.layout);
 			const config = buildDefaultViewConfig(payload.layout);
-			return createViewByContext(projectId, context, { name: payload.name, view_type, config }, sprintId);
+			return createViewByContext(
+				projectId,
+				context,
+				{ name: payload.name, view_type, config },
+				sprintId,
+			);
 		},
 		onSuccess: (view) => {
 			qc.invalidateQueries({ queryKey: viewsQueryKey });
@@ -969,7 +1020,10 @@ export function InteractionLayout({
 						onStartSprint={
 							context === "backlog" && canCreate
 								? async (sid, payload) => {
-										await updateSprintMutation.mutateAsync({ sprintId: sid, payload });
+										await updateSprintMutation.mutateAsync({
+											sprintId: sid,
+											payload,
+										});
 										navigate({
 											to: "/projects/$projectId/interactions/sprints/$sprintId",
 											params: { projectId, sprintId: sid },
@@ -977,7 +1031,9 @@ export function InteractionLayout({
 									}
 								: undefined
 						}
-						onCreateSprint={context === "backlog" && canCreate ? handleNewSprint : undefined}
+						onCreateSprint={
+							context === "backlog" && canCreate ? handleNewSprint : undefined
+						}
 					/>
 				)}
 			</div>

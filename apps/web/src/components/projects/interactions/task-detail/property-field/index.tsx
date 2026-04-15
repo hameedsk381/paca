@@ -117,7 +117,9 @@ export function PropertyField({
 						</span>
 					);
 				}
-				return <NumberEditor value={numberValue ?? 0} onChange={onNumberChange} />;
+				return (
+					<NumberEditor value={numberValue ?? 0} onChange={onNumberChange} />
+				);
 
 			case "text":
 				return (

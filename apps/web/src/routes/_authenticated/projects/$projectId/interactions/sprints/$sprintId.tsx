@@ -28,8 +28,8 @@ export const Route = createFileRoute(
 				throw redirect({
 					to: "/projects/$projectId/interactions/backlog",
 					params: { projectId },
-				})
-			})
+				});
+			});
 	},
 	component: SprintPage,
 });
@@ -42,14 +42,14 @@ function SprintPage() {
 
 	const { data: sprint, isError } = useQuery(
 		sprintQueryOptions(projectId, sprintId),
-	)
+	);
 	const { data: allSprints = [] } = useQuery(sprintsQueryOptions(projectId));
 	const { data: tasksResult } = useQuery(
 		sprintTasksQueryOptions(projectId, sprintId),
-	)
+	);
 	const { data: taskStatuses = [] } = useQuery(
 		taskStatusesQueryOptions(projectId),
-	)
+	);
 
 	const canCreate = hasPermission("tasks.write");
 	const canEdit = hasPermission("tasks.write");
@@ -62,17 +62,15 @@ function SprintPage() {
 	const sprintTasks = tasksResult?.items ?? [];
 
 	const doneStatusIds = new Set(
-		taskStatuses
-			.filter((s) => s.category === "done")
-			.map((s) => s.id),
-	)
+		taskStatuses.filter((s) => s.category === "done").map((s) => s.id),
+	);
 	const incompleteTasks = sprintTasks.filter(
 		(t) => !t.status_id || !doneStatusIds.has(t.status_id),
-	)
+	);
 
 	const otherSprints = allSprints.filter(
 		(s) => s.id !== sprintId && s.status !== "completed",
-	)
+	);
 
 	const completeSprintMutation = useMutation({
 		mutationFn: async () => {
@@ -84,25 +82,27 @@ function SprintPage() {
 							sprint_id: moveToSprintId ?? null,
 						}),
 					),
-				)
+				);
 			}
 			// Mark sprint as completed
 			return updateSprint(projectId, sprintId, { status: "completed" });
 		},
 		onSuccess: () => {
 			qc.invalidateQueries({ queryKey: ["projects", projectId, "sprints"] });
-			qc.invalidateQueries({ queryKey: ["projects", projectId, "backlog-tasks"] });
+			qc.invalidateQueries({
+				queryKey: ["projects", projectId, "backlog-tasks"],
+			});
 			qc.invalidateQueries({ queryKey: ["projects", projectId, "all-tasks"] });
 			qc.invalidateQueries({
 				queryKey: ["projects", projectId, "sprints", sprintId, "tasks"],
-			})
+			});
 			setCompleteOpen(false);
 			navigate({
 				to: "/projects/$projectId/interactions/backlog",
 				params: { projectId },
-			})
+			});
 		},
-	})
+	});
 
 	if (isError || !sprint) {
 		return (
@@ -110,7 +110,7 @@ function SprintPage() {
 				<AlertCircle className="size-8 opacity-40" />
 				<p className="text-sm">Sprint not found or access denied.</p>
 			</div>
-		)
+		);
 	}
 
 	const statusBadge =
@@ -121,8 +121,8 @@ function SprintPage() {
 				: "Completed";
 
 	return (
-        <>
-            <InteractionLayout
+		<>
+			<InteractionLayout
 				projectId={projectId}
 				interactionKey={`sprint:${sprintId}`}
 				title={sprint.name}
@@ -149,19 +149,23 @@ function SprintPage() {
 					) : undefined
 				}
 			/>
-            {/* Complete Sprint Modal */}
-            {completeOpen && (
+			{/* Complete Sprint Modal */}
+			{completeOpen && (
 				// biome-ignore lint/a11y/noStaticElementInteractions: modal backdrop
-				(<div
+				<div
 					className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
 					onClick={(e) => {
 						if (e.target === e.currentTarget) setCompleteOpen(false);
 					}}
+					onKeyDown={(e) => {
+						if (e.key === "Escape") setCompleteOpen(false);
+					}}
 				>
-                    {/* biome-ignore lint/a11y/noStaticElementInteractions: modal panel */}
-                    <div
+					{/* biome-ignore lint/a11y/noStaticElementInteractions: modal panel */}
+					<div
 						className="relative w-full max-w-md rounded-xl border border-border/50 bg-background p-6 shadow-2xl mx-4"
 						onClick={(e) => e.stopPropagation()}
+						onKeyDown={(e) => e.stopPropagation()}
 					>
 						<button
 							type="button"
@@ -256,8 +260,8 @@ function SprintPage() {
 							</button>
 						</div>
 					</div>
-                </div>)
+				</div>
 			)}
-        </>
-    )
+		</>
+	);
 }

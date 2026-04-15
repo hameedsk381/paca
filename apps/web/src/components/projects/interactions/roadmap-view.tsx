@@ -1,10 +1,10 @@
-import { useMemo } from "react";
 import { CalendarDays } from "lucide-react";
+import { useMemo } from "react";
 
 import type { Task } from "@/lib/interaction-api";
-import { AddTaskRow } from "./add-task-row";
 import type { TaskStatus, TaskType } from "@/lib/project-api";
 import { cn } from "@/lib/utils";
+import { AddTaskRow } from "./add-task-row";
 
 // ─── Layout constants ─────────────────────────────────────────────────────────
 const LEFT_COL_W = 280; // px — sticky task-name column
@@ -110,8 +110,10 @@ export function RoadmapView({
 			if (d !== null) allMs.push(d);
 		}
 
-		const rawMin = allMs.length > 0 ? Math.min(...allMs) : now - 15 * MS_PER_DAY;
-		const rawMax = allMs.length > 0 ? Math.max(...allMs) : now + 15 * MS_PER_DAY;
+		const rawMin =
+			allMs.length > 0 ? Math.min(...allMs) : now - 15 * MS_PER_DAY;
+		const rawMax =
+			allMs.length > 0 ? Math.max(...allMs) : now + 15 * MS_PER_DAY;
 		const minMs = rawMin - PAD_DAYS * MS_PER_DAY;
 		const maxMs = rawMax + PAD_DAYS * MS_PER_DAY;
 
@@ -157,8 +159,8 @@ export function RoadmapView({
 		if (startMs === null && dueMs === null) return null;
 
 		const singleDate = startMs === null || dueMs === null;
-		const effectiveStart = startMs ?? dueMs!;
-		const effectiveEnd = dueMs ?? startMs! + MS_PER_DAY;
+		const effectiveStart = startMs ?? (dueMs as number);
+		const effectiveEnd = dueMs ?? (startMs as number) + MS_PER_DAY;
 
 		const leftPx = toPx(effectiveStart);
 		const widthPx = Math.max(8, toPx(effectiveEnd) - leftPx);
@@ -170,7 +172,7 @@ export function RoadmapView({
 		} else if (startMs !== null) {
 			tooltip = `Start: ${fmtDate(startMs)}`;
 		} else {
-			tooltip = `Due: ${fmtDate(dueMs!)}`;
+			tooltip = `Due: ${fmtDate(dueMs as number)}`;
 		}
 
 		return { leftPx, widthPx, singleDate, overdue, tooltip };
@@ -390,7 +392,11 @@ export function RoadmapView({
 								if (!uns.length) return null;
 								return (
 									<div className="border-b border-border/20 last:border-0">
-										<GroupHeader color={null} name="No Status" count={uns.length} />
+										<GroupHeader
+											color={null}
+											name="No Status"
+											count={uns.length}
+										/>
 										{uns.map((t) => (
 											<RoadmapTaskRow key={t.id} task={t} />
 										))}
@@ -401,20 +407,22 @@ export function RoadmapView({
 					)}
 
 					{/* ── Add task ─────────────────────────────────────────── */}
-					{canCreate && defaultStatusId && onCreateTask && taskTypes.length > 0 && (
-						<div className="border-t border-border/20 bg-muted/5">
-							<AddTaskRow
-								taskTypes={taskTypes}
-								variant="list"
-								onAdd={(title, taskTypeId) => {
-									void onCreateTask(defaultStatusId, title, taskTypeId);
-								}}
-							/>
-						</div>
-					)}
+					{canCreate &&
+						defaultStatusId &&
+						onCreateTask &&
+						taskTypes.length > 0 && (
+							<div className="border-t border-border/20 bg-muted/5">
+								<AddTaskRow
+									taskTypes={taskTypes}
+									variant="list"
+									onAdd={(title, taskTypeId) => {
+										void onCreateTask(defaultStatusId, title, taskTypeId);
+									}}
+								/>
+							</div>
+						)}
 				</div>
 			</div>
 		</div>
 	);
 }
-

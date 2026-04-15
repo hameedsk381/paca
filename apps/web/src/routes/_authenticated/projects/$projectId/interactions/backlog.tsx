@@ -29,5 +29,5 @@ function BacklogPage() {
 			sprintId={null}
 			context="backlog"
 		/>
-	)
+	);
 }

@@ -34,10 +34,10 @@ export function getImportanceBucket(importance: number): number {
  * boundary.  Bucket 4 (Critical, 100+) uses 150 as a reasonable midpoint.
  */
 export const IMPORTANCE_BUCKET_VALUES: Record<number, number> = {
-	0: 0,   // None
-	1: 10,  // Low:      mid of 1–19
-	2: 35,  // Medium:   mid of 20–49
-	3: 75,  // High:     mid of 50–99
+	0: 0, // None
+	1: 10, // Low:      mid of 1–19
+	2: 35, // Medium:   mid of 20–49
+	3: 75, // High:     mid of 50–99
 	4: 150, // Critical: mid of 100–200 (representative)
 };
 
@@ -48,9 +48,10 @@ export function getPriority(importance: number): PriorityMeta {
 /**
  * Returns the min/max raw importance bounds for a given bucket index (0-4).
  */
-export function getImportanceBucketBounds(
-	bucket: number,
-): { min: number; max: number } {
+export function getImportanceBucketBounds(bucket: number): {
+	min: number;
+	max: number;
+} {
 	switch (bucket) {
 		case 0:
 			return { min: 0, max: 0 };

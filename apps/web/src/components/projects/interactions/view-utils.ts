@@ -6,7 +6,11 @@ import type {
 	TaskType,
 } from "@/lib/project-api";
 
-import { IMPORTANCE_BUCKET_VALUES, PRIORITY_LEVELS, getImportanceBucket } from "./priority";
+import {
+	getImportanceBucket,
+	IMPORTANCE_BUCKET_VALUES,
+	PRIORITY_LEVELS,
+} from "./priority";
 
 // ── Context ──────────────────────────────────────────────────────────────────
 
@@ -345,11 +349,7 @@ export const BUILTIN_FIELDS: { key: string; label: string }[] = [
  * Default visible fields (excluding title, which is always shown).
  * Used when a view has no field config saved yet.
  */
-export const DEFAULT_VISIBLE_FIELDS = [
-	"assignee",
-	"importance",
-	"type",
-];
+export const DEFAULT_VISIBLE_FIELDS = ["assignee", "importance", "type"];
 
 export function buildColumnByOptions(
 	customFields: CustomFieldDefinition[],

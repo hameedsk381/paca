@@ -1,42 +1,47 @@
 import { useQuery } from "@tanstack/react-query";
-import { Check, ChevronDown, ChevronRight, GripVertical, Settings } from "lucide-react";
+import {
+	Check,
+	ChevronDown,
+	ChevronRight,
+	GripVertical,
+	Settings,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-
+import { getTaskTypeIconComponent } from "@/components/projects/task-types/task-type-icons";
 import {
 	Popover,
 	PopoverContent,
 	PopoverTrigger,
 } from "@/components/ui/popover";
 import {
-	sprintsQueryOptions,
 	type FilterConfig,
 	type FilterEntry,
 	type InteractionView,
+	sprintsQueryOptions,
 	type ViewConfig,
 	type ViewFilters,
 } from "@/lib/interaction-api";
 import {
+	type CustomFieldDefinition,
 	customFieldsQueryOptions,
 	projectMembersQueryOptions,
-	taskStatusesQueryOptions,
-	taskTypesQueryOptions,
 	STATUS_CATEGORIES,
 	STATUS_CATEGORY_LABELS,
-	type CustomFieldDefinition,
 	type StatusCategory,
 	type TaskStatus,
 	type TaskType,
+	taskStatusesQueryOptions,
+	taskTypesQueryOptions,
 } from "@/lib/project-api";
-import { getTaskTypeIconComponent } from "@/components/projects/task-types/task-type-icons";
 import { cn } from "@/lib/utils";
 
 import {
-	DEFAULT_VISIBLE_FIELDS,
 	buildAllFieldOptions,
 	buildColumnByOptions,
 	buildFieldSumOptions,
 	buildSortByOptions,
 	buildSwimlaneOptions,
+	DEFAULT_VISIBLE_FIELDS,
 } from "./view-utils";
 
 // ── Category visual config ────────────────────────────────────────────────────
@@ -405,7 +410,8 @@ function StatusFilterSection({
 				const groupStatuses = statuses.filter((s) => s.category === cat);
 				if (groupStatuses.length === 0) return null;
 				const groupIds = groupStatuses.map((s) => s.id);
-				const allChecked = isAll || groupIds.every((id) => selectedIds.includes(id));
+				const allChecked =
+					isAll || groupIds.every((id) => selectedIds.includes(id));
 
 				return (
 					<div key={cat}>
@@ -521,7 +527,10 @@ function AssigneeFilterSection({
 function filterConfigToIds(config: FilterConfig | undefined): string[] {
 	if (!config || config.all) return [];
 	return Object.entries(config.items ?? {})
-		.filter(([, v]) => v === true || (typeof v === "object" && (v as FilterConfig).all))
+		.filter(
+			([, v]) =>
+				v === true || (typeof v === "object" && (v as FilterConfig).all),
+		)
 		.map(([k]) => k);
 }
 
@@ -537,10 +546,11 @@ function taskTypeConfigToUI(config: FilterConfig | undefined): {
 	selectedIds: string[];
 } {
 	if (!config) return { allNormal: false, selectedIds: [] };
-	const normalEntry = config.items?.["normal"];
+	const normalEntry = config.items?.normal;
 	const allNormal =
 		normalEntry === true ||
-		(typeof normalEntry === "object" && (normalEntry as FilterConfig).all === true);
+		(typeof normalEntry === "object" &&
+			(normalEntry as FilterConfig).all === true);
 	const selectedIds = Object.entries(config.items ?? {})
 		.filter(
 			([k, v]) =>
@@ -557,7 +567,7 @@ function uiToTaskTypeConfig(
 ): FilterConfig | undefined {
 	if (!allNormal && selectedIds.length === 0) return undefined;
 	const items: Record<string, FilterEntry> = {};
-	if (allNormal) items["normal"] = { all: true };
+	if (allNormal) items.normal = { all: true };
 	for (const id of selectedIds) items[id] = true;
 	return { all: false, items };
 }
@@ -742,9 +752,7 @@ export function ViewSettingsPanel({
 	const { data: customFields = [] } = useQuery(
 		customFieldsQueryOptions(projectId),
 	);
-	const { data: statuses = [] } = useQuery(
-		taskStatusesQueryOptions(projectId),
-	);
+	const { data: statuses = [] } = useQuery(taskStatusesQueryOptions(projectId));
 	const { data: taskTypes = [] } = useQuery(taskTypesQueryOptions(projectId));
 	const { data: members = [] } = useQuery(
 		projectMembersQueryOptions(projectId),
@@ -957,14 +965,11 @@ export function ViewSettingsPanel({
 									onChange={(v) => update({ field_sum: v })}
 								/>
 							</SettingRow>
-
-</div>
+						</div>
 
 						{/* ── Filters section ──────────────────────────────────── */}
 						<div className="border-t border-border/20">
-							<PanelSectionHeader>
-								Filters
-							</PanelSectionHeader>
+							<PanelSectionHeader>Filters</PanelSectionHeader>
 
 							<div className="pb-1">
 								<CollapsibleFilter
@@ -975,7 +980,9 @@ export function ViewSettingsPanel({
 									<SprintFilterSection
 										sprints={sprints}
 										selectedIds={filterSprintIds}
-										onChange={(ids) => updateFilters({ sprints: idsToFilterConfig(ids) })}
+										onChange={(ids) =>
+											updateFilters({ sprints: idsToFilterConfig(ids) })
+										}
 									/>
 								</CollapsibleFilter>
 
@@ -987,7 +994,9 @@ export function ViewSettingsPanel({
 									<StatusFilterSection
 										statuses={statuses}
 										selectedIds={filterStatusIds}
-										onChange={(ids) => updateFilters({ statuses: idsToFilterConfig(ids) })}
+										onChange={(ids) =>
+											updateFilters({ statuses: idsToFilterConfig(ids) })
+										}
 									/>
 								</CollapsibleFilter>
 
@@ -999,14 +1008,20 @@ export function ViewSettingsPanel({
 									<AssigneeFilterSection
 										members={members}
 										selectedIds={filterAssigneeIds}
-										onChange={(ids) => updateFilters({ assignees: idsToFilterConfig(ids) })}
+										onChange={(ids) =>
+											updateFilters({ assignees: idsToFilterConfig(ids) })
+										}
 									/>
 								</CollapsibleFilter>
 
 								<CollapsibleFilter
 									label="Task types"
-									badge={filterTaskTypeIds.length + (filterTaskTypeAllNormal ? 1 : 0)}
-									defaultOpen={filterTaskTypeIds.length > 0 || filterTaskTypeAllNormal}
+									badge={
+										filterTaskTypeIds.length + (filterTaskTypeAllNormal ? 1 : 0)
+									}
+									defaultOpen={
+										filterTaskTypeIds.length > 0 || filterTaskTypeAllNormal
+									}
 								>
 									<TaskTypeFilterSection
 										taskTypes={taskTypes}
@@ -1014,7 +1029,10 @@ export function ViewSettingsPanel({
 										allNormal={filterTaskTypeAllNormal}
 										onChange={(ids) =>
 											updateFilters({
-												task_types: uiToTaskTypeConfig(filterTaskTypeAllNormal, ids),
+												task_types: uiToTaskTypeConfig(
+													filterTaskTypeAllNormal,
+													ids,
+												),
 											})
 										}
 										onAllNormalChange={(next) =>
@@ -1023,7 +1041,8 @@ export function ViewSettingsPanel({
 													next,
 													next
 														? filterTaskTypeIds.filter(
-																(id) => taskTypes.find((t) => t.id === id)?.is_system,
+																(id) =>
+																	taskTypes.find((t) => t.id === id)?.is_system,
 															)
 														: filterTaskTypeIds,
 												),

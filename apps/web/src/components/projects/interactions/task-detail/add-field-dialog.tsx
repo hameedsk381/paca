@@ -1,10 +1,10 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { X } from "lucide-react";
 import { useState } from "react";
 import {
 	createCustomFieldDefinition,
 	customFieldsQueryOptions,
 } from "@/lib/project-api";
-import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { mapApiFieldToUi, mapUiFieldTypeToApi, slugify } from "./helpers";
 import type { CustomFieldDef } from "./types";

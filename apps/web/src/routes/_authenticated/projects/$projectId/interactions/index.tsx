@@ -120,5 +120,5 @@ function IntegrationsPage() {
 				</div>
 			</div>
 		</div>
-	)
+	);
 }

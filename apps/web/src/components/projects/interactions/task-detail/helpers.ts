@@ -42,10 +42,7 @@ const API_TO_UI_FIELD_TYPE: Record<FieldType, CustomFieldDef["field_type"]> = {
 	url: "Text",
 };
 
-const UI_TO_API_FIELD_TYPE: Record<
-	CustomFieldDef["field_type"],
-	FieldType
-> = {
+const UI_TO_API_FIELD_TYPE: Record<CustomFieldDef["field_type"], FieldType> = {
 	Text: "text",
 	Number: "number",
 	Date: "date",

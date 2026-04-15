@@ -267,13 +267,14 @@ func (r *TaskRepository) ListTasks(ctx context.Context, projectID uuid.UUID, fil
 	q := r.db.WithContext(ctx).Model(&taskRecord{}).
 		Where("project_id = ? AND deleted_at IS NULL", projectID.String())
 
-	if filter.ParentTaskID != nil {
+	switch {
+	case filter.ParentTaskID != nil:
 		q = q.Where("parent_task_id = ?", filter.ParentTaskID.String())
-	} else if len(filter.SprintIDs) > 0 {
+	case len(filter.SprintIDs) > 0:
 		q = q.Where("sprint_id IN ?", uuidSliceToStrSlice(filter.SprintIDs))
-	} else if filter.BacklogOnly {
+	case filter.BacklogOnly:
 		q = q.Where("sprint_id IS NULL")
-	} else if filter.SprintID != nil {
+	case filter.SprintID != nil:
 		q = q.Where("sprint_id = ?", filter.SprintID.String())
 	}
 	if len(filter.StatusIDs) > 0 {

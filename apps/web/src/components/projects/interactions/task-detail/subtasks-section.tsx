@@ -65,9 +65,15 @@ export function SubtasksSection({
 		const trimmed = newTitle.trim();
 		if (!trimmed) return;
 		if (mode === "subtasks") {
-			onSubtaskCreate?.({ title: trimmed, task_type_id: subtaskType?.id ?? null });
+			onSubtaskCreate?.({
+				title: trimmed,
+				task_type_id: subtaskType?.id ?? null,
+			});
 		} else {
-			onSubtaskCreate?.({ title: trimmed, task_type_id: selectedTypeId || null });
+			onSubtaskCreate?.({
+				title: trimmed,
+				task_type_id: selectedTypeId || null,
+			});
 		}
 		setNewTitle("");
 		setAdding(false);

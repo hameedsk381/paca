@@ -121,7 +121,9 @@ function CreateProjectDialog({
 				return;
 			}
 			if (code === ApiErrorCode.ProjectPrefixInvalid) {
-				setPrefixError("Prefix must be 1–10 uppercase letters/digits (e.g. PACA).");
+				setPrefixError(
+					"Prefix must be 1–10 uppercase letters/digits (e.g. PACA).",
+				);
 				return;
 			}
 			setError("Something went wrong. Please try again.");
@@ -179,27 +181,44 @@ function CreateProjectDialog({
 					<div className="space-y-1.5">
 						<Label htmlFor="project-prefix">
 							Task ID prefix{" "}
-							<span className="text-muted-foreground font-normal">(e.g. PACA)</span>
+							<span className="text-muted-foreground font-normal">
+								(e.g. PACA)
+							</span>
 						</Label>
 						<div className="flex items-center gap-2">
 							<Input
 								id="project-prefix"
 								value={prefix}
 								onChange={(e) => {
-									setPrefix(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 10));
+									setPrefix(
+										e.target.value
+											.toUpperCase()
+											.replace(/[^A-Z0-9]/g, "")
+											.slice(0, 10),
+									);
 									setPrefixTouched(true);
 									setPrefixError(null);
 								}}
 								placeholder="PROJ"
 								className={cn(
 									"font-[JetBrains_Mono,monospace] uppercase w-32",
-									prefixError ? "border-destructive focus-visible:ring-destructive/30" : "",
+									prefixError
+										? "border-destructive focus-visible:ring-destructive/30"
+										: "",
 								)}
 								maxLength={10}
 							/>
 							{prefix ? (
 								<span className="text-xs text-muted-foreground">
-									Tasks will be labelled <span className="font-[JetBrains_Mono,monospace] font-semibold text-foreground">{prefix}-1</span>, <span className="font-[JetBrains_Mono,monospace] font-semibold text-foreground">{prefix}-2</span>…
+									Tasks will be labelled{" "}
+									<span className="font-[JetBrains_Mono,monospace] font-semibold text-foreground">
+										{prefix}-1
+									</span>
+									,{" "}
+									<span className="font-[JetBrains_Mono,monospace] font-semibold text-foreground">
+										{prefix}-2
+									</span>
+									…
 								</span>
 							) : null}
 						</div>

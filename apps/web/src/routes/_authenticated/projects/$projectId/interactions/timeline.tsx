@@ -29,5 +29,5 @@ function TimelinePage() {
 			sprintId={null}
 			context="timeline"
 		/>
-	)
+	);
 }

@@ -121,7 +121,10 @@ export type ViewLayout = "Board" | "Table" | "Roadmap";
  * Resolves a generic FilterConfig to an array of IDs from `allIds`.
  * Does not handle virtual group keys — use domain-specific resolvers for those.
  */
-export function resolveFilterConfig(config: FilterConfig, allIds: string[]): string[] {
+export function resolveFilterConfig(
+	config: FilterConfig,
+	allIds: string[],
+): string[] {
 	const included = new Set<string>(config.all ? allIds : []);
 	for (const [key, entry] of Object.entries(config.items ?? {})) {
 		const include = entry === true || (typeof entry === "object" && entry.all);
@@ -163,7 +166,8 @@ export function resolveTaskTypeFilter(
 			}
 		} else {
 			// Direct UUID key
-			const include = entry === true || (typeof entry === "object" && entry.all);
+			const include =
+				entry === true || (typeof entry === "object" && entry.all);
 			if (include) included.add(key);
 			else included.delete(key);
 		}
@@ -207,8 +211,12 @@ interface ViewListResult {
 
 export type ViewsContext = "sprint" | "backlog" | "timeline";
 
-function viewsContextQuery(context: ViewsContext, sprintId?: string | null): string {
-	if (context === "sprint" && sprintId) return `context=sprint&sprint_id=${sprintId}`;
+function viewsContextQuery(
+	context: ViewsContext,
+	sprintId?: string | null,
+): string {
+	if (context === "sprint" && sprintId)
+		return `context=sprint&sprint_id=${sprintId}`;
 	return `context=${context}`;
 }
 
@@ -217,9 +225,9 @@ export async function listViewsByContext(
 	context: ViewsContext,
 	sprintId?: string | null,
 ): Promise<InteractionView[]> {
-	const { data } = await apiClient.instance.get<SuccessEnvelope<ViewListResult>>(
-		`/projects/${projectId}/views?${viewsContextQuery(context, sprintId)}`,
-	);
+	const { data } = await apiClient.instance.get<
+		SuccessEnvelope<ViewListResult>
+	>(`/projects/${projectId}/views?${viewsContextQuery(context, sprintId)}`);
 	return data.data.items.map(mapView);
 }
 
@@ -241,7 +249,12 @@ export async function createViewByContext(
 export async function updateViewById(
 	projectId: string,
 	viewId: string,
-	payload: Partial<{ name: string; view_type: ViewType; config: ViewConfig; position: number }>,
+	payload: Partial<{
+		name: string;
+		view_type: ViewType;
+		config: ViewConfig;
+		position: number;
+	}>,
 ): Promise<InteractionView> {
 	const { data } = await apiClient.instance.patch<
 		SuccessEnvelope<Omit<InteractionView, "layout">>
@@ -271,7 +284,11 @@ export async function reorderViewsByContext(
 export async function bulkMoveViewTaskPositions(
 	projectId: string,
 	viewId: string,
-	items: Array<{ task_id: string; position: number; group_key?: string | null }>,
+	items: Array<{
+		task_id: string;
+		position: number;
+		group_key?: string | null;
+	}>,
 ): Promise<void> {
 	await apiClient.instance.put(
 		`/projects/${projectId}/views/${viewId}/task-positions`,
@@ -377,12 +394,16 @@ function buildTaskQueryParams(opts: ListTasksOptions = {}) {
 	};
 	if (opts.sprintId === null) params.sprint_id = "null";
 	else if (opts.sprintId) params.sprint_id = opts.sprintId;
-	if (opts.sprintIds && opts.sprintIds.length > 0) params.sprint_ids = opts.sprintIds.join(",");
+	if (opts.sprintIds && opts.sprintIds.length > 0)
+		params.sprint_ids = opts.sprintIds.join(",");
 	if (opts.statusId) params.status_id = opts.statusId;
-	if (opts.statusIds && opts.statusIds.length > 0) params.status_ids = opts.statusIds.join(",");
+	if (opts.statusIds && opts.statusIds.length > 0)
+		params.status_ids = opts.statusIds.join(",");
 	if (opts.assigneeId) params.assignee_id = opts.assigneeId;
-	if (opts.assigneeIds && opts.assigneeIds.length > 0) params.assignee_ids = opts.assigneeIds.join(",");
-	if (opts.taskTypeIds && opts.taskTypeIds.length > 0) params.task_type_ids = opts.taskTypeIds.join(",");
+	if (opts.assigneeIds && opts.assigneeIds.length > 0)
+		params.assignee_ids = opts.assigneeIds.join(",");
+	if (opts.taskTypeIds && opts.taskTypeIds.length > 0)
+		params.task_type_ids = opts.taskTypeIds.join(",");
 	if (opts.parentTaskId) params.parent_task_id = opts.parentTaskId;
 	return params;
 }
@@ -392,10 +413,9 @@ export async function listAllTasks(
 	opts: ListTasksOptions = {},
 ): Promise<TaskListResult> {
 	const params = buildTaskQueryParams(opts);
-	const { data } = await apiClient.instance.get<SuccessEnvelope<TaskListResult>>(
-		`/projects/${projectId}/tasks`,
-		{ params },
-	);
+	const { data } = await apiClient.instance.get<
+		SuccessEnvelope<TaskListResult>
+	>(`/projects/${projectId}/tasks`, { params });
 	return data.data;
 }
 
@@ -536,10 +556,7 @@ export const viewTaskPositionsQueryOptions = (
 		staleTime: 15_000,
 	});
 
-export const sprintTasksQueryOptions = (
-	projectId: string,
-	sprintId: string,
-) =>
+export const sprintTasksQueryOptions = (projectId: string, sprintId: string) =>
 	queryOptions({
 		queryKey: ["projects", projectId, "sprints", sprintId, "tasks"],
 		queryFn: () => listSprintTasks(projectId, sprintId),
@@ -547,8 +564,14 @@ export const sprintTasksQueryOptions = (
 	});
 
 /** Fetches all tasks whose task_type is "Epic" for a project. */
-export async function listEpicTasks(projectId: string, epicTypeId: string): Promise<Task[]> {
-	const result = await listAllTasks(projectId, { taskTypeIds: [epicTypeId], pageSize: 500 });
+export async function listEpicTasks(
+	projectId: string,
+	epicTypeId: string,
+): Promise<Task[]> {
+	const result = await listAllTasks(projectId, {
+		taskTypeIds: [epicTypeId],
+		pageSize: 500,
+	});
 	return result.items;
 }
 

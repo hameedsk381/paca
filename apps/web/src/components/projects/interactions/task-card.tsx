@@ -1,5 +1,5 @@
-import { useState } from "react";
 import { Check, GripVertical, Layers, Link, User } from "lucide-react";
+import { useState } from "react";
 
 import { getTaskTypeIconComponent } from "@/components/projects/task-types/task-type-icons";
 import {
@@ -22,7 +22,11 @@ import type {
 } from "@/lib/project-api";
 import { cn } from "@/lib/utils";
 
-import { IMPORTANCE_BUCKET_VALUES, PRIORITY_LEVELS, getPriority } from "./priority";
+import {
+	getPriority,
+	IMPORTANCE_BUCKET_VALUES,
+	PRIORITY_LEVELS,
+} from "./priority";
 import { DEFAULT_VISIBLE_FIELDS, type TaskFieldUpdate } from "./view-utils";
 
 type UpdatePayload = TaskFieldUpdate;
@@ -73,7 +77,6 @@ export function TaskCard({
 		? members.find((m) => m.id === task.assignee_id)
 		: undefined;
 	const status = statuses.find((s) => s.id === task.status_id);
-
 
 	/** Renders the chip/indicator for a single field key. */
 	const renderField = (fieldKey: string) => {
@@ -148,16 +151,22 @@ export function TaskCard({
 						)}
 					>
 						{assignee ? (
-							(assignee.full_name || assignee.username).slice(0, 1).toUpperCase()
+							(assignee.full_name || assignee.username)
+								.slice(0, 1)
+								.toUpperCase()
 						) : (
 							<User className="size-2.5" />
 						)}
 					</div>
 				);
 
-				case "type":
+			case "type":
 				return canEdit && taskTypes.length > 0 ? (
-					<Popover key="type" open={typePopoverOpen} onOpenChange={setTypePopoverOpen}>
+					<Popover
+						key="type"
+						open={typePopoverOpen}
+						onOpenChange={setTypePopoverOpen}
+					>
 						<PopoverTrigger
 							type="button"
 							onClick={(e) => e.stopPropagation()}
@@ -234,8 +243,12 @@ export function TaskCard({
 								key="type"
 								className="inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-bold leading-tight border shrink-0"
 								style={{
-									borderColor: taskType.color ? `${taskType.color}44` : "var(--border)",
-									backgroundColor: taskType.color ? `${taskType.color}15` : "var(--muted)",
+									borderColor: taskType.color
+										? `${taskType.color}44`
+										: "var(--border)",
+									backgroundColor: taskType.color
+										? `${taskType.color}15`
+										: "var(--muted)",
 									color: taskType.color ?? "inherit",
 								}}
 							>
@@ -268,7 +281,7 @@ export function TaskCard({
 							{statuses.map((s) => (
 								<DropdownMenuItem
 									key={s.id}
-								onClick={(e) => {
+									onClick={(e) => {
 										e.stopPropagation();
 										onUpdate?.(task.id, { status_id: s.id });
 									}}
@@ -317,16 +330,20 @@ export function TaskCard({
 									{p.label}
 								</>
 							) : (
-								<span className="text-[10px] text-muted-foreground/40">Priority</span>
+								<span className="text-[10px] text-muted-foreground/40">
+									Priority
+								</span>
 							)}
 						</DropdownMenuTrigger>
 						<DropdownMenuContent align="start">
 							{PRIORITY_LEVELS.map((level) => (
 								<DropdownMenuItem
 									key={level.value}
-								onClick={(e) => {
+									onClick={(e) => {
 										e.stopPropagation();
-										onUpdate?.(task.id, { importance: IMPORTANCE_BUCKET_VALUES[level.value] ?? 0 });
+										onUpdate?.(task.id, {
+											importance: IMPORTANCE_BUCKET_VALUES[level.value] ?? 0,
+										});
 									}}
 								>
 									<span
@@ -335,7 +352,7 @@ export function TaskCard({
 									/>
 									<span style={{ color: level.color }}>{level.label}</span>
 									{getPriority(task.importance).label === level.label &&
-										(task.importance > 0) === (level.value > 0) && (
+										task.importance > 0 === level.value > 0 && (
 											<Check className="size-3.5 text-primary ml-auto" />
 										)}
 								</DropdownMenuItem>
@@ -364,11 +381,15 @@ export function TaskCard({
 				return (
 					<div
 						key="reporter"
-						title={reporter ? (reporter.full_name || reporter.username) : "Reporter"}
+						title={
+							reporter ? reporter.full_name || reporter.username : "Reporter"
+						}
 						className="flex size-5 items-center justify-center rounded-full bg-linear-to-br from-muted/80 to-muted/40 text-muted-foreground text-[10px] font-bold ring-1 ring-border/25"
 					>
 						{reporter ? (
-							(reporter.full_name || reporter.username).slice(0, 1).toUpperCase()
+							(reporter.full_name || reporter.username)
+								.slice(0, 1)
+								.toUpperCase()
 						) : (
 							<User className="size-2.5" />
 						)}
@@ -378,21 +399,30 @@ export function TaskCard({
 
 			case "start_date":
 				return task.start_date ? (
-					<span key="start_date" className="text-[10px] text-muted-foreground/70 shrink-0">
+					<span
+						key="start_date"
+						className="text-[10px] text-muted-foreground/70 shrink-0"
+					>
 						{formatDate(task.start_date)}
 					</span>
 				) : null;
 
 			case "due_date":
 				return task.due_date ? (
-					<span key="due_date" className="text-[10px] text-muted-foreground/70 shrink-0">
+					<span
+						key="due_date"
+						className="text-[10px] text-muted-foreground/70 shrink-0"
+					>
 						{formatDate(task.due_date)}
 					</span>
 				) : null;
 
 			case "created":
 				return (
-					<span key="created" className="text-[10px] text-muted-foreground/50 shrink-0">
+					<span
+						key="created"
+						className="text-[10px] text-muted-foreground/50 shrink-0"
+					>
 						{formatDate(task.created_at)}
 					</span>
 				);
@@ -428,7 +458,9 @@ export function TaskCard({
 								}}
 							>
 								<span className="flex-1 text-left">No Epic</span>
-								{!task.parent_task_id && <Check className="size-3.5 text-primary" />}
+								{!task.parent_task_id && (
+									<Check className="size-3.5 text-primary" />
+								)}
 							</button>
 							{epics.map((e) => (
 								<button
@@ -465,32 +497,52 @@ export function TaskCard({
 				const cf = customFields.find((f) => f.field_key === fieldKey);
 				if (!cf) return null;
 				const val = task.custom_fields[cf.field_key];
-				if (val === null || val === undefined || val === "") return (
-					<span key={fieldKey} className="text-[10px] text-muted-foreground/30">—</span>
-				);
+				if (val === null || val === undefined || val === "")
+					return (
+						<span
+							key={fieldKey}
+							className="text-[10px] text-muted-foreground/30"
+						>
+							—
+						</span>
+					);
 
 				switch (cf.field_type) {
 					case "boolean":
 						return val ? (
 							<Check key={fieldKey} className="size-3 text-primary shrink-0" />
 						) : (
-							<span key={fieldKey} className="text-[10px] text-muted-foreground/40">✗</span>
+							<span
+								key={fieldKey}
+								className="text-[10px] text-muted-foreground/40"
+							>
+								✗
+							</span>
 						);
 					case "number":
 						return (
-							<span key={fieldKey} className="text-[10px] font-medium text-foreground/70 shrink-0">
+							<span
+								key={fieldKey}
+								className="text-[10px] font-medium text-foreground/70 shrink-0"
+							>
 								{String(val)}
 							</span>
 						);
 					case "date":
 						return (
-							<span key={fieldKey} className="text-[10px] text-muted-foreground/70 shrink-0">
+							<span
+								key={fieldKey}
+								className="text-[10px] text-muted-foreground/70 shrink-0"
+							>
 								{formatDate(String(val))}
 							</span>
 						);
 					case "select":
 						return (
-							<span key={fieldKey} className="inline-flex items-center rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary/80 shrink-0">
+							<span
+								key={fieldKey}
+								className="inline-flex items-center rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary/80 shrink-0"
+							>
 								{String(val)}
 							</span>
 						);
@@ -499,7 +551,10 @@ export function TaskCard({
 						return (
 							<span key={fieldKey} className="inline-flex gap-0.5 flex-wrap">
 								{arr.map((v) => (
-									<span key={v} className="inline-flex items-center rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary/80">
+									<span
+										key={v}
+										className="inline-flex items-center rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary/80"
+									>
 										{v}
 									</span>
 								))}
@@ -508,11 +563,17 @@ export function TaskCard({
 					}
 					case "url":
 						return (
-							<Link key={fieldKey} className="size-3 text-primary/60 shrink-0" />
+							<Link
+								key={fieldKey}
+								className="size-3 text-primary/60 shrink-0"
+							/>
 						);
 					default:
 						return (
-							<span key={fieldKey} className="text-[10px] text-foreground/60 truncate max-w-24">
+							<span
+								key={fieldKey}
+								className="text-[10px] text-foreground/60 truncate max-w-24"
+							>
 								{String(val)}
 							</span>
 						);
@@ -525,6 +586,8 @@ export function TaskCard({
 	const fieldChips = visibleFields.map(renderField).filter(Boolean);
 
 	return (
+		// biome-ignore lint/a11y/noStaticElementInteractions: draggable kanban card; converting to button breaks drag-and-drop
+		// biome-ignore lint/a11y/useKeyWithClickEvents: drag-and-drop card; keyboard nav handled by parent
 		<div
 			data-task-id={task.id}
 			draggable={canEdit}
@@ -547,7 +610,9 @@ export function TaskCard({
 			{(taskIdPrefix || task.task_number > 0) && (
 				<div className="mb-1 flex items-center">
 					<span className="font-[JetBrains_Mono,monospace] text-[10px] font-semibold text-muted-foreground/50 tracking-wide">
-						{taskIdPrefix ? `${taskIdPrefix}-${task.task_number}` : `#${task.task_number}`}
+						{taskIdPrefix
+							? `${taskIdPrefix}-${task.task_number}`
+							: `#${task.task_number}`}
 					</span>
 				</div>
 			)}
@@ -564,4 +629,3 @@ export function TaskCard({
 		</div>
 	);
 }
-

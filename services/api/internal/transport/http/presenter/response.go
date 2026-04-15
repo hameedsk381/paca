@@ -195,7 +195,8 @@ func httpStatusForCode(code apierr.Code) int {
 		return http.StatusNotFound
 	case apierr.CodeProjectNameTaken:
 		return http.StatusConflict
-	case apierr.CodeProjectNameInvalid:
+	case apierr.CodeProjectNameInvalid,
+		apierr.CodeProjectPrefixInvalid:
 		return http.StatusBadRequest
 	case apierr.CodeProjectRoleNotFound:
 		return http.StatusNotFound

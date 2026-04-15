@@ -11,16 +11,6 @@ import {
 	X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import type { Sprint, Task } from "@/lib/interaction-api";
-import type { ProjectMember, TaskStatus, TaskType } from "@/lib/project-api";
-import { getTaskTypeIconComponent } from "../../task-types/task-type-icons";
-import {
-	IMPORTANCE_BUCKET_VALUES,
-	PRIORITY_LEVELS,
-	getImportanceBucket,
-	getPriority,
-} from "../priority";
-import type { PriorityMeta } from "../priority";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -28,6 +18,16 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import type { Sprint, Task } from "@/lib/interaction-api";
+import type { ProjectMember, TaskStatus, TaskType } from "@/lib/project-api";
+import { getTaskTypeIconComponent } from "../../task-types/task-type-icons";
+import type { PriorityMeta } from "../priority";
+import {
+	getImportanceBucket,
+	getPriority,
+	IMPORTANCE_BUCKET_VALUES,
+	PRIORITY_LEVELS,
+} from "../priority";
 import { AddFieldDialog } from "./add-field-dialog";
 import { FieldRow, FieldValue } from "./primitives";
 import type { SelectOption, UserOption } from "./property-field";
@@ -153,7 +153,9 @@ export function PropertiesPanel({
 					mode="select"
 					value={status?.id}
 					options={statusOptions}
-					onChange={(v) => onUpdate?.({ status_id: typeof v === "string" ? v : null })}
+					onChange={(v) =>
+						onUpdate?.({ status_id: typeof v === "string" ? v : null })
+					}
 					canEdit={canEdit && statuses.length > 0}
 				/>
 
@@ -182,7 +184,9 @@ export function PropertiesPanel({
 					mode="select"
 					value={taskType?.id}
 					options={taskTypeOptions}
-					onChange={(v) => onUpdate?.({ task_type_id: typeof v === "string" ? v : null })}
+					onChange={(v) =>
+						onUpdate?.({ task_type_id: typeof v === "string" ? v : null })
+					}
 					canEdit={canEdit && taskTypes.length > 0}
 					hidden={!taskType && !(canEdit && taskTypes.length > 0)}
 				/>
@@ -214,7 +218,9 @@ export function PropertiesPanel({
 								<DropdownMenuTrigger className="inline-flex items-center gap-1.5 rounded-full border border-border/30 bg-muted/30 px-3 py-1 text-[12px] font-semibold text-muted-foreground hover:bg-muted/50 hover:border-border/50 transition-all duration-150">
 									{(() => {
 										const bucket = getImportanceBucket(task.importance ?? 0);
-										const level = PRIORITY_LEVELS.find((l) => l.value === bucket);
+										const level = PRIORITY_LEVELS.find(
+											(l) => l.value === bucket,
+										);
 										return level ? (
 											<>
 												<span
@@ -230,13 +236,16 @@ export function PropertiesPanel({
 								</DropdownMenuTrigger>
 								<DropdownMenuContent align="start">
 									{PRIORITY_LEVELS.map((level) => {
-										const currentBucket = getImportanceBucket(task.importance ?? 0);
+										const currentBucket = getImportanceBucket(
+											task.importance ?? 0,
+										);
 										return (
 											<DropdownMenuItem
 												key={level.value}
 												onClick={() =>
 													onUpdate?.({
-														importance: IMPORTANCE_BUCKET_VALUES[level.value] ?? 0,
+														importance:
+															IMPORTANCE_BUCKET_VALUES[level.value] ?? 0,
 													})
 												}
 											>
@@ -244,7 +253,9 @@ export function PropertiesPanel({
 													className="size-2 rounded-full shrink-0 mr-2"
 													style={{ background: level.color }}
 												/>
-												<span style={{ color: level.color }}>{level.label}</span>
+												<span style={{ color: level.color }}>
+													{level.label}
+												</span>
 												{currentBucket === level.value && (
 													<Check className="size-3.5 text-primary ml-auto" />
 												)}
@@ -304,7 +315,8 @@ export function PropertiesPanel({
 					options={sprintOptions}
 					onChange={(v) =>
 						onUpdate?.({
-							sprint_id: v === "__backlog__" ? null : typeof v === "string" ? v : null,
+							sprint_id:
+								v === "__backlog__" ? null : typeof v === "string" ? v : null,
 						})
 					}
 					canEdit={canEdit && sprints.length > 0}
@@ -312,92 +324,122 @@ export function PropertiesPanel({
 				/>
 
 				{/* Epic field – normal tasks only */}
-				{taskRole === "normal" && (epicTasks.length > 0 || task.parent_task_id) && (() => {
-					const epic = task.parent_task_id
-						? epicTasks.find((e) => e.id === task.parent_task_id)
-						: undefined;
-					const otherEpics = epicTasks.filter((e) => e.id !== task.parent_task_id);
-					const hasActions = (epic && onNavigateToTask) || (!!task.parent_task_id && canEdit);
-					return (
-						<FieldRow label="Epic">
-							<DropdownMenu>
-								<DropdownMenuTrigger className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[12px] font-medium hover:bg-muted/50 transition-colors duration-150 cursor-pointer -ml-2 max-w-52 truncate">
-									{epic ? (
-										<>
-											<Layers className="size-3.5 shrink-0 text-violet-500/80" />
-											<span className="truncate text-foreground/80">{epic.title}</span>
-										</>
-									) : (
-										<span className="text-muted-foreground/50 italic">None</span>
-									)}
-								</DropdownMenuTrigger>
-								<DropdownMenuContent align="start" className="w-64">
-									{epic && onNavigateToTask && (
-										<DropdownMenuItem onClick={() => onNavigateToTask(epic.id)}>
-											<ExternalLink className="size-3.5 mr-2 shrink-0" />
-											View epic
-										</DropdownMenuItem>
-									)}
-									{task.parent_task_id && canEdit && (
-										<DropdownMenuItem
-											className="text-destructive focus:text-destructive"
-											onClick={() => onUpdate?.({ parent_task_id: null })}
-										>
-											<X className="size-3.5 mr-2 shrink-0" />
-											Remove epic
-										</DropdownMenuItem>
-									)}
-									{hasActions && otherEpics.length > 0 && <DropdownMenuSeparator />}
-									{otherEpics.map((e) => (
-										<DropdownMenuItem key={e.id} onClick={() => onUpdate?.({ parent_task_id: e.id })}>
-											<Layers className="size-3.5 mr-2 shrink-0 text-violet-500/80" />
-											<span className="truncate">{e.title}</span>
-										</DropdownMenuItem>
-									))}
-								</DropdownMenuContent>
-							</DropdownMenu>
-						</FieldRow>
-					);
-				})()}
+				{taskRole === "normal" &&
+					(epicTasks.length > 0 || task.parent_task_id) &&
+					(() => {
+						const epic = task.parent_task_id
+							? epicTasks.find((e) => e.id === task.parent_task_id)
+							: undefined;
+						const otherEpics = epicTasks.filter(
+							(e) => e.id !== task.parent_task_id,
+						);
+						const hasActions =
+							(epic && onNavigateToTask) || (!!task.parent_task_id && canEdit);
+						return (
+							<FieldRow label="Epic">
+								<DropdownMenu>
+									<DropdownMenuTrigger className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[12px] font-medium hover:bg-muted/50 transition-colors duration-150 cursor-pointer -ml-2 max-w-52 truncate">
+										{epic ? (
+											<>
+												<Layers className="size-3.5 shrink-0 text-violet-500/80" />
+												<span className="truncate text-foreground/80">
+													{epic.title}
+												</span>
+											</>
+										) : (
+											<span className="text-muted-foreground/50 italic">
+												None
+											</span>
+										)}
+									</DropdownMenuTrigger>
+									<DropdownMenuContent align="start" className="w-64">
+										{epic && onNavigateToTask && (
+											<DropdownMenuItem
+												onClick={() => onNavigateToTask(epic.id)}
+											>
+												<ExternalLink className="size-3.5 mr-2 shrink-0" />
+												View epic
+											</DropdownMenuItem>
+										)}
+										{task.parent_task_id && canEdit && (
+											<DropdownMenuItem
+												className="text-destructive focus:text-destructive"
+												onClick={() => onUpdate?.({ parent_task_id: null })}
+											>
+												<X className="size-3.5 mr-2 shrink-0" />
+												Remove epic
+											</DropdownMenuItem>
+										)}
+										{hasActions && otherEpics.length > 0 && (
+											<DropdownMenuSeparator />
+										)}
+										{otherEpics.map((e) => (
+											<DropdownMenuItem
+												key={e.id}
+												onClick={() => onUpdate?.({ parent_task_id: e.id })}
+											>
+												<Layers className="size-3.5 mr-2 shrink-0 text-violet-500/80" />
+												<span className="truncate">{e.title}</span>
+											</DropdownMenuItem>
+										))}
+									</DropdownMenuContent>
+								</DropdownMenu>
+							</FieldRow>
+						);
+					})()}
 				{/* Parent task – subtasks only */}
 				{taskRole === "subtask" && (
 					<FieldRow label="Parent">
-						{parentTask ? (() => {
-							const parentType = taskTypes.find((tt) => tt.id === parentTask.task_type_id);
-							const ParentIcon = parentType ? getTaskTypeIconComponent(parentType.icon) : null;
-							return (
-							<DropdownMenu>
-								<DropdownMenuTrigger className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[12px] font-medium hover:bg-muted/50 transition-colors duration-150 cursor-pointer -ml-2 max-w-52 truncate">
-									{ParentIcon ? (
-										<ParentIcon className="size-3.5 shrink-0 text-muted-foreground/80" />
-									) : (
-										<ArrowRight className="size-3.5 shrink-0 opacity-60" />
-									)}
-									<span className="truncate text-foreground/80">{parentTask.title}</span>
-								</DropdownMenuTrigger>
-								<DropdownMenuContent align="start" className="w-56">
-									{onNavigateToTask && (
-										<DropdownMenuItem onClick={() => onNavigateToTask(parentTask.id)}>
-											<ExternalLink className="size-3.5 mr-2 shrink-0" />
-											View parent
-										</DropdownMenuItem>
-									)}
-									{canEdit && (
-										<DropdownMenuItem
-											className="text-destructive focus:text-destructive"
-											onClick={() => onUpdate?.({ parent_task_id: null })}
-										>
-											<X className="size-3.5 mr-2 shrink-0" />
-											Remove parent
-										</DropdownMenuItem>
-									)}
-								</DropdownMenuContent>
-							</DropdownMenu>
-							);
-						})() : task.parent_task_id ? (
-							<span className="text-[12px] text-muted-foreground/60 italic">Loading…</span>
+						{parentTask ? (
+							(() => {
+								const parentType = taskTypes.find(
+									(tt) => tt.id === parentTask.task_type_id,
+								);
+								const ParentIcon = parentType
+									? getTaskTypeIconComponent(parentType.icon)
+									: null;
+								return (
+									<DropdownMenu>
+										<DropdownMenuTrigger className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[12px] font-medium hover:bg-muted/50 transition-colors duration-150 cursor-pointer -ml-2 max-w-52 truncate">
+											{ParentIcon ? (
+												<ParentIcon className="size-3.5 shrink-0 text-muted-foreground/80" />
+											) : (
+												<ArrowRight className="size-3.5 shrink-0 opacity-60" />
+											)}
+											<span className="truncate text-foreground/80">
+												{parentTask.title}
+											</span>
+										</DropdownMenuTrigger>
+										<DropdownMenuContent align="start" className="w-56">
+											{onNavigateToTask && (
+												<DropdownMenuItem
+													onClick={() => onNavigateToTask(parentTask.id)}
+												>
+													<ExternalLink className="size-3.5 mr-2 shrink-0" />
+													View parent
+												</DropdownMenuItem>
+											)}
+											{canEdit && (
+												<DropdownMenuItem
+													className="text-destructive focus:text-destructive"
+													onClick={() => onUpdate?.({ parent_task_id: null })}
+												>
+													<X className="size-3.5 mr-2 shrink-0" />
+													Remove parent
+												</DropdownMenuItem>
+											)}
+										</DropdownMenuContent>
+									</DropdownMenu>
+								);
+							})()
+						) : task.parent_task_id ? (
+							<span className="text-[12px] text-muted-foreground/60 italic">
+								Loading…
+							</span>
 						) : (
-							<span className="text-[12px] text-muted-foreground/50 italic">No parent</span>
+							<span className="text-[12px] text-muted-foreground/50 italic">
+								No parent
+							</span>
 						)}
 					</FieldRow>
 				)}

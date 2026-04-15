@@ -73,11 +73,15 @@ export function StartSprintModal({
 			onClick={(e) => {
 				if (e.target === e.currentTarget) onOpenChange(false);
 			}}
+			onKeyDown={(e) => {
+				if (e.key === "Escape") onOpenChange(false);
+			}}
 		>
 			{/* biome-ignore lint/a11y/noStaticElementInteractions: modal panel */}
 			<div
 				className="relative w-full max-w-md rounded-xl border border-border/50 bg-background p-6 shadow-2xl mx-4"
 				onClick={(e) => e.stopPropagation()}
+				onKeyDown={(e) => e.stopPropagation()}
 			>
 				<button
 					type="button"

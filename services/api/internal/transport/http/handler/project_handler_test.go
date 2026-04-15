@@ -318,6 +318,8 @@ func TestCreateProject_SeedsDefaultViews(t *testing.T) {
 			backlogView = view
 		case sprintdom.ViewContextTimeline:
 			timelineView = view
+		case sprintdom.ViewContextSprint:
+			// sprint-context views are not expected here
 		}
 	}
 	if backlogView == nil || timelineView == nil {

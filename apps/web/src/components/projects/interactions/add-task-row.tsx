@@ -18,14 +18,20 @@ interface AddTaskRowProps {
 	variant?: "list" | "board";
 }
 
-export function AddTaskRow({ taskTypes, onAdd, variant = "list" }: AddTaskRowProps) {
+export function AddTaskRow({
+	taskTypes,
+	onAdd,
+	variant = "list",
+}: AddTaskRowProps) {
 	const [open, setOpen] = useState(false);
 	const [value, setValue] = useState("");
 	const [selectedTypeId, setSelectedTypeId] = useState<string | null>(null);
 	const inputRef = useRef<HTMLInputElement>(null);
 
-	const defaultType = taskTypes.find((tt) => tt.is_default) ?? taskTypes[0] ?? null;
-	const selectedType = taskTypes.find((tt) => tt.id === selectedTypeId) ?? defaultType;
+	const defaultType =
+		taskTypes.find((tt) => tt.is_default) ?? taskTypes[0] ?? null;
+	const selectedType =
+		taskTypes.find((tt) => tt.id === selectedTypeId) ?? defaultType;
 	const SelectedIcon = getTaskTypeIconComponent(selectedType?.icon ?? null);
 
 	const openForm = () => {

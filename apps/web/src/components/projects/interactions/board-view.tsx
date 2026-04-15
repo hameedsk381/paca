@@ -1,7 +1,12 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 
-import { type Sprint, type Task, type ViewConfig, updateTask } from "@/lib/interaction-api";
+import {
+	type Sprint,
+	type Task,
+	updateTask,
+	type ViewConfig,
+} from "@/lib/interaction-api";
 import type {
 	CustomFieldDefinition,
 	ProjectMember,
@@ -13,15 +18,15 @@ import { cn } from "@/lib/utils";
 import { AddTaskRow } from "./add-task-row";
 import { TaskCard } from "./task-card";
 import {
-	type ColumnGroupDef,
-	type TaskFieldUpdate,
-	DEFAULT_VISIBLE_FIELDS,
 	buildColumnDropUpdate,
+	type ColumnGroupDef,
 	computeFieldSum,
+	DEFAULT_VISIBLE_FIELDS,
 	getColumnGroupDefs,
 	getSwimlaneDefs,
 	getTaskColumnKeys,
 	getTaskSwimlaneKey,
+	type TaskFieldUpdate,
 } from "./view-utils";
 
 // ── Props ────────────────────────────────────────────────────────────────────
@@ -122,7 +127,8 @@ export function BoardView({
 	const columnBy = viewConfig?.column_by ?? "status";
 	const swimlaneBy = viewConfig?.swimlanes;
 	const fieldSum = viewConfig?.field_sum;
-	const isStatusGrouping = !viewConfig?.column_by || viewConfig.column_by === "status";
+	const isStatusGrouping =
+		!viewConfig?.column_by || viewConfig.column_by === "status";
 	const visibleFields: string[] =
 		viewConfig?.fields && viewConfig.fields.length > 0
 			? viewConfig.fields
@@ -188,10 +194,7 @@ export function BoardView({
 
 	// ── Swimlane task helper ──────────────────────────────────────────────────
 
-	const getSwimlaneColumnTasks = (
-		colKey: string,
-		swimKey: string,
-	): Task[] => {
+	const getSwimlaneColumnTasks = (colKey: string, swimKey: string): Task[] => {
 		const colTasks = getColumnTasks(colKey);
 		if (swimKey === "__all") return colTasks;
 		return colTasks.filter(
@@ -231,7 +234,11 @@ export function BoardView({
 		// Check if the task is already in this column
 		const currentKeys = getTaskColumnKeys(task, columnBy, viewCtx);
 		if (!currentKeys.includes(colDef.key)) {
-			const update = buildColumnDropUpdate(columnBy, colDef.fieldValue, customFields);
+			const update = buildColumnDropUpdate(
+				columnBy,
+				colDef.fieldValue,
+				customFields,
+			);
 			if (onMoveToColumn) {
 				onMoveToColumn(taskId, update);
 			} else {
@@ -273,17 +280,33 @@ export function BoardView({
 		const colChanged = !currentColKeys.includes(colDef.key);
 
 		if (colChanged) {
-			const colUpdate = buildColumnDropUpdate(columnBy, colDef.fieldValue, customFields);
+			const colUpdate = buildColumnDropUpdate(
+				columnBy,
+				colDef.fieldValue,
+				customFields,
+			);
 			Object.assign(updates, colUpdate);
 		}
 
 		// Update swimlane field if task dropped onto a different band
-		if (swimDef && swimDef.key !== "__all" && swimlaneBy && swimlaneBy !== "none") {
+		if (
+			swimDef &&
+			swimDef.key !== "__all" &&
+			swimlaneBy &&
+			swimlaneBy !== "none"
+		) {
 			const currentSwimKey = getTaskSwimlaneKey(task, swimlaneBy, viewCtx);
 			if (currentSwimKey !== swimDef.key) {
-				const swimUpdate = buildColumnDropUpdate(swimlaneBy, swimDef.fieldValue, customFields);
+				const swimUpdate = buildColumnDropUpdate(
+					swimlaneBy,
+					swimDef.fieldValue,
+					customFields,
+				);
 				if (swimUpdate.custom_fields && updates.custom_fields) {
-					updates.custom_fields = { ...updates.custom_fields, ...swimUpdate.custom_fields };
+					updates.custom_fields = {
+						...updates.custom_fields,
+						...swimUpdate.custom_fields,
+					};
 				} else {
 					Object.assign(updates, swimUpdate);
 				}
@@ -296,7 +319,7 @@ export function BoardView({
 			} else {
 				updateMutation.mutate({ taskId, update: updates });
 			}
-	} else if (manualSort && taskId !== targetTaskId && !colChanged) {
+		} else if (manualSort && taskId !== targetTaskId && !colChanged) {
 			// Reorder within same column
 			const current = getColumnTasks(colDef.key);
 			const srcIdx = current.findIndex((t) => t.id === taskId);
@@ -345,7 +368,11 @@ export function BoardView({
 		// Update column field if moved to a different column
 		const currentColKeys = getTaskColumnKeys(task, columnBy, viewCtx);
 		if (!currentColKeys.includes(colDef.key)) {
-			const colUpdate = buildColumnDropUpdate(columnBy, colDef.fieldValue, customFields);
+			const colUpdate = buildColumnDropUpdate(
+				columnBy,
+				colDef.fieldValue,
+				customFields,
+			);
 			Object.assign(updates, colUpdate);
 		}
 
@@ -353,9 +380,16 @@ export function BoardView({
 		if (swimDef.key !== "__all" && swimlaneBy && swimlaneBy !== "none") {
 			const currentSwimKey = getTaskSwimlaneKey(task, swimlaneBy, viewCtx);
 			if (currentSwimKey !== swimDef.key) {
-				const swimUpdate = buildColumnDropUpdate(swimlaneBy, swimDef.fieldValue, customFields);
+				const swimUpdate = buildColumnDropUpdate(
+					swimlaneBy,
+					swimDef.fieldValue,
+					customFields,
+				);
 				if (swimUpdate.custom_fields && updates.custom_fields) {
-					updates.custom_fields = { ...updates.custom_fields, ...swimUpdate.custom_fields };
+					updates.custom_fields = {
+						...updates.custom_fields,
+						...swimUpdate.custom_fields,
+					};
 				} else {
 					Object.assign(updates, swimUpdate);
 				}
@@ -386,7 +420,11 @@ export function BoardView({
 			for (const k of getTaskColumnKeys(t, columnBy, viewCtx)) {
 				if (!seen.has(k)) {
 					seen.add(k);
-					dynamic.push({ key: k, label: k === "__none" ? "None" : k, fieldValue: k });
+					dynamic.push({
+						key: k,
+						label: k === "__none" ? "None" : k,
+						fieldValue: k,
+					});
 				}
 			}
 		}
@@ -456,7 +494,7 @@ export function BoardView({
 							e.stopPropagation();
 							setOverColumnKey(colDef.key);
 							setOverSwimKey(swimOverKey);
-						if (manualSort) setOverCardId(task.id);
+							if (manualSort) setOverCardId(task.id);
 						}}
 						onDrop={(e) =>
 							handleDropOnCard(
@@ -486,31 +524,45 @@ export function BoardView({
 						/>
 					</div>
 				))}
-				{canCreate && (isStatusGrouping || columnBy === "sprint") && colDef.key !== "__none" && (
-					<AddTaskRow
-						variant="board"
-						taskTypes={taskTypes}
-						onAdd={(title, typeId) => {
-							const extra: TaskFieldUpdate = {};
-							if (!isStatusGrouping && columnBy === "sprint") {
-								extra.sprint_id = colDef.key === "__backlog" ? null : (colDef.key as string);
-							}
-							if (hasSwimlanes && swimDef.key !== "__all" && swimlaneBy && swimlaneBy !== "none") {
-								const swimUpdate = buildColumnDropUpdate(swimlaneBy, swimDef.fieldValue, customFields);
-								Object.assign(extra, swimUpdate);
-							}
-							const statusId = isStatusGrouping
-								? colDef.key
-								: statuses.find((s) => s.category !== "done")?.id ?? statuses[0]?.id ?? "";
-							onCreateTask(
-								statusId,
-								title,
-								typeId,
-								Object.keys(extra).length > 0 ? extra : undefined,
-							);
-						}}
-					/>
-				)}
+				{canCreate &&
+					(isStatusGrouping || columnBy === "sprint") &&
+					colDef.key !== "__none" && (
+						<AddTaskRow
+							variant="board"
+							taskTypes={taskTypes}
+							onAdd={(title, typeId) => {
+								const extra: TaskFieldUpdate = {};
+								if (!isStatusGrouping && columnBy === "sprint") {
+									extra.sprint_id =
+										colDef.key === "__backlog" ? null : (colDef.key as string);
+								}
+								if (
+									hasSwimlanes &&
+									swimDef.key !== "__all" &&
+									swimlaneBy &&
+									swimlaneBy !== "none"
+								) {
+									const swimUpdate = buildColumnDropUpdate(
+										swimlaneBy,
+										swimDef.fieldValue,
+										customFields,
+									);
+									Object.assign(extra, swimUpdate);
+								}
+								const statusId = isStatusGrouping
+									? colDef.key
+									: (statuses.find((s) => s.category !== "done")?.id ??
+										statuses[0]?.id ??
+										"");
+								onCreateTask(
+									statusId,
+									title,
+									typeId,
+									Object.keys(extra).length > 0 ? extra : undefined,
+								);
+							}}
+						/>
+					)}
 			</div>
 		);
 	};
@@ -545,7 +597,11 @@ export function BoardView({
 	if (hasSwimlanes) {
 		// ── Swimlanes-outer layout: swimlane rows → column cells inside ──────
 		// Shared singleton swimlane def for "no swimlane" filter
-		const noSwim: ColumnGroupDef = { key: "__all", label: "", fieldValue: null };
+		const noSwim: ColumnGroupDef = {
+			key: "__all",
+			label: "",
+			fieldValue: null,
+		};
 		// Only use defined defs; filter out the __all sentinel
 		const visibleSwimDefs = swimlaneDefs.filter((s) => s.key !== "__all");
 
@@ -564,36 +620,45 @@ export function BoardView({
 					</div>
 
 					{/* One row per swimlane */}
-					{(visibleSwimDefs.length > 0 ? visibleSwimDefs : [noSwim]).map((swimDef) => (
-						<div key={swimDef.key} className="flex gap-4 py-3 border-b border-border/15 last:border-0">
-							{/* Swimlane label */}
-							<div className="w-36 shrink-0 flex items-start pt-1 gap-2">
-								{swimDef.color && (
-									<span
-										className="size-1.5 rounded-full mt-1.5 shrink-0"
-										style={{ background: swimDef.color }}
-									/>
-								)}
-								<span className="text-[11px] font-bold uppercase tracking-[0.08em] text-foreground/70 wrap-break-word leading-snug">
-									{swimDef.label}
-								</span>
-							</div>
-
-							{/* Column cells */}
-							{effectiveColumnDefs.map((colDef) => (
-								<div key={colDef.key} className="w-72 shrink-0">
-									{renderCellCards(colDef, swimDef)}
+					{(visibleSwimDefs.length > 0 ? visibleSwimDefs : [noSwim]).map(
+						(swimDef) => (
+							<div
+								key={swimDef.key}
+								className="flex gap-4 py-3 border-b border-border/15 last:border-0"
+							>
+								{/* Swimlane label */}
+								<div className="w-36 shrink-0 flex items-start pt-1 gap-2">
+									{swimDef.color && (
+										<span
+											className="size-1.5 rounded-full mt-1.5 shrink-0"
+											style={{ background: swimDef.color }}
+										/>
+									)}
+									<span className="text-[11px] font-bold uppercase tracking-[0.08em] text-foreground/70 wrap-break-word leading-snug">
+										{swimDef.label}
+									</span>
 								</div>
-							))}
-						</div>
-					))}
+
+								{/* Column cells */}
+								{effectiveColumnDefs.map((colDef) => (
+									<div key={colDef.key} className="w-72 shrink-0">
+										{renderCellCards(colDef, swimDef)}
+									</div>
+								))}
+							</div>
+						),
+					)}
 				</div>
 			</div>
 		);
 	}
 
 	// ── No-swimlane layout: horizontal columns ────────────────────────────────
-	const noSwimAll: ColumnGroupDef = { key: "__all", label: "", fieldValue: null };
+	const noSwimAll: ColumnGroupDef = {
+		key: "__all",
+		label: "",
+		fieldValue: null,
+	};
 
 	return (
 		<div className="flex flex-1 min-h-0 gap-4 overflow-x-auto px-6 py-5 pb-8">

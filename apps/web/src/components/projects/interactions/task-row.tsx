@@ -1,4 +1,4 @@
-import { Check, GripVertical, Link, Layers, User } from "lucide-react";
+import { Check, GripVertical, Layers, Link, User } from "lucide-react";
 
 import { getTaskTypeIconComponent } from "@/components/projects/task-types/task-type-icons";
 import {
@@ -21,7 +21,11 @@ import type {
 } from "@/lib/project-api";
 import { cn } from "@/lib/utils";
 
-import { IMPORTANCE_BUCKET_VALUES, PRIORITY_LEVELS, getPriority } from "./priority";
+import {
+	getPriority,
+	IMPORTANCE_BUCKET_VALUES,
+	PRIORITY_LEVELS,
+} from "./priority";
 import { DEFAULT_VISIBLE_FIELDS, type TaskFieldUpdate } from "./view-utils";
 
 // ── Column config ──────────────────────────────────────────────────────────────
@@ -92,7 +96,11 @@ export function getRowColConfig(
 					: cf?.field_type === "number"
 						? "w-16"
 						: "w-24";
-			return { className: `${width} shrink-0`, headerLabel: label, responsive: true };
+			return {
+				className: `${width} shrink-0`,
+				headerLabel: label,
+				responsive: true,
+			};
 		}
 	}
 }
@@ -147,10 +155,12 @@ export function TaskRow({
 		switch (fieldKey) {
 			case "type":
 				return canEditField && taskTypes.length > 0 ? (
+					// biome-ignore lint/a11y/noStaticElementInteractions: cell container stops propagation; inner controls are the interactive elements
 					<div
 						key="type"
 						className={cn(col.className, responsiveClass, "items-center")}
 						onClick={(e) => e.stopPropagation()}
+						onKeyDown={(e) => e.stopPropagation()}
 					>
 						<Popover>
 							<PopoverTrigger
@@ -208,7 +218,10 @@ export function TaskRow({
 						</Popover>
 					</div>
 				) : (
-					<div key="type" className={cn(col.className, responsiveClass, "items-center")}>
+					<div
+						key="type"
+						className={cn(col.className, responsiveClass, "items-center")}
+					>
 						{taskType ? (
 							<span
 								className="inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[11px] font-bold leading-tight tracking-wide border truncate max-w-full"
@@ -232,15 +245,15 @@ export function TaskRow({
 
 			case "importance":
 				return canEditField ? (
+					// biome-ignore lint/a11y/noStaticElementInteractions: cell container stops propagation; inner controls are the interactive elements
 					<div
 						key="importance"
 						className={cn(col.className, responsiveClass, "items-center gap-1")}
 						onClick={(e) => e.stopPropagation()}
+						onKeyDown={(e) => e.stopPropagation()}
 					>
 						<DropdownMenu>
-							<DropdownMenuTrigger
-								className="flex items-center gap-1 hover:opacity-80 transition-opacity cursor-pointer"
-							>
+							<DropdownMenuTrigger className="flex items-center gap-1 hover:opacity-80 transition-opacity cursor-pointer">
 								{(() => {
 									const p = getPriority(task.importance);
 									return task.importance > 0 ? (
@@ -257,7 +270,9 @@ export function TaskRow({
 											</span>
 										</>
 									) : (
-										<span className="text-[11px] text-muted-foreground/50">—</span>
+										<span className="text-[11px] text-muted-foreground/50">
+											—
+										</span>
 									);
 								})()}
 							</DropdownMenuTrigger>
@@ -265,8 +280,10 @@ export function TaskRow({
 								{PRIORITY_LEVELS.map((p) => (
 									<DropdownMenuItem
 										key={p.value}
-									onClick={() =>
-											onUpdateTaskField(task.id, { importance: IMPORTANCE_BUCKET_VALUES[p.value] ?? 0 })
+										onClick={() =>
+											onUpdateTaskField(task.id, {
+												importance: IMPORTANCE_BUCKET_VALUES[p.value] ?? 0,
+											})
 										}
 									>
 										<span
@@ -284,7 +301,10 @@ export function TaskRow({
 						</DropdownMenu>
 					</div>
 				) : (
-					<div key="importance" className={cn(col.className, responsiveClass, "items-center gap-1")}>
+					<div
+						key="importance"
+						className={cn(col.className, responsiveClass, "items-center gap-1")}
+					>
 						{(() => {
 							const p = getPriority(task.importance);
 							return task.importance > 0 ? (
@@ -309,36 +329,37 @@ export function TaskRow({
 
 			case "status":
 				return canEditField && statuses.length > 0 ? (
+					// biome-ignore lint/a11y/noStaticElementInteractions: cell container stops propagation; inner controls are the interactive elements
 					<div
 						key="status"
 						className={cn(col.className, responsiveClass, "items-center")}
 						onClick={(e) => e.stopPropagation()}
+						onKeyDown={(e) => e.stopPropagation()}
 					>
 						<DropdownMenu>
-							<DropdownMenuTrigger
-								className="inline-flex items-center gap-1.5 rounded-full border border-border/40 bg-muted/40 px-2.5 py-0.5 text-[11px] font-semibold text-muted-foreground tracking-wide hover:opacity-80 transition-opacity truncate max-w-full cursor-pointer"
-							>
+							<DropdownMenuTrigger className="inline-flex items-center gap-1.5 rounded-full border border-border/40 bg-muted/40 px-2.5 py-0.5 text-[11px] font-semibold text-muted-foreground tracking-wide hover:opacity-80 transition-opacity truncate max-w-full cursor-pointer">
 								{status ? (
 									<>
 										<span
 											className="size-1.5 rounded-full shrink-0"
 											style={{
 												background:
-													status.color ??
-													"oklch(var(--muted-foreground))",
+													status.color ?? "oklch(var(--muted-foreground))",
 											}}
 										/>
 										{status.name}
 									</>
 								) : (
-									<span className="text-[11px] text-muted-foreground/50">—</span>
+									<span className="text-[11px] text-muted-foreground/50">
+										—
+									</span>
 								)}
 							</DropdownMenuTrigger>
 							<DropdownMenuContent align="start">
 								{statuses.map((s) => (
 									<DropdownMenuItem
 										key={s.id}
-									onClick={() =>
+										onClick={() =>
 											onUpdateTaskField(task.id, { status_id: s.id })
 										}
 									>
@@ -356,13 +377,17 @@ export function TaskRow({
 						</DropdownMenu>
 					</div>
 				) : (
-					<div key="status" className={cn(col.className, responsiveClass, "items-center")}>
+					<div
+						key="status"
+						className={cn(col.className, responsiveClass, "items-center")}
+					>
 						{status ? (
 							<span className="inline-flex items-center gap-1.5 rounded-full border border-border/40 bg-muted/40 px-2.5 py-0.5 text-[11px] font-semibold text-muted-foreground tracking-wide">
 								<span
 									className="size-1.5 rounded-full shrink-0"
 									style={{
-										background: status.color ?? "oklch(var(--muted-foreground))",
+										background:
+											status.color ?? "oklch(var(--muted-foreground))",
 										boxShadow: status.color
 											? `0 0 4px ${status.color}40`
 											: undefined,
@@ -381,10 +406,12 @@ export function TaskRow({
 					? members.find((m) => m.id === task.assignee_id)
 					: undefined;
 				return canEditField && members.length > 0 ? (
+					// biome-ignore lint/a11y/noStaticElementInteractions: cell container stops propagation; inner controls are the interactive elements
 					<div
 						key="assignee"
 						className={cn(col.className, "flex items-center justify-center")}
 						onClick={(e) => e.stopPropagation()}
+						onKeyDown={(e) => e.stopPropagation()}
 					>
 						<Popover>
 							<PopoverTrigger
@@ -425,11 +452,11 @@ export function TaskRow({
 								</button>
 								{members.map((m) => (
 									<button
-									key={m.id}
-									type="button"
-									className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] hover:bg-muted/60 transition-colors duration-100"
-									onClick={() =>
-										onUpdateTaskField(task.id, { assignee_id: m.id })
+										key={m.id}
+										type="button"
+										className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] hover:bg-muted/60 transition-colors duration-100"
+										onClick={() =>
+											onUpdateTaskField(task.id, { assignee_id: m.id })
 										}
 									>
 										<div className="flex size-5 items-center justify-center rounded-full bg-linear-to-br from-primary/20 to-primary/10 text-primary text-[9px] font-bold">
@@ -447,7 +474,10 @@ export function TaskRow({
 						</Popover>
 					</div>
 				) : (
-					<div key="assignee" className={cn(col.className, "flex items-center justify-center")}>
+					<div
+						key="assignee"
+						className={cn(col.className, "flex items-center justify-center")}
+					>
 						<div
 							className={cn(
 								"flex size-6 items-center justify-center rounded-full text-[10px] font-bold ring-1",
@@ -457,7 +487,9 @@ export function TaskRow({
 							)}
 						>
 							{assignee ? (
-								(assignee.full_name || assignee.username).slice(0, 1).toUpperCase()
+								(assignee.full_name || assignee.username)
+									.slice(0, 1)
+									.toUpperCase()
 							) : (
 								<User className="size-3" />
 							)}
@@ -473,11 +505,17 @@ export function TaskRow({
 				return (
 					<div
 						key="reporter"
-						className={cn(col.className, responsiveClass, "items-center justify-center")}
+						className={cn(
+							col.className,
+							responsiveClass,
+							"items-center justify-center",
+						)}
 					>
 						<div className="flex size-6 items-center justify-center rounded-full bg-linear-to-br from-muted/80 to-muted/40 text-muted-foreground text-[10px] font-bold ring-1 ring-border/25">
 							{reporter ? (
-								(reporter.full_name || reporter.username).slice(0, 1).toUpperCase()
+								(reporter.full_name || reporter.username)
+									.slice(0, 1)
+									.toUpperCase()
 							) : (
 								<User className="size-3" />
 							)}
@@ -488,7 +526,10 @@ export function TaskRow({
 
 			case "start_date":
 				return (
-					<div key="start_date" className={cn(col.className, responsiveClass, "items-center")}>
+					<div
+						key="start_date"
+						className={cn(col.className, responsiveClass, "items-center")}
+					>
 						<span className="text-[11px] text-muted-foreground/70 truncate">
 							{task.start_date ? formatDate(task.start_date) : "—"}
 						</span>
@@ -497,7 +538,10 @@ export function TaskRow({
 
 			case "due_date":
 				return (
-					<div key="due_date" className={cn(col.className, responsiveClass, "items-center")}>
+					<div
+						key="due_date"
+						className={cn(col.className, responsiveClass, "items-center")}
+					>
 						<span className="text-[11px] text-muted-foreground/70 truncate">
 							{task.due_date ? formatDate(task.due_date) : "—"}
 						</span>
@@ -506,7 +550,10 @@ export function TaskRow({
 
 			case "created":
 				return (
-					<div key="created" className={cn(col.className, responsiveClass, "items-center")}>
+					<div
+						key="created"
+						className={cn(col.className, responsiveClass, "items-center")}
+					>
 						<span className="text-[11px] text-muted-foreground/50 truncate">
 							{formatDate(task.created_at)}
 						</span>
@@ -518,10 +565,12 @@ export function TaskRow({
 					? epics.find((e) => e.id === task.parent_task_id)
 					: undefined;
 				return canEditField ? (
+					// biome-ignore lint/a11y/noStaticElementInteractions: cell container stops propagation; inner controls are the interactive elements
 					<div
 						key="epic"
 						className={cn(col.className, responsiveClass, "items-center")}
 						onClick={(e) => e.stopPropagation()}
+						onKeyDown={(e) => e.stopPropagation()}
 					>
 						<Popover>
 							<PopoverTrigger
@@ -544,17 +593,23 @@ export function TaskRow({
 								<button
 									type="button"
 									className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[13px] text-muted-foreground hover:bg-muted/60 transition-colors duration-100"
-									onClick={() => onUpdateTaskField(task.id, { parent_task_id: null })}
+									onClick={() =>
+										onUpdateTaskField(task.id, { parent_task_id: null })
+									}
 								>
 									<span className="flex-1 text-left">No Epic</span>
-									{!task.parent_task_id && <Check className="size-3.5 text-primary" />}
+									{!task.parent_task_id && (
+										<Check className="size-3.5 text-primary" />
+									)}
 								</button>
 								{epics.map((e) => (
 									<button
 										key={e.id}
 										type="button"
 										className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[13px] hover:bg-muted/60 transition-colors duration-100"
-										onClick={() => onUpdateTaskField(task.id, { parent_task_id: e.id })}
+										onClick={() =>
+											onUpdateTaskField(task.id, { parent_task_id: e.id })
+										}
 									>
 										<Layers className="size-3.5 shrink-0 text-violet-500 opacity-70" />
 										<span className="flex-1 text-left truncate">{e.title}</span>
@@ -567,7 +622,10 @@ export function TaskRow({
 						</Popover>
 					</div>
 				) : (
-					<div key="epic" className={cn(col.className, responsiveClass, "items-center")}>
+					<div
+						key="epic"
+						className={cn(col.className, responsiveClass, "items-center")}
+					>
 						{epic ? (
 							<span className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium border border-violet-500/30 bg-violet-500/10 text-violet-600 dark:text-violet-400 truncate max-w-full">
 								<Layers className="size-3 shrink-0 opacity-70" />
@@ -588,7 +646,9 @@ export function TaskRow({
 
 				const renderValue = () => {
 					if (val === null || val === undefined || val === "")
-						return <span className="text-[11px] text-muted-foreground/40">—</span>;
+						return (
+							<span className="text-[11px] text-muted-foreground/40">—</span>
+						);
 					switch (cf.field_type) {
 						case "boolean":
 							return val ? (
@@ -615,7 +675,9 @@ export function TaskRow({
 								</span>
 							);
 						case "multi_select": {
-							const arr = Array.isArray(val) ? (val as string[]) : [String(val)];
+							const arr = Array.isArray(val)
+								? (val as string[])
+								: [String(val)];
 							return (
 								<span className="inline-flex gap-1 flex-wrap">
 									{arr.map((v) => (
@@ -686,4 +748,3 @@ export function TaskRow({
 		</div>
 	);
 }
-

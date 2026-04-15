@@ -8,7 +8,7 @@ interface TaskHeaderProps {
 	task: Task;
 	mode: "modal" | "page";
 	projectName?: string;
-		interactionName?: string;
+	interactionName?: string;
 	projectId?: string;
 	taskIdPrefix?: string;
 	onClose: () => void;

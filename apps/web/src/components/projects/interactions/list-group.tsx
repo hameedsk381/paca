@@ -12,13 +12,13 @@ import { cn } from "@/lib/utils";
 
 import { AddTaskRow } from "./add-task-row";
 import { StartSprintModal } from "./start-sprint-modal";
-import { TaskRow, getRowColConfig } from "./task-row";
+import { getRowColConfig, TaskRow } from "./task-row";
 import {
-	type ColumnGroupDef,
-	type TaskFieldUpdate,
 	buildColumnDropUpdate,
+	type ColumnGroupDef,
 	computeFieldSum,
 	getTaskSwimlaneKey,
+	type TaskFieldUpdate,
 } from "./view-utils";
 
 // ── Props ────────────────────────────────────────────────────────────────────
@@ -122,8 +122,14 @@ export function ListGroup({
 		if (isStatusGrouping) {
 			return onCreateTask(groupDef.key as string, title, typeId);
 		}
-		const defaultStatus = statuses.find((s) => s.category !== "done") ?? statuses[0];
-		return onCreateTask(defaultStatus?.id ?? "", title, typeId, extraCreateFields);
+		const defaultStatus =
+			statuses.find((s) => s.category !== "done") ?? statuses[0];
+		return onCreateTask(
+			defaultStatus?.id ?? "",
+			title,
+			typeId,
+			extraCreateFields,
+		);
 	};
 
 	// ── Drag helpers ─────────────────────────────────────────────────────────
@@ -136,14 +142,20 @@ export function ListGroup({
 		e.preventDefault();
 		e.stopPropagation();
 		const taskId = e.dataTransfer.getData("text/plain");
-		const sourceGroupKey = e.dataTransfer.getData("application/x-source-group-key");
+		const sourceGroupKey = e.dataTransfer.getData(
+			"application/x-source-group-key",
+		);
 
 		if (sourceGroupKey && sourceGroupKey !== groupDef.key) {
 			if (canEdit) {
 				if (isStatusGrouping) {
 					onStatusChange?.(taskId, groupDef.key as string);
 				} else {
-					const colUpdate = buildColumnDropUpdate(columnBy, groupDef.fieldValue, customFields);
+					const colUpdate = buildColumnDropUpdate(
+						columnBy,
+						groupDef.fieldValue,
+						customFields,
+					);
 					if (Object.keys(colUpdate).length > 0)
 						onUpdateTaskField?.(taskId, colUpdate);
 				}
@@ -163,7 +175,9 @@ export function ListGroup({
 
 		const currentDraggingId = draggingId;
 		if (!currentDraggingId || currentDraggingId === targetTask.id) return;
-		const sourceIndex = orderedTasks.findIndex((t) => t.id === currentDraggingId);
+		const sourceIndex = orderedTasks.findIndex(
+			(t) => t.id === currentDraggingId,
+		);
 		if (sourceIndex === -1) return;
 		const updated = [...orderedTasks];
 		const [moved] = updated.splice(sourceIndex, 1);
@@ -184,7 +198,9 @@ export function ListGroup({
 	const handleGroupDrop = (e: React.DragEvent) => {
 		e.preventDefault();
 		const taskId = e.dataTransfer.getData("text/plain");
-		const sourceGroupKey = e.dataTransfer.getData("application/x-source-group-key");
+		const sourceGroupKey = e.dataTransfer.getData(
+			"application/x-source-group-key",
+		);
 		setIsDropTarget(false);
 		setDraggingId(null);
 		setDragOverId(null);
@@ -193,8 +209,13 @@ export function ListGroup({
 			if (isStatusGrouping) {
 				onStatusChange?.(taskId, groupDef.key as string);
 			} else {
-				const colUpdate = buildColumnDropUpdate(columnBy, groupDef.fieldValue, customFields);
-				if (Object.keys(colUpdate).length > 0) onUpdateTaskField?.(taskId, colUpdate);
+				const colUpdate = buildColumnDropUpdate(
+					columnBy,
+					groupDef.fieldValue,
+					customFields,
+				);
+				if (Object.keys(colUpdate).length > 0)
+					onUpdateTaskField?.(taskId, colUpdate);
 			}
 		}
 	};
@@ -232,7 +253,12 @@ export function ListGroup({
 
 	// ── Task row renderer ─────────────────────────────────────────────────────
 
-	const renderTaskRow = (task: Task, index: number, groupKey: string, swimKey?: string) => (
+	const renderTaskRow = (
+		task: Task,
+		index: number,
+		groupKey: string,
+		swimKey?: string,
+	) => (
 		// biome-ignore lint/a11y/noStaticElementInteractions: drag-and-drop row slot
 		<div
 			key={task.id}
@@ -277,7 +303,11 @@ export function ListGroup({
 							);
 							setDragOverSwimKey(null);
 							// Cross-band drop
-							if (swimKey !== "__all" && sourceSwimKey && sourceSwimKey !== swimKey) {
+							if (
+								swimKey !== "__all" &&
+								sourceSwimKey &&
+								sourceSwimKey !== swimKey
+							) {
 								setDraggingId(null);
 								setDragOverId(null);
 								if (canEdit) {
@@ -324,12 +354,17 @@ export function ListGroup({
 							const targetOrderedIndex = orderedTasks.findIndex(
 								(t) => t.id === task.id,
 							);
-							if (sourceOrderedIndex === -1 || targetOrderedIndex === -1) return;
+							if (sourceOrderedIndex === -1 || targetOrderedIndex === -1)
+								return;
 							const updated = [...orderedTasks];
 							const [moved] = updated.splice(sourceOrderedIndex, 1);
 							updated.splice(targetOrderedIndex, 0, moved);
 							setOrderedTasks(updated);
-							onReorderTask?.(groupDef.key, currentDraggingId, targetOrderedIndex);
+							onReorderTask?.(
+								groupDef.key,
+								currentDraggingId,
+								targetOrderedIndex,
+							);
 							setDraggingId(null);
 							setDragOverId(null);
 						}
@@ -355,7 +390,9 @@ export function ListGroup({
 	);
 
 	const showAddTask =
-		canCreate && groupDef.key !== "__none" && (isStatusGrouping || !!extraCreateFields);
+		canCreate &&
+		groupDef.key !== "__none" &&
+		(isStatusGrouping || !!extraCreateFields);
 
 	// ── Render ────────────────────────────────────────────────────────────────
 
@@ -371,7 +408,7 @@ export function ListGroup({
 			onDrop={handleGroupDrop}
 		>
 			{/* Group header */}
-			{/* biome-ignore lint/a11y/noStaticElementInteractions: composite group header with action buttons */}
+			{/* biome-ignore lint/a11y/useSemanticElements: div contains child buttons and cannot be converted to button element */}
 			<div
 				onClick={() => setCollapsed((v) => !v)}
 				onKeyDown={(e) => {
@@ -401,7 +438,6 @@ export function ListGroup({
 
 				{/* Sprint: "Start sprint" button */}
 				{sprint && sprint.status === "planned" && onStartSprint && (
-					// biome-ignore lint/a11y/noStaticElementInteractions: stop click propagation
 					<button
 						type="button"
 						onClick={(e) => {
@@ -417,7 +453,6 @@ export function ListGroup({
 
 				{/* Backlog: "New sprint" button */}
 				{groupDef.key === "__backlog" && onCreateSprint && (
-					// biome-ignore lint/a11y/noStaticElementInteractions: stop click propagation
 					<button
 						type="button"
 						onClick={(e) => {
@@ -447,123 +482,125 @@ export function ListGroup({
 				/>
 			)}
 
-			{!collapsed && (
-				<>
-					{hasSwimlanes ? (
-						<>
-							{/* Swimlane bands */}
-							{swimlaneDefs.map((swimDef) => {
-								const viewCtxForSwim = { statuses, taskTypes, members, customFields };
-								const laneTasks =
-									swimDef.key === "__all"
-										? getViewCtxTasks()
-										: getViewCtxTasks().filter(
-												(t) =>
-													getTaskSwimlaneKey(t, swimlaneBy, viewCtxForSwim) ===
-													swimDef.key,
-											);
-
-								const handleSwimBandDragOver = (e: React.DragEvent) => {
-									if (!isDraggable || swimDef.key === "__all") return;
-									e.preventDefault();
-									e.dataTransfer.dropEffect = "move";
-									setDragOverSwimKey(swimDef.key);
-								};
-
-								const handleSwimBandDrop = (e: React.DragEvent) => {
-									e.preventDefault();
-									const taskId = e.dataTransfer.getData("text/plain");
-									const sourceSwimKey = e.dataTransfer.getData(
-										"application/x-source-swim-key",
-									);
-									setDragOverSwimKey(null);
-									setDraggingId(null);
-									setDragOverId(null);
-									if (!taskId || !canEdit || swimDef.key === "__all") return;
-									if (sourceSwimKey && sourceSwimKey !== swimDef.key) {
-										const swimUpdate = buildColumnDropUpdate(
-											swimlaneBy,
-											swimDef.fieldValue,
-											customFields,
+			{!collapsed &&
+				(hasSwimlanes ? (
+					<>
+						{/* Swimlane bands */}
+						{swimlaneDefs.map((swimDef) => {
+							const viewCtxForSwim = {
+								statuses,
+								taskTypes,
+								members,
+								customFields,
+							};
+							const laneTasks =
+								swimDef.key === "__all"
+									? getViewCtxTasks()
+									: getViewCtxTasks().filter(
+											(t) =>
+												getTaskSwimlaneKey(t, swimlaneBy, viewCtxForSwim) ===
+												swimDef.key,
 										);
-										if (Object.keys(swimUpdate).length > 0)
-											onUpdateTaskField?.(taskId, swimUpdate);
-									}
-								};
 
-								return (
-									// biome-ignore lint/a11y/noStaticElementInteractions: drag-and-drop swimlane band
-									<div
-										key={swimDef.key}
-										className={cn(
-											"border-t border-border/15",
-											dragOverSwimKey === swimDef.key &&
-												isDraggable &&
-												"bg-primary/5 ring-inset ring-1 ring-primary/20",
-										)}
-										onDragOver={handleSwimBandDragOver}
-										onDragLeave={(e) => {
-											if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-												setDragOverSwimKey(null);
-											}
-										}}
-										onDrop={handleSwimBandDrop}
-									>
-										{swimDef.key !== "__all" && (
-											<div className="flex items-center gap-2 px-8 py-1.5 bg-muted/10">
-												<span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">
-													{swimDef.label}
-												</span>
-											</div>
-										)}
-										{/* Column headers shown once for the first band */}
-										{swimDef.key === (swimlaneDefs[0]?.key ?? "__all") &&
-											columnHeaders}
-										{laneTasks.length === 0 ? (
-											<div className="flex flex-col items-center py-5 text-muted-foreground/40">
-												<p className="text-[12px] font-medium">No tasks</p>
-											</div>
-										) : (
-											laneTasks.map((task, index) =>
-												renderTaskRow(task, index, groupDef.key, swimDef.key),
-											)
-										)}
-									</div>
+							const handleSwimBandDragOver = (e: React.DragEvent) => {
+								if (!isDraggable || swimDef.key === "__all") return;
+								e.preventDefault();
+								e.dataTransfer.dropEffect = "move";
+								setDragOverSwimKey(swimDef.key);
+							};
+
+							const handleSwimBandDrop = (e: React.DragEvent) => {
+								e.preventDefault();
+								const taskId = e.dataTransfer.getData("text/plain");
+								const sourceSwimKey = e.dataTransfer.getData(
+									"application/x-source-swim-key",
 								);
-							})}
+								setDragOverSwimKey(null);
+								setDraggingId(null);
+								setDragOverId(null);
+								if (!taskId || !canEdit || swimDef.key === "__all") return;
+								if (sourceSwimKey && sourceSwimKey !== swimDef.key) {
+									const swimUpdate = buildColumnDropUpdate(
+										swimlaneBy,
+										swimDef.fieldValue,
+										customFields,
+									);
+									if (Object.keys(swimUpdate).length > 0)
+										onUpdateTaskField?.(taskId, swimUpdate);
+								}
+							};
 
-							{/* Add task button after all swimlane bands */}
-							{showAddTask && (
-								<AddTaskRow
-									variant="list"
-									taskTypes={taskTypes}
-									onAdd={handleAdd}
-								/>
-							)}
-						</>
-					) : (
-						<>
-							{columnHeaders}
-							{orderedTasks.length === 0 ? (
-								<div className="flex flex-col items-center py-8 text-muted-foreground/40">
-									<p className="text-[12px] font-medium">No tasks</p>
+							return (
+								// biome-ignore lint/a11y/noStaticElementInteractions: drag-and-drop swimlane band
+								<div
+									key={swimDef.key}
+									className={cn(
+										"border-t border-border/15",
+										dragOverSwimKey === swimDef.key &&
+											isDraggable &&
+											"bg-primary/5 ring-inset ring-1 ring-primary/20",
+									)}
+									onDragOver={handleSwimBandDragOver}
+									onDragLeave={(e) => {
+										if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+											setDragOverSwimKey(null);
+										}
+									}}
+									onDrop={handleSwimBandDrop}
+								>
+									{swimDef.key !== "__all" && (
+										<div className="flex items-center gap-2 px-8 py-1.5 bg-muted/10">
+											<span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">
+												{swimDef.label}
+											</span>
+										</div>
+									)}
+									{/* Column headers shown once for the first band */}
+									{swimDef.key === (swimlaneDefs[0]?.key ?? "__all") &&
+										columnHeaders}
+									{laneTasks.length === 0 ? (
+										<div className="flex flex-col items-center py-5 text-muted-foreground/40">
+											<p className="text-[12px] font-medium">No tasks</p>
+										</div>
+									) : (
+										laneTasks.map((task, index) =>
+											renderTaskRow(task, index, groupDef.key, swimDef.key),
+										)
+									)}
 								</div>
-							) : (
-								orderedTasks.map((task, index) =>
-									renderTaskRow(task, index, groupDef.key),
-								)
-							)}
-							{showAddTask && (
-								<AddTaskRow
-									variant="list"
-									taskTypes={taskTypes}
-									onAdd={handleAdd}
-								/>
-							)}
-						</>
-					)}
-				</>
-			)}
+							);
+						})}
+
+						{/* Add task button after all swimlane bands */}
+						{showAddTask && (
+							<AddTaskRow
+								variant="list"
+								taskTypes={taskTypes}
+								onAdd={handleAdd}
+							/>
+						)}
+					</>
+				) : (
+					<>
+						{columnHeaders}
+						{orderedTasks.length === 0 ? (
+							<div className="flex flex-col items-center py-8 text-muted-foreground/40">
+								<p className="text-[12px] font-medium">No tasks</p>
+							</div>
+						) : (
+							orderedTasks.map((task, index) =>
+								renderTaskRow(task, index, groupDef.key),
+							)
+						)}
+						{showAddTask && (
+							<AddTaskRow
+								variant="list"
+								taskTypes={taskTypes}
+								onAdd={handleAdd}
+							/>
+						)}
+					</>
+				))}
 		</div>
 	);
 }

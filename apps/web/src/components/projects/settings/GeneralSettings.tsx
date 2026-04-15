@@ -59,7 +59,9 @@ export function GeneralSettings({
 				return;
 			}
 			if (code === ApiErrorCode.ProjectPrefixInvalid) {
-				setPrefixError("Prefix must be 1–10 uppercase letters/digits (e.g. PACA).");
+				setPrefixError(
+					"Prefix must be 1–10 uppercase letters/digits (e.g. PACA).",
+				);
 				return;
 			}
 			setError("Failed to update project. Please try again.");
@@ -100,13 +102,20 @@ export function GeneralSettings({
 				<div className="space-y-1.5">
 					<Label htmlFor="project-prefix">
 						Task ID prefix{" "}
-						<span className="text-muted-foreground font-normal text-xs">e.g. PACA → PACA-1, PACA-2…</span>
+						<span className="text-muted-foreground font-normal text-xs">
+							e.g. PACA → PACA-1, PACA-2…
+						</span>
 					</Label>
 					<Input
 						id="project-prefix"
 						value={prefix}
 						onChange={(e) => {
-							setPrefix(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 10));
+							setPrefix(
+								e.target.value
+									.toUpperCase()
+									.replace(/[^A-Z0-9]/g, "")
+									.slice(0, 10),
+							);
 							setPrefixError(null);
 						}}
 						placeholder="PROJ"

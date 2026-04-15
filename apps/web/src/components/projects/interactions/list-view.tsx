@@ -11,11 +11,11 @@ import type {
 import { ListGroup } from "./list-group";
 import {
 	type ColumnGroupDef,
-	type TaskFieldUpdate,
 	DEFAULT_VISIBLE_FIELDS,
 	getColumnGroupDefs,
 	getSwimlaneDefs,
 	getTaskColumnKeys,
+	type TaskFieldUpdate,
 } from "./view-utils";
 
 // ── Props ─────────────────────────────────────────────────────────────────────
@@ -90,7 +90,8 @@ export function ListView({
 		viewConfig?.fields && viewConfig.fields.length > 0
 			? viewConfig.fields
 			: DEFAULT_VISIBLE_FIELDS;
-	const isStatusGrouping = !viewConfig?.column_by || viewConfig.column_by === "status";
+	const isStatusGrouping =
+		!viewConfig?.column_by || viewConfig.column_by === "status";
 
 	const viewCtx = useMemo(
 		() => ({ statuses, taskTypes, members, customFields, sprints }),
@@ -129,7 +130,11 @@ export function ListView({
 			for (const k of getTaskColumnKeys(t, columnBy, viewCtx)) {
 				if (!seen.has(k)) {
 					seen.add(k);
-					dynamic.push({ key: k, label: k === "__none" ? "None" : k, fieldValue: k });
+					dynamic.push({
+						key: k,
+						label: k === "__none" ? "None" : k,
+						fieldValue: k,
+					});
 				}
 			}
 		}
@@ -145,7 +150,9 @@ export function ListView({
 	);
 
 	const getGroupTasks = (groupKey: string): Task[] =>
-		filtered.filter((t) => getTaskColumnKeys(t, columnBy, viewCtx).includes(groupKey));
+		filtered.filter((t) =>
+			getTaskColumnKeys(t, columnBy, viewCtx).includes(groupKey),
+		);
 
 	return (
 		<div className="flex flex-col overflow-auto">
@@ -164,7 +171,9 @@ export function ListView({
 						statuses={statuses}
 						taskTypes={taskTypes}
 						members={members}
-						customFields={customFields}					epics={epics}						canCreate={canCreate}
+						customFields={customFields}
+						epics={epics}
+						canCreate={canCreate}
 						defaultCollapsed={isDone}
 						fieldSum={fieldSum}
 						swimlaneDefs={swimlaneDefs}
@@ -186,7 +195,10 @@ export function ListView({
 						columnBy={columnBy}
 						extraCreateFields={
 							!isStatusGrouping && columnBy === "sprint"
-								? { sprint_id: grp.key === "__backlog" ? null : (grp.key as string) }
+								? {
+										sprint_id:
+											grp.key === "__backlog" ? null : (grp.key as string),
+									}
 								: undefined
 						}
 					/>

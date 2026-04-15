@@ -117,7 +117,7 @@ func defaultProjectViewInputs(projectID uuid.UUID, taskTypes []*taskdom.TaskType
 	}
 }
 
-func defaultSprintViewInputs(projectID, sprintID uuid.UUID, taskTypes []*taskdom.TaskType) []sprintdom.CreateViewInput {
+func defaultSprintViewInputs(projectID, sprintID uuid.UUID, _ []*taskdom.TaskType) []sprintdom.CreateViewInput {
 	sprintIDs := []string{sprintID.String()}
 	return []sprintdom.CreateViewInput{
 		{

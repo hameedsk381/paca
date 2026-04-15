@@ -55,7 +55,7 @@ func listViewIDsViaAPI(t *testing.T, env *e2eEnv, client *http.Client, token, pr
 }
 
 // deleteViewViaAPI deletes a view, ignoring 404 (already gone).
-func deleteViewViaAPI(t *testing.T, env *e2eEnv, client *http.Client, token, projectID, sprintID, viewID string) {
+func deleteViewViaAPI(t *testing.T, env *e2eEnv, client *http.Client, token, projectID, _ string, viewID string) {
 	t.Helper()
 	url := fmt.Sprintf("%s/api/v1/projects/%s/views/%s", env.base, projectID, viewID)
 	req := mustRequest(env.ctx, t, http.MethodDelete, url, nil)

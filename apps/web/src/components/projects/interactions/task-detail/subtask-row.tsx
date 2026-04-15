@@ -1,4 +1,5 @@
 import { Check, User } from "lucide-react";
+import { getTaskTypeIconComponent } from "@/components/projects/task-types/task-type-icons";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -10,11 +11,14 @@ import {
 	PopoverContent,
 	PopoverTrigger,
 } from "@/components/ui/popover";
-import { getTaskTypeIconComponent } from "@/components/projects/task-types/task-type-icons";
 import type { Task } from "@/lib/interaction-api";
 import type { ProjectMember, TaskStatus, TaskType } from "@/lib/project-api";
 import { cn } from "@/lib/utils";
-import { IMPORTANCE_BUCKET_VALUES, PRIORITY_LEVELS, getPriority } from "../priority";
+import {
+	getPriority,
+	IMPORTANCE_BUCKET_VALUES,
+	PRIORITY_LEVELS,
+} from "../priority";
 
 type SubtaskUpdatePayload = Partial<{
 	status_id: string | null;
@@ -81,7 +85,12 @@ export function SubtaskRow({
 
 			{/* Type — only in epic's task list */}
 			{showTypeField && (
-				<div className="shrink-0" onClick={(e) => e.stopPropagation()}>
+				// biome-ignore lint/a11y/noStaticElementInteractions: cell container stops propagation; inner controls are the interactive elements
+				<div
+					className="shrink-0"
+					onClick={(e) => e.stopPropagation()}
+					onKeyDown={(e) => e.stopPropagation()}
+				>
 					{canEditField && taskTypes.length > 0 ? (
 						<Popover>
 							<PopoverTrigger
@@ -90,8 +99,12 @@ export function SubtaskRow({
 								style={
 									taskType
 										? {
-												borderColor: taskType.color ? `${taskType.color}44` : "var(--border)",
-												backgroundColor: taskType.color ? `${taskType.color}15` : "var(--muted)",
+												borderColor: taskType.color
+													? `${taskType.color}44`
+													: "var(--border)",
+												backgroundColor: taskType.color
+													? `${taskType.color}15`
+													: "var(--muted)",
 												color: taskType.color ?? "inherit",
 											}
 										: undefined
@@ -114,7 +127,9 @@ export function SubtaskRow({
 											key={tt.id}
 											type="button"
 											className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[13px] hover:bg-muted/60 transition-colors duration-100"
-											onClick={() => onUpdate?.(task.id, { task_type_id: tt.id })}
+											onClick={() =>
+												onUpdate?.(task.id, { task_type_id: tt.id })
+											}
 										>
 											{TtIcon && (
 												<TtIcon
@@ -136,8 +151,12 @@ export function SubtaskRow({
 							<span
 								className="inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[10px] font-bold leading-tight tracking-wide border"
 								style={{
-									borderColor: taskType.color ? `${taskType.color}44` : "var(--border)",
-									backgroundColor: taskType.color ? `${taskType.color}15` : "var(--muted)",
+									borderColor: taskType.color
+										? `${taskType.color}44`
+										: "var(--border)",
+									backgroundColor: taskType.color
+										? `${taskType.color}15`
+										: "var(--muted)",
 									color: taskType.color ?? "inherit",
 								}}
 							>
@@ -149,9 +168,11 @@ export function SubtaskRow({
 			)}
 
 			{/* Assignee */}
+			{/* biome-ignore lint/a11y/noStaticElementInteractions: cell container stops propagation; inner controls are the interactive elements */}
 			<div
 				className="shrink-0 flex items-center justify-center"
 				onClick={(e) => e.stopPropagation()}
+				onKeyDown={(e) => e.stopPropagation()}
 			>
 				{canEditField && members.length > 0 ? (
 					<Popover>
@@ -168,7 +189,9 @@ export function SubtaskRow({
 								)}
 							>
 								{assignee ? (
-									(assignee.full_name || assignee.username).slice(0, 1).toUpperCase()
+									(assignee.full_name || assignee.username)
+										.slice(0, 1)
+										.toUpperCase()
 								) : (
 									<User className="size-2.5" />
 								)}
@@ -197,7 +220,9 @@ export function SubtaskRow({
 									<div className="flex size-5 items-center justify-center rounded-full bg-linear-to-br from-primary/20 to-primary/10 text-primary text-[9px] font-bold">
 										{(m.full_name || m.username).slice(0, 1).toUpperCase()}
 									</div>
-									<span className="flex-1 text-left truncate">{m.full_name || m.username}</span>
+									<span className="flex-1 text-left truncate">
+										{m.full_name || m.username}
+									</span>
 									{m.id === task.assignee_id && (
 										<Check className="size-3.5 text-primary" />
 									)}
@@ -215,7 +240,9 @@ export function SubtaskRow({
 						)}
 					>
 						{assignee ? (
-							(assignee.full_name || assignee.username).slice(0, 1).toUpperCase()
+							(assignee.full_name || assignee.username)
+								.slice(0, 1)
+								.toUpperCase()
 						) : (
 							<User className="size-2.5" />
 						)}
@@ -224,9 +251,11 @@ export function SubtaskRow({
 			</div>
 
 			{/* Priority */}
+			{/* biome-ignore lint/a11y/noStaticElementInteractions: cell container stops propagation; inner controls are the interactive elements */}
 			<div
 				className="shrink-0 w-16 flex items-center"
 				onClick={(e) => e.stopPropagation()}
+				onKeyDown={(e) => e.stopPropagation()}
 			>
 				{canEditField ? (
 					<DropdownMenu>
@@ -253,7 +282,9 @@ export function SubtaskRow({
 								<DropdownMenuItem
 									key={p.value}
 									onClick={() =>
-										onUpdate?.(task.id, { importance: IMPORTANCE_BUCKET_VALUES[p.value] ?? 0 })
+										onUpdate?.(task.id, {
+											importance: IMPORTANCE_BUCKET_VALUES[p.value] ?? 0,
+										})
 									}
 								>
 									<span
@@ -287,9 +318,11 @@ export function SubtaskRow({
 			</div>
 
 			{/* Status */}
+			{/* biome-ignore lint/a11y/noStaticElementInteractions: cell container stops propagation; inner controls are the interactive elements */}
 			<div
 				className="shrink-0 w-24 flex items-center"
 				onClick={(e) => e.stopPropagation()}
+				onKeyDown={(e) => e.stopPropagation()}
 			>
 				{canEditField && statuses.length > 0 ? (
 					<DropdownMenu>
@@ -298,7 +331,9 @@ export function SubtaskRow({
 								<>
 									<span
 										className="size-1.5 rounded-full shrink-0"
-										style={{ background: status.color ?? "var(--muted-foreground)" }}
+										style={{
+											background: status.color ?? "var(--muted-foreground)",
+										}}
 									/>
 									<span className="truncate">{status.name}</span>
 								</>
