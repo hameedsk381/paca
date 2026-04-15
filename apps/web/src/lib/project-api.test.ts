@@ -1,12 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mockGet, mockPost, mockPatch, mockDelete, mockPut } = vi.hoisted(() => ({
-	mockGet: vi.fn(),
-	mockPost: vi.fn(),
-	mockPatch: vi.fn(),
-	mockDelete: vi.fn(),
-	mockPut: vi.fn(),
-}));
+const { mockGet, mockPost, mockPatch, mockDelete, mockPut } = vi.hoisted(
+	() => ({
+		mockGet: vi.fn(),
+		mockPost: vi.fn(),
+		mockPatch: vi.fn(),
+		mockDelete: vi.fn(),
+		mockPut: vi.fn(),
+	}),
+);
 
 vi.mock("./api-client", () => ({
 	apiClient: {
@@ -28,8 +30,8 @@ import {
 	deleteProjectRole,
 	findEpicType,
 	findSubtaskType,
-	getProject,
 	getNormalTaskTypes,
+	getProject,
 	isEpicType,
 	isSubtaskType,
 	listProjectMembers,
