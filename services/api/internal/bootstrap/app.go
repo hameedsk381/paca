@@ -21,9 +21,11 @@ import (
 	"github.com/paca/api/internal/platform/database"
 	"github.com/paca/api/internal/platform/logger"
 	"github.com/paca/api/internal/platform/messaging"
+	"github.com/paca/api/internal/platform/storage"
 	jwttoken "github.com/paca/api/internal/platform/token"
 	pgRepo "github.com/paca/api/internal/repository/postgres"
 	redisRepo "github.com/paca/api/internal/repository/redis"
+	attachmentsvc "github.com/paca/api/internal/service/attachment"
 	authsvc "github.com/paca/api/internal/service/auth"
 	globalrolesvc "github.com/paca/api/internal/service/globalrole"
 	projectsvc "github.com/paca/api/internal/service/project"
@@ -76,6 +78,7 @@ func New(cfg *config.Config) (*App, error) {
 	taskRepo := pgRepo.NewTaskRepository(db)
 	sprintRepo := pgRepo.NewSprintRepository(db)
 	viewRepo := pgRepo.NewViewRepository(db)
+	attachmentRepo := pgRepo.NewAttachmentRepository(db)
 	refreshStore := redisRepo.NewRefreshTokenStore(redisClient)
 
 	// --- Schema migration (non-production only) -----------------------------
@@ -109,6 +112,26 @@ func New(cfg *config.Config) (*App, error) {
 	sprintService := sprintsvc.New(sprintRepo, taskRepo)
 	viewService := sprintsvc.NewViewService(viewRepo)
 
+	// Object storage — defaults to MinIO; switches to AWS S3 when STORAGE_PROVIDER=s3.
+	storageClient, err := storage.NewS3Client(context.Background(), storage.S3Config{
+		Endpoint:        cfg.Storage.Endpoint,
+		PublicURL:       cfg.Storage.PublicURL,
+		Region:          cfg.Storage.Region,
+		Bucket:          cfg.Storage.Bucket,
+		AccessKeyID:     cfg.Storage.AccessKeyID,
+		SecretAccessKey: cfg.Storage.SecretAccessKey,
+		UseSSL:          cfg.Storage.UseSSL,
+		ForcePathStyle:  cfg.Storage.Provider != "s3", // MinIO requires path-style
+	})
+	if err != nil {
+		return nil, fmt.Errorf("bootstrap: storage client: %w", err)
+	}
+	if err := storageClient.EnsureBucket(context.Background(), cfg.Storage.Bucket); err != nil {
+		return nil, fmt.Errorf("bootstrap: ensure storage bucket: %w", err)
+	}
+
+	attachmentService := attachmentsvc.New(attachmentRepo, storageClient, cfg.Storage.Bucket)
+
 	// --- Handlers -----------------------------------------------------------
 	cookieCfg := handler.CookieConfig{
 		Secure:            cfg.Server.CookieSecure,
@@ -128,6 +151,7 @@ func New(cfg *config.Config) (*App, error) {
 		Task:         handler.NewTaskHandler(taskService, viewService),
 		Sprint:       handler.NewSprintHandler(sprintService, viewService, handler.WithSprintDefaultTaskTypes(taskService)),
 		View:         handler.NewViewHandler(viewService),
+		Attachment:   handler.NewAttachmentHandler(attachmentService),
 		Log:          log,
 	}
 

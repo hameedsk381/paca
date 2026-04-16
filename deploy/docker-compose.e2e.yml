@@ -53,10 +53,20 @@ services:
       COOKIE_SECURE: "false"
       ADMIN_USERNAME: admin
       ADMIN_PASSWORD: e2e-admin-password
+      STORAGE_PROVIDER: minio
+      STORAGE_ENDPOINT: minio:9000
+      STORAGE_PUBLIC_URL: http://localhost/storage
+      STORAGE_REGION: us-east-1
+      STORAGE_BUCKET: paca
+      STORAGE_ACCESS_KEY_ID: e2e-minio-access-key
+      STORAGE_SECRET_ACCESS_KEY: e2e-minio-secret-key
+      STORAGE_USE_SSL: "false"
     depends_on:
       postgres:
         condition: service_healthy
       valkey:
+        condition: service_healthy
+      minio:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -qO/dev/null -T 3 --tries=1 http://127.0.0.1:8080/api/healthz || exit 1"]
@@ -100,6 +110,23 @@ services:
       timeout: 5s
       retries: 20
 
+  # MinIO — S3-compatible object store for E2E tests.
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: e2e-minio-access-key
+      MINIO_ROOT_PASSWORD: e2e-minio-secret-key
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
 volumes:
   postgres_data:
   valkey_data:
+  minio_data:

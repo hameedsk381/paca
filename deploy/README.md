@@ -11,8 +11,9 @@ Keeping those concerns separate makes the repository easier to understand and av
 
 | File | Description |
 |---|---|
-| `docker-compose.dev.yml` | Local development stack with PostgreSQL, Valkey, and optional app containers |
-| `docker-compose.prod.yml` | Production-oriented single-host stack for web, API, PostgreSQL, and Valkey |
+| `docker-compose.dev.yml` | Local development stack: PostgreSQL, Valkey, MinIO, and optional app containers |
+| `docker-compose.prod.yml` | Production-oriented single-host stack: web, API, PostgreSQL, Valkey, and MinIO |
+| `docker-compose.e2e.yml` | End-to-end test stack mirroring production topology with fixed test credentials |
 | `.env.production.example` | Example environment file for `docker-compose.prod.yml` |
 
 Service container definitions live with each service:
@@ -46,7 +47,9 @@ The Postgres schema is applied automatically on the first container start from `
 | PostgreSQL | 5432 | Local database for development |
 | Valkey | 6379 | Local cache / event streams |
 | API | 8080 | Containerized Go service |
-| Web | 3000 | Containerized TanStack Start app |
+| Web | 3000 | Containerized React app |
+| MinIO S3 API | 9000 | Local object store (S3-compatible) |
+| MinIO Console | 9001 | MinIO web UI (credentials: `minioadmin` / `minioadmin`) |
 
 Stop the development stack:
 
@@ -74,8 +77,19 @@ cp deploy/.env.production.example deploy/.env.production
 
 Then run:
 
+**With MinIO (default self-hosted):**
 ```bash
-docker compose --env-file deploy/.env.production -f deploy/docker-compose.prod.yml up -d --build
+docker compose \
+  --env-file deploy/.env.production \
+  -f deploy/docker-compose.prod.yml up -d --build
+```
+
+**With AWS S3 (suppress MinIO):**
+```bash
+# Set STORAGE_PROVIDER=s3 and real AWS credentials in .env.production
+docker compose \
+  --env-file deploy/.env.production \
+  -f deploy/docker-compose.prod.yml up -d --build --scale minio=0
 ```
 
 This file is suitable as:
@@ -84,4 +98,32 @@ This file is suitable as:
 - a CI/CD handoff artifact;
 - a reference for container image names and required runtime configuration.
 
-By default, the web and API services are published to the host in the production compose. PostgreSQL and Valkey stay on the internal Compose network unless an operator intentionally exposes them.
+By default, the web and API services are published to the host in the production compose. PostgreSQL, Valkey, and MinIO stay on the internal Compose network unless an operator intentionally exposes them.
+
+## E2E Compose
+
+Use [`docker-compose.e2e.yml`](./docker-compose.e2e.yml) to spin up a full production-like stack with fixed, test-safe credentials for running end-to-end tests:
+
+```bash
+docker compose -f deploy/docker-compose.e2e.yml up -d --build --wait
+docker compose -f deploy/docker-compose.e2e.yml down -v
+```
+
+All secrets are intentionally weak and public — never use them outside a local E2E environment.
+
+## Object Storage
+
+All environments include MinIO, an S3-compatible object store, to support file attachments without requiring an AWS account.
+
+In production, MinIO runs by default. When using AWS S3, pass `--scale minio=0` to suppress the MinIO container:
+
+```bash
+docker compose --env-file deploy/.env.production \
+  -f deploy/docker-compose.prod.yml up -d --build --scale minio=0
+```
+
+To switch to AWS S3:
+1. Set `STORAGE_PROVIDER=s3` in `.env.production`.
+2. Leave `STORAGE_ENDPOINT` empty (uses the default AWS regional endpoint) or set it explicitly.
+3. Supply real `STORAGE_ACCESS_KEY_ID` and `STORAGE_SECRET_ACCESS_KEY`.
+4. Add `--scale minio=0` to the startup command.

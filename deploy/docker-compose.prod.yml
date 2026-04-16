@@ -5,11 +5,21 @@
 # running managed PostgreSQL or Valkey can still use the same images
 # and environment variables as a handoff into their own platform.
 #
-# Example:
+# ── Object storage ────────────────────────────────────────────────────────────
+# MinIO runs by default (self-hosted). To use AWS S3 instead, scale MinIO to
+# zero so it does not start, and supply real AWS credentials.
+#
+# Self-hosted with MinIO (default):
 #   cp deploy/.env.production.example deploy/.env.production
 #   docker compose \
 #     --env-file deploy/.env.production \
 #     -f deploy/docker-compose.prod.yml up -d --build
+#
+# With AWS S3 (MinIO container suppressed):
+#   # Set STORAGE_PROVIDER=s3 and real AWS credentials in .env.production
+#   docker compose \
+#     --env-file deploy/.env.production \
+#     -f deploy/docker-compose.prod.yml up -d --build --scale minio=0
 
 name: paca-prod
 
@@ -59,11 +69,27 @@ services:
       COOKIE_SECURE: ${COOKIE_SECURE:-true}
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD}
+      # Object storage.
+      # Default: STORAGE_PROVIDER=minio — run with --profile minio.
+      # AWS S3:  set STORAGE_PROVIDER=s3 and real credentials; omit --profile minio.
+      STORAGE_PROVIDER: ${STORAGE_PROVIDER:-minio}
+      STORAGE_ENDPOINT: ${STORAGE_ENDPOINT:-minio:9000}
+      # Rewrite presigned URL host from the internal Docker hostname to the
+      # public gateway URL so browsers can reach the object store.
+      STORAGE_PUBLIC_URL: ${STORAGE_PUBLIC_URL:-http://localhost/storage}
+      STORAGE_REGION: ${STORAGE_REGION:-us-east-1}
+      STORAGE_BUCKET: ${STORAGE_BUCKET:-paca}
+      STORAGE_ACCESS_KEY_ID: ${STORAGE_ACCESS_KEY_ID:?set STORAGE_ACCESS_KEY_ID}
+      STORAGE_SECRET_ACCESS_KEY: ${STORAGE_SECRET_ACCESS_KEY:?set STORAGE_SECRET_ACCESS_KEY}
+      STORAGE_USE_SSL: ${STORAGE_USE_SSL:-false}
     depends_on:
       postgres:
         condition: service_healthy
       valkey:
         condition: service_healthy
+      minio:
+        condition: service_healthy
+        required: false  # skipped when --scale minio=0 (AWS S3 mode)
 
   web:
     image: ${PACA_WEB_IMAGE:-paca-web:latest}
@@ -88,6 +114,25 @@ services:
       - api
       - web
 
+  # MinIO — S3-compatible object store. Runs by default for self-hosted deployments.
+  # When using AWS S3, suppress this container with --scale minio=0 and set
+  # STORAGE_PROVIDER=s3 with real AWS credentials in your env file.
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${STORAGE_ACCESS_KEY_ID:?set STORAGE_ACCESS_KEY_ID}
+      MINIO_ROOT_PASSWORD: ${STORAGE_SECRET_ACCESS_KEY:?set STORAGE_SECRET_ACCESS_KEY}
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
 volumes:
   postgres_data:
   valkey_data:
+  minio_data:

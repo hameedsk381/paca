@@ -1,29 +1,61 @@
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Paperclip, Upload } from "lucide-react";
 import { useRef, useState } from "react";
+import {
+	deleteTaskAttachment,
+	taskAttachmentsQueryOptions,
+	uploadAttachment,
+} from "@/lib/attachment-api";
 import { cn } from "@/lib/utils";
 import { AttachmentItem } from "./attachment-item";
-import type { Attachment } from "./types";
 
 interface AttachmentsSectionProps {
+	projectId: string;
+	taskId: string;
 	canEdit?: boolean;
 }
 
 export function AttachmentsSection({
+	projectId,
+	taskId,
 	canEdit = true,
 }: AttachmentsSectionProps) {
-	const [attachments, setAttachments] = useState<Attachment[]>([]);
-	const [isDragOver, setIsDragOver] = useState(false);
+	const qc = useQueryClient();
 	const fileInputRef = useRef<HTMLInputElement>(null);
+	const [isDragOver, setIsDragOver] = useState(false);
+
+	// ── Query ──────────────────────────────────────────────────────────────
+	const { data: attachments = [] } = useQuery(
+		taskAttachmentsQueryOptions(projectId, taskId),
+	);
+
+	// ── Upload mutation ────────────────────────────────────────────────────
+	const uploadMutation = useMutation({
+		mutationFn: (file: File) =>
+			uploadAttachment(projectId, taskId, file),
+		onSuccess: () => {
+			qc.invalidateQueries({
+				queryKey: ["projects", projectId, "tasks", taskId, "attachments"],
+			});
+		},
+	});
+
+	// ── Delete mutation ────────────────────────────────────────────────────
+	const deleteMutation = useMutation({
+		mutationFn: (attachmentId: string) =>
+			deleteTaskAttachment(projectId, taskId, attachmentId),
+		onSuccess: () => {
+			qc.invalidateQueries({
+				queryKey: ["projects", projectId, "tasks", taskId, "attachments"],
+			});
+		},
+	});
 
 	const addFiles = (files: File[]) => {
 		if (!canEdit) return;
-		const newAttachments: Attachment[] = files.map((f) => ({
-			id: crypto.randomUUID(),
-			name: f.name,
-			size: f.size,
-			uploaded_at: new Date().toISOString(),
-		}));
-		setAttachments((a) => [...a, ...newAttachments]);
+		for (const file of files) {
+			uploadMutation.mutate(file);
+		}
 	};
 
 	const handleFileDrop = (e: React.DragEvent) => {
@@ -38,16 +70,12 @@ export function AttachmentsSection({
 		if (e.target) e.target.value = "";
 	};
 
-	const handleDelete = (id: string) => {
-		setAttachments((a) => a.filter((att) => att.id !== id));
-	};
-
 	return (
 		<div className="space-y-3">
 			<div className="flex items-center justify-between">
 				<h3 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground/70 flex items-center gap-2">
 					<span>Attachments</span>
-					<div className="flex-1 h-px bg-gradient-to-r from-border/40 to-transparent" />
+					<div className="flex-1 h-px bg-linear-to-r from-border/40 to-transparent" />
 				</h3>
 				{canEdit && (
 					<>
@@ -77,8 +105,10 @@ export function AttachmentsSection({
 						<AttachmentItem
 							key={att.id}
 							attachment={att}
+							projectId={projectId}
+							taskId={taskId}
 							canDelete={canEdit}
-							onDelete={handleDelete}
+							onDelete={(id) => deleteMutation.mutate(id)}
 						/>
 					))}
 				</div>
@@ -123,3 +153,4 @@ export function AttachmentsSection({
 		</div>
 	);
 }
+

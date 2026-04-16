@@ -10,6 +10,7 @@ type Config struct {
 	Redis    RedisConfig
 	JWT      JWTConfig
 	Admin    AdminConfig
+	Storage  StorageConfig
 	Env      string // development | production
 }
 
@@ -41,4 +42,19 @@ type JWTConfig struct {
 	AccessTTL         time.Duration
 	RefreshTTL        time.Duration // persistent session (remember me = true)
 	RefreshSessionTTL time.Duration // ephemeral session (remember me = false)
+}
+
+// StorageConfig holds object-storage settings.
+// When Provider is "s3" the service connects to AWS S3 using the Region field.
+// When Provider is "minio" (default) it targets the Endpoint URL.
+// The bucket is created automatically on startup if it does not exist.
+type StorageConfig struct {
+	Provider        string // "s3" | "minio"  (default: "minio")
+	Endpoint        string // MinIO URL, e.g. "minio:9000"; ignored for AWS S3
+	PublicURL       string // public-facing base URL for presigned URLs, e.g. "http://localhost/storage"
+	Region          string // AWS region; used for S3; also supplied to MinIO (can be any value)
+	Bucket          string
+	AccessKeyID     string
+	SecretAccessKey string
+	UseSSL          bool // set true when Endpoint is HTTPS
 }

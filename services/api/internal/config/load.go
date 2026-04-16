@@ -66,6 +66,21 @@ func Load() (*Config, error) {
 		errs = append(errs, err)
 	}
 
+	storageAccessKey, err := requireEnv("STORAGE_ACCESS_KEY_ID")
+	if err != nil {
+		errs = append(errs, err)
+	}
+
+	storageSecretKey, err := requireEnv("STORAGE_SECRET_ACCESS_KEY")
+	if err != nil {
+		errs = append(errs, err)
+	}
+
+	storageUseSSL, err := strconv.ParseBool(env("STORAGE_USE_SSL", "false"))
+	if err != nil {
+		return nil, fmt.Errorf("config: STORAGE_USE_SSL: %w", err)
+	}
+
 	if len(errs) > 0 {
 		return nil, errors.Join(errs...)
 	}
@@ -91,6 +106,16 @@ func Load() (*Config, error) {
 		Admin: AdminConfig{
 			Username: adminUser,
 			Password: adminPass,
+		},
+		Storage: StorageConfig{
+			Provider:        env("STORAGE_PROVIDER", "minio"),
+			Endpoint:        env("STORAGE_ENDPOINT", "minio:9000"),
+			PublicURL:       env("STORAGE_PUBLIC_URL", ""),
+			Region:          env("STORAGE_REGION", "us-east-1"),
+			Bucket:          env("STORAGE_BUCKET", "paca"),
+			AccessKeyID:     storageAccessKey,
+			SecretAccessKey: storageSecretKey,
+			UseSSL:          storageUseSSL,
 		},
 	}, nil
 }

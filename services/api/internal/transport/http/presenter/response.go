@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/paca/api/internal/apierr"
+	attachmentdom "github.com/paca/api/internal/domain/attachment"
 	domainauth "github.com/paca/api/internal/domain/auth"
 	globalroledom "github.com/paca/api/internal/domain/globalrole"
 	projectdom "github.com/paca/api/internal/domain/project"
@@ -170,6 +171,16 @@ func statusAndCodeFor(err error) (int, apierr.Code) {
 		return http.StatusNotFound, apierr.CodeBDDScenarioNotFound
 	case errors.Is(err, taskdom.ErrBDDScenarioTitleInvalid):
 		return http.StatusBadRequest, apierr.CodeBDDScenarioTitleInvalid
+	case errors.Is(err, attachmentdom.ErrFileNotFound):
+		return http.StatusNotFound, apierr.CodeFileNotFound
+	case errors.Is(err, attachmentdom.ErrAttachmentNotFound):
+		return http.StatusNotFound, apierr.CodeAttachmentNotFound
+	case errors.Is(err, attachmentdom.ErrUploadNotPending):
+		return http.StatusConflict, apierr.CodeUploadNotPending
+	case errors.Is(err, attachmentdom.ErrFileSizeZero),
+		errors.Is(err, attachmentdom.ErrFileNameEmpty),
+		errors.Is(err, attachmentdom.ErrContentTypeEmpty):
+		return http.StatusBadRequest, apierr.CodeAttachmentInvalid
 	default:
 		return http.StatusInternalServerError, apierr.CodeInternalError
 	}

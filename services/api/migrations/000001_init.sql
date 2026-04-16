@@ -310,21 +310,56 @@ CREATE INDEX IF NOT EXISTS idx_tasks_sprint_id    ON tasks (sprint_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_deleted_at   ON tasks (deleted_at) WHERE deleted_at IS NOT NULL;
 
 -- -------------------------------------------------------------------------
+-- FILES
+-- Central file-metadata registry.  One row per uploaded object in the
+-- object-store (S3-compatible).  Other tables (e.g. task_attachments)
+-- reference this table so the same file can be attached to multiple
+-- entities without duplicating metadata.
+--
+-- upload_status lifecycle:
+--   pending  → file record created, presigned upload URL issued.
+--   uploaded → client confirmed upload (or multipart completed).
+--   failed   → upload abandoned / timed-out (candidates for cleanup).
+--
+-- multipart_upload_id: non-NULL only while a multipart upload is in
+--   progress; cleared after CompleteMultipartUpload.
+-- -------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS files (
+    id                   UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    storage_key          TEXT        NOT NULL UNIQUE,
+    bucket               TEXT        NOT NULL,
+    file_name            TEXT        NOT NULL,
+    content_type         TEXT        NOT NULL DEFAULT 'application/octet-stream',
+    file_size            BIGINT      NOT NULL DEFAULT 0,
+    upload_status        TEXT        NOT NULL DEFAULT 'pending'
+                             CHECK (upload_status IN ('pending','uploaded','failed')),
+    multipart_upload_id  TEXT,
+    uploaded_by          UUID        REFERENCES users(id) ON DELETE SET NULL,
+    created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_files_uploaded_by    ON files (uploaded_by);
+CREATE INDEX IF NOT EXISTS idx_files_upload_status  ON files (upload_status) WHERE upload_status != 'uploaded';
+
+-- -------------------------------------------------------------------------
 -- TASK ATTACHMENTS
+-- Links a confirmed file to a task.  The file record itself lives in the
+-- files table; task_attachments is a pure join table with audit columns.
 -- -------------------------------------------------------------------------
 
 CREATE TABLE IF NOT EXISTS task_attachments (
-    id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    task_id     UUID        NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
-    file_name   TEXT        NOT NULL,
-    file_size   BIGINT      NOT NULL,
-    mime_type   TEXT        NOT NULL,
-    storage_url TEXT        NOT NULL,
-    uploaded_by UUID        REFERENCES project_members(id) ON DELETE SET NULL,
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    task_id    UUID        NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    file_id    UUID        NOT NULL REFERENCES files(id) ON DELETE CASCADE,
+    created_by UUID        REFERENCES users(id) ON DELETE SET NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_task_attachments_task_file UNIQUE (task_id, file_id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_task_attachments_task_id ON task_attachments (task_id);
+CREATE INDEX IF NOT EXISTS idx_task_attachments_file_id ON task_attachments (file_id);
 
 -- -------------------------------------------------------------------------
 -- TASK CHECKLISTS

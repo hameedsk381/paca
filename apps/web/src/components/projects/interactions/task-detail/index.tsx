@@ -399,7 +399,11 @@ export function TaskDetailModal({
 						<ChecklistsSection />
 
 						{/* Attachments */}
-						<AttachmentsSection canEdit={canEdit} />
+						<AttachmentsSection
+							projectId={projectId ?? ""}
+							taskId={task.id}
+							canEdit={canEdit}
+						/>
 
 						{/* Bottom breathing room */}
 						<div className="h-8" />
