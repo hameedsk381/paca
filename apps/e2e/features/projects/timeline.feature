@@ -1,7 +1,7 @@
 @projects @interactions @timeline
 Feature: Timeline interaction (Epic roadmap)
   The Timeline is a dedicated project interaction accessible from the project
-  sidebar under the "Integrations" section, appearing above "Product Backlog"
+  sidebar under the "Interactions" section, appearing above "Product Backlog"
   and all sprint entries.  Its purpose is long-horizon planning of Epics on a
   Gantt-style roadmap.  When a user opens the Timeline the page header shows
   "Timeline" with the subtitle "Epics and long-horizon planning on a roadmap."
@@ -27,8 +27,8 @@ Feature: Timeline interaction (Epic roadmap)
       And the user has the "View Sprints" project permission in "E2E_TIMELINE_PROJECT"
       And the user has navigated to the "E2E_TIMELINE_PROJECT" project
 
-    Scenario: Timeline appears as the first entry in the Integrations sidebar section
-      Then the project sidebar should contain a "Timeline" entry in the Integrations section
+    Scenario: Timeline appears as the first entry in the Interactions sidebar section
+      Then the project sidebar should contain a "Timeline" entry in the Interactions section
       And the "Timeline" entry should appear above "Product Backlog" and any sprint entries
 
     Scenario: Clicking Timeline in the sidebar opens the Timeline interaction page
