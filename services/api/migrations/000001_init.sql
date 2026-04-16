@@ -370,19 +370,6 @@ CREATE TABLE IF NOT EXISTS task_checklist_items (
 CREATE INDEX IF NOT EXISTS idx_task_checklist_items_checklist_id ON task_checklist_items (checklist_id, position);
 
 -- -------------------------------------------------------------------------
--- USER GLOBAL ROLES (join table)
--- Tracks the many-to-many relationship between users and global roles.
--- In practice the schema enforces a single role per user via users.role_id,
--- but this table is kept for potential future multi-role support.
--- -------------------------------------------------------------------------
-
-CREATE TABLE IF NOT EXISTS user_global_roles (
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    role_id UUID NOT NULL REFERENCES global_roles(id) ON DELETE CASCADE,
-    PRIMARY KEY (user_id, role_id)
-);
-
--- -------------------------------------------------------------------------
 -- BDD SCENARIOS
 -- BDD scenarios capture the Given / When / Then acceptance criteria for a
 -- task.  Each scenario belongs to exactly one task and is deleted when the
