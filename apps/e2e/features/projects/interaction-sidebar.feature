@@ -2,11 +2,11 @@
 Feature: Sidebar interaction navigation
   The project sidebar exposes all open interactions — timeline, product
   backlog, and any sprints that are active or planned — as direct navigation
-  entries inside an "Integrations" collapsible section.  Users never need to
+  entries inside an "Interactions" collapsible section.  Users never need to
   visit the Interactions settings page just to navigate to their work.
-  Inside the "Integrations" section the entries are ordered: Timeline first,
+  Inside the "Interactions" section the entries are ordered: Timeline first,
   then Product Backlog, then sprint entries (active before planned).  Sprint
-  entries are only visible when the Integrations section is in its expanded
+  entries are only visible when the Interactions section is in its expanded
   (open) state; they are hidden when the section is collapsed.  Completed
   sprints are always hidden from the sidebar.  The active interaction entry
   is always highlighted, and the section can be collapsed or expanded to
@@ -21,8 +21,8 @@ Feature: Sidebar interaction navigation
       And the user has the "View Sprints" project permission in "E2E_SIDEBAR_INTERACTIONS_PROJECT"
       And the user is inside the project "E2E_SIDEBAR_INTERACTIONS_PROJECT"
 
-    Scenario: Timeline always appears as the first fixed entry in the Integrations section
-      Then the project sidebar should contain a "Timeline" entry in the Integrations section
+    Scenario: Timeline always appears as the first fixed entry in the Interactions section
+      Then the project sidebar should contain a "Timeline" entry in the Interactions section
       And the "Timeline" entry should appear above "Product Backlog" and any sprint entries
 
     Scenario: Product Backlog always appears as a fixed entry in the sidebar
@@ -54,10 +54,10 @@ Feature: Sidebar interaction navigation
       Given the project has an active sprint named "E2E_RUNNING_SPRINT"
       Then the "E2E_RUNNING_SPRINT" sidebar entry should carry a visual indicator that marks it as active
 
-    Scenario: Sidebar shows an "Integrations" section label grouping all interaction entries
-      Then the sidebar should show a collapsible section labelled "Integrations"
+    Scenario: Sidebar shows an "Interactions" section label grouping all interaction entries
+      Then the sidebar should show a collapsible section labelled "Interactions"
       And the entries for timeline, product backlog, and sprints should appear beneath that label
-      And collapsing the "Integrations" section should hide all interaction entries
+      And collapsing the "Interactions" section should hide all interaction entries
 
   @authenticated
   Rule: Navigating directly to an interaction from the sidebar

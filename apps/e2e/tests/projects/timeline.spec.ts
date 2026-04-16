@@ -96,7 +96,7 @@ test.describe('Timeline interaction page header and navigation', () => {
     }
     await signIn(page);
 
-    // Navigate to the project to expand the sidebar integrations section
+    // Navigate to the project to expand the sidebar interactions section
     await navigateToTimeline(page, projectId);
 
     // Confirm sidebar link order: Timeline index < Product Backlog index

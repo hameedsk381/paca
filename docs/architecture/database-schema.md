@@ -138,7 +138,7 @@ Table sprint_views {
   project_id uuid [not null, ref: > projects.id]
   name varchar
   view_type varchar [not null, note: 'Layout: table | board | roadmap']
-  view_context varchar [not null, note: 'Integration discriminator: sprint | backlog | timeline. sprint rows always have sprint_id set; backlog and timeline rows have sprint_id = null.']
+  view_context varchar [not null, note: 'Interaction discriminator: sprint | backlog | timeline. sprint rows always have sprint_id set; backlog and timeline rows have sprint_id = null.']
   position integer [not null, default: 0, note: 'Zero-based tab order within the interaction; lower = further left in the tab bar. Updated on drag-to-reorder.']
   config jsonb [note: '''
     View display settings.  All keys are optional; unset keys fall back to

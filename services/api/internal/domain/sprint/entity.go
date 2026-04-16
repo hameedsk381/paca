@@ -173,7 +173,7 @@ type ViewConfig struct {
 // SprintView is a named, persisted view configuration for a sprint,
 // product-backlog, or timeline interaction.
 // SprintID is nil for project-level views (backlog and timeline); ProjectID is always set.
-// ViewContext distinguishes which integration a project-level view belongs to.
+// ViewContext distinguishes which interaction a project-level view belongs to.
 type SprintView struct {
 	ID          uuid.UUID
 	SprintID    *uuid.UUID

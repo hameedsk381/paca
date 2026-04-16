@@ -257,7 +257,7 @@ function ProjectNavItems({ projectId }: { projectId: string }) {
 	);
 }
 
-// ── Project Integrations Section ───────────────────────────────────────────────
+// ── Project Interactions Section ───────────────────────────────────────────────
 function ProjectInteractionsSection({ projectId }: { projectId: string }) {
 	const location = useRouterState({ select: (s) => s.location.pathname });
 	const { hasPermission } = usePermissions();
@@ -380,7 +380,7 @@ function ProjectInteractionsSection({ projectId }: { projectId: string }) {
 				className="flex cursor-pointer items-center justify-between hover:text-sidebar-foreground transition-colors"
 				onClick={toggle}
 			>
-				<span>Integrations</span>
+				<span>Interactions</span>
 				<ChevronRight
 					className={cn(
 						"size-3.5 transition-transform duration-200 text-sidebar-foreground/40",

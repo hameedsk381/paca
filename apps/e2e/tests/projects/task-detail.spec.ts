@@ -25,7 +25,7 @@ interface Task {
   sprint_id: string | null;
 }
 
-interface IntegrationView {
+interface InteractionView {
   id: string;
   name: string;
   view_type: string;
@@ -100,18 +100,18 @@ async function createBacklogView(
   projectId: string,
   name: string,
   view_type: 'board' | 'table',
-): Promise<IntegrationView> {
+): Promise<InteractionView> {
   const resp = await request.post(`${BASE_URL}/api/v1/projects/${projectId}/views?context=backlog`, {
     data: { name, view_type },
   });
   const body = await resp.json();
-  return body.data as IntegrationView;
+  return body.data as InteractionView;
 }
 
-async function listBacklogViews(request: APIRequestContext, projectId: string): Promise<IntegrationView[]> {
+async function listBacklogViews(request: APIRequestContext, projectId: string): Promise<InteractionView[]> {
   const resp = await request.get(`${BASE_URL}/api/v1/projects/${projectId}/views?context=backlog`);
   const body = await resp.json();
-  return (body?.data?.items ?? []) as IntegrationView[];
+  return (body?.data?.items ?? []) as InteractionView[];
 }
 
 async function deleteBacklogView(request: APIRequestContext, projectId: string, viewId: string): Promise<void> {
