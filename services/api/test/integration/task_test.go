@@ -2292,12 +2292,24 @@ func TestIntegrationTasks_PatchTitleOnlyPreservesAllFields(t *testing.T) {
 	if env.Data.StatusID == nil || *env.Data.StatusID != statusID.String() {
 		t.Errorf("expected status_id=%s preserved, got %v", statusID, env.Data.StatusID)
 	}
-	if len(env.Data.Description) == 0 || string(env.Data.Description) == "null" {
-		t.Errorf("expected description preserved, got %v", env.Data.Description)
+	// Assert the description block array was preserved verbatim, including the
+	// original text content (keepMeText).
+	var descBlocks []struct {
+		ID      string `json:"id"`
+		Type    string `json:"type"`
+		Content []struct {
+			Type string `json:"type"`
+			Text string `json:"text"`
+		} `json:"content"`
 	}
-	var descArr []any
-	if err := json.Unmarshal(env.Data.Description, &descArr); err != nil || len(descArr) == 0 {
-		t.Errorf("expected description to be a non-empty JSON array, got %q", string(env.Data.Description))
+	if err := json.Unmarshal(env.Data.Description, &descBlocks); err != nil {
+		t.Fatalf("description is not a valid JSON array: %v", err)
+	}
+	if len(descBlocks) == 0 {
+		t.Fatalf("expected description to contain at least one block, got empty array")
+	}
+	if got := descBlocks[0].Content[0].Text; got != keepMeText {
+		t.Errorf("expected description text %q preserved, got %q", keepMeText, got)
 	}
 }
 
