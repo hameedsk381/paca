@@ -550,14 +550,22 @@ func (h *TaskHandler) taskChangedFields(ctx context.Context, old *taskdom.Task, 
 	}
 
 	if req.StartDate.Set {
-		changes = append(changes, taskdom.FieldChange{Field: "start_date", Old: timePtrToStr(old.StartDate), New: timePtrToStr(req.StartDate.Value)})
+		oldVal := timePtrToStr(old.StartDate)
+		newVal := timePtrToStr(req.StartDate.Value)
+		if oldVal != newVal {
+			changes = append(changes, taskdom.FieldChange{Field: "start_date", Old: oldVal, New: newVal})
+		}
 	}
 
 	if req.DueDate.Set {
-		changes = append(changes, taskdom.FieldChange{Field: "due_date", Old: timePtrToStr(old.DueDate), New: timePtrToStr(req.DueDate.Value)})
+		oldVal := timePtrToStr(old.DueDate)
+		newVal := timePtrToStr(req.DueDate.Value)
+		if oldVal != newVal {
+			changes = append(changes, taskdom.FieldChange{Field: "due_date", Old: oldVal, New: newVal})
+		}
 	}
 
-	if req.Description.Set {
+	if req.Description.Set && string(req.Description.Value) != string(old.Description) {
 		changes = append(changes, taskdom.FieldChange{Field: "description"})
 	}
 
@@ -566,7 +574,11 @@ func (h *TaskHandler) taskChangedFields(ctx context.Context, old *taskdom.Task, 
 	}
 
 	if req.CustomFields != nil {
-		changes = append(changes, taskdom.FieldChange{Field: "custom_fields"})
+		oldJSON, _ := json.Marshal(old.CustomFields)
+		newJSON, _ := json.Marshal(*req.CustomFields)
+		if string(oldJSON) != string(newJSON) {
+			changes = append(changes, taskdom.FieldChange{Field: "custom_fields"})
+		}
 	}
 
 	return changes
