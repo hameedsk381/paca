@@ -420,3 +420,37 @@ a {
 		@apply border-border outline-ring/50;
 	}
 }
+
+/* BlockNote dark-mode theme — aligned with the app's deep-navy dark palette */
+.dark .bn-root[data-color-scheme="dark"] {
+	/* Editor canvas — transparent so the card container background shows through */
+	--bn-colors-editor-text: #dde4ff;
+	--bn-colors-editor-background: transparent;
+
+	/* Floating menus / slash menu / side menu dropdowns */
+	--bn-colors-menu-text: #dde4ff;
+	--bn-colors-menu-background: #0c1428;
+
+	/* Tooltips */
+	--bn-colors-tooltip-text: #c8d0f0;
+	--bn-colors-tooltip-background: #141e38;
+
+	/* Hover state (e.g. menu items on hover) */
+	--bn-colors-hovered-text: #dde4ff;
+	--bn-colors-hovered-background: #1a2845;
+
+	/* Selected state (e.g. active menu item, selected text highlight) */
+	--bn-colors-selected-text: #070c18;
+	--bn-colors-selected-background: #567ac2;
+
+	/* Disabled state */
+	--bn-colors-disabled-text: #4a5880;
+	--bn-colors-disabled-background: #101e38;
+
+	/* Shadows and borders */
+	--bn-colors-shadow: rgba(0, 0, 0, 0.5);
+	--bn-colors-border: #1a2845;
+
+	/* Side-menu drag handle / block decorations */
+	--bn-colors-side-menu: #7a8db3;
+}
