@@ -5,12 +5,11 @@ import { useCreateBlockNote } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/shadcn";
 import { Sparkles } from "lucide-react";
 import { useCallback, useEffect, useRef } from "react";
-
+import { useThemeMode } from "@/hooks/use-theme-mode";
 import {
 	getAttachmentDownloadURL,
 	uploadAttachment,
 } from "@/lib/attachment-api";
-import { useThemeMode } from "@/hooks/use-theme-mode";
 
 type UpdateFn = (payload: { description?: unknown[] | null }) => void;
 
@@ -86,7 +85,8 @@ export function DescriptionSection({
 		const normalized = description ?? null;
 		// Stringify for stable comparison (array identity changes on every response)
 		const normalizedStr = normalized ? JSON.stringify(normalized) : null;
-		if (initializedRef.current && normalizedStr === lastSavedRef.current) return;
+		if (initializedRef.current && normalizedStr === lastSavedRef.current)
+			return;
 		initializedRef.current = true;
 		lastSavedRef.current = normalizedStr;
 
@@ -146,4 +146,3 @@ export function DescriptionSection({
 		</div>
 	);
 }
-
