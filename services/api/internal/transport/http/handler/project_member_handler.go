@@ -99,3 +99,35 @@ func (h *ProjectHandler) RemoveMember(c *gin.Context) {
 	}
 	presenter.OK(c, gin.H{"message": "member removed"})
 }
+
+// GetMyProjectPermissions handles GET /projects/:projectId/members/me/permissions.
+// It returns the permission map of the authenticated user's project role.
+// Any authenticated project member can call this endpoint regardless of which
+// permissions their role grants — the lookup is always scoped to themselves.
+func (h *ProjectHandler) GetMyProjectPermissions(c *gin.Context) {
+	projectID, err := parseProjectID(c)
+	if err != nil {
+		presenter.Error(c, err)
+		return
+	}
+
+	claims := middleware.ClaimsFrom(c)
+	if claims == nil {
+		presenter.Error(c, apierr.New(apierr.CodeUnauthenticated, "unauthenticated"))
+		return
+	}
+
+	userID, err := uuid.Parse(claims.Subject)
+	if err != nil {
+		presenter.Error(c, apierr.New(apierr.CodeBadRequest, "invalid subject claim"))
+		return
+	}
+
+	perms, err := h.svc.GetMyProjectPermissions(c.Request.Context(), projectID, userID)
+	if err != nil {
+		presenter.Error(c, err)
+		return
+	}
+
+	presenter.OK(c, gin.H{"permissions": perms})
+}

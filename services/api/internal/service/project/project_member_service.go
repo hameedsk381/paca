@@ -92,3 +92,21 @@ func (s *Service) RemoveMember(ctx context.Context, projectID, userID uuid.UUID)
 	}
 	return s.repo.RemoveMember(ctx, projectID, userID)
 }
+
+// GetMyProjectPermissions returns the effective permission map of the calling
+// user's project role. Returns ErrMemberNotFound when the user is not a member.
+func (s *Service) GetMyProjectPermissions(ctx context.Context, projectID, userID uuid.UUID) (map[string]any, error) {
+	member, err := s.repo.FindMember(ctx, projectID, userID)
+	if err != nil {
+		return nil, err
+	}
+	role, err := s.repo.FindRoleByID(ctx, member.ProjectRoleID)
+	if err != nil {
+		return nil, err
+	}
+	perms := role.Permissions
+	if perms == nil {
+		perms = map[string]any{}
+	}
+	return perms, nil
+}

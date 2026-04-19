@@ -112,7 +112,7 @@ CREATE INDEX IF NOT EXISTS idx_project_members_role_id    ON project_members (pr
 CREATE INDEX IF NOT EXISTS idx_project_members_deleted_at ON project_members (deleted_at) WHERE deleted_at IS NOT NULL;
 
 -- -------------------------------------------------------------------------
--- SEED DATA: global roles and template project roles
+-- SEED DATA: global roles
 -- -------------------------------------------------------------------------
 
 INSERT INTO global_roles (id, name, permissions, created_at, updated_at)
@@ -123,22 +123,6 @@ VALUES
 ON CONFLICT (name) DO UPDATE
 SET permissions = EXCLUDED.permissions,
     updated_at  = NOW();
-
-INSERT INTO project_roles (id, project_id, role_name, permissions, created_at, updated_at)
-VALUES
-    (gen_random_uuid(), NULL, 'PROJECT_OWNER',
-     '{"projects.*": true, "project.members.*": true, "project.roles.*": true, "tasks.*": true, "sprints.*": true}'::jsonb,
-     NOW(), NOW()),
-    (gen_random_uuid(), NULL, 'PROJECT_MANAGER',
-     '{"projects.read": true, "projects.write": true, "project.members.read": true, "project.members.write": true, "tasks.*": true, "sprints.*": true}'::jsonb,
-     NOW(), NOW()),
-    (gen_random_uuid(), NULL, 'PROJECT_MEMBER',
-     '{"projects.read": true, "tasks.read": true, "tasks.write": true, "sprints.read": true}'::jsonb,
-     NOW(), NOW()),
-    (gen_random_uuid(), NULL, 'PROJECT_VIEWER',
-     '{"projects.read": true, "tasks.read": true, "sprints.read": true}'::jsonb,
-     NOW(), NOW())
-ON CONFLICT DO NOTHING;
 
 -- -------------------------------------------------------------------------
 -- TASK TYPES

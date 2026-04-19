@@ -1116,3 +1116,97 @@ func TestE2ETaskTypes_SetDefault(t *testing.T) {
 		assertErrorCode(t, resp, "TASK_TYPE_NOT_FOUND")
 	})
 }
+
+// ---------------------------------------------------------------------------
+// GetMyProjectPermissions e2e tests
+// ---------------------------------------------------------------------------
+
+// getMyProjectPermissionsViaAPI calls GET /api/v1/projects/:id/members/me/permissions
+// and returns the decoded permissions map on success.
+func getMyProjectPermissionsViaAPI(t *testing.T, env *e2eEnv, client *http.Client, token, projectID string) map[string]any {
+	t.Helper()
+	url := fmt.Sprintf("%s/api/v1/projects/%s/members/me/permissions", env.base, projectID)
+	req := mustRequest(env.ctx, t, http.MethodGet, url, nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp := mustDo(t, client, req)
+	defer func() { _ = resp.Body.Close() }()
+	assertStatus(t, resp, http.StatusOK)
+	var env2 envelope
+	decodeJSON(t, resp, &env2)
+	data := assertDataMap(t, env2)
+	perms, _ := data["permissions"].(map[string]any)
+	return perms
+}
+
+// TestE2EGetMyProjectPermissions_Success verifies that an authenticated project
+// member receives their role's permissions from the endpoint.
+func TestE2EGetMyProjectPermissions_Success(t *testing.T) {
+	env := newE2EEnv(t)
+
+	seedProjectAdminUser(t, env, "perms-admin", "permspass1")
+	adminClient, adminToken := projectAdminLogin(t, env, "perms-admin", "permspass1")
+	projID := createProjectViaAPI(t, env, adminClient, adminToken, "perms-project-"+uuid.NewString(), "")
+
+	editorPerms := map[string]any{
+		"tasks.read":   true,
+		"tasks.write":  true,
+		"sprints.read": true,
+	}
+	editorRoleID := createProjectRoleWithPermsViaAPI(t, env, adminClient, adminToken, projID, "editor", editorPerms)
+
+	memberUsername := "perms-member-" + uuid.NewString()
+	seedUser(t, env, memberUsername, "permspass1", "Perms Member")
+	memberUser, err := env.userRepo.FindByUsername(env.ctx, memberUsername)
+	if err != nil {
+		t.Fatalf("find member user: %v", err)
+	}
+	addMemberViaAPI(t, env, adminClient, adminToken, projID, memberUser.ID.String(), editorRoleID)
+
+	memberClient, memberToken := loginUser(t, env, memberUsername, "permspass1")
+	perms := getMyProjectPermissionsViaAPI(t, env, memberClient, memberToken, projID)
+
+	for _, key := range []string{"tasks.read", "tasks.write", "sprints.read"} {
+		if v, _ := perms[key].(bool); !v {
+			t.Errorf("expected permission %q=true, got %v", key, perms[key])
+		}
+	}
+}
+
+// TestE2EGetMyProjectPermissions_NotMember verifies that an authenticated user
+// who is not a project member receives a 404 PROJECT_MEMBER_NOT_FOUND.
+func TestE2EGetMyProjectPermissions_NotMember(t *testing.T) {
+	env := newE2EEnv(t)
+
+	seedProjectAdminUser(t, env, "perms-nm-admin", "permspass2")
+	adminClient, adminToken := projectAdminLogin(t, env, "perms-nm-admin", "permspass2")
+	projID := createProjectViaAPI(t, env, adminClient, adminToken, "perms-nm-project-"+uuid.NewString(), "")
+
+	// Seed a plain user but do NOT add them as a member.
+	seedUser(t, env, "perms-nm-user", "permspass2", "Perms Non-Member")
+	nmClient, nmToken := loginUser(t, env, "perms-nm-user", "permspass2")
+
+	url := fmt.Sprintf("%s/api/v1/projects/%s/members/me/permissions", env.base, projID)
+	req := mustRequest(env.ctx, t, http.MethodGet, url, nil)
+	req.Header.Set("Authorization", "Bearer "+nmToken)
+	resp := mustDo(t, nmClient, req)
+	defer func() { _ = resp.Body.Close() }()
+	assertStatus(t, resp, http.StatusNotFound)
+	assertErrorCode(t, resp, "PROJECT_MEMBER_NOT_FOUND")
+}
+
+// TestE2EGetMyProjectPermissions_Unauthenticated verifies that requests without
+// a valid token receive a 401 Unauthorized.
+func TestE2EGetMyProjectPermissions_Unauthenticated(t *testing.T) {
+	env := newE2EEnv(t)
+
+	seedProjectAdminUser(t, env, "perms-unauth-admin", "permspass3")
+	adminClient, adminToken := projectAdminLogin(t, env, "perms-unauth-admin", "permspass3")
+	projID := createProjectViaAPI(t, env, adminClient, adminToken, "perms-unauth-project-"+uuid.NewString(), "")
+
+	url := fmt.Sprintf("%s/api/v1/projects/%s/members/me/permissions", env.base, projID)
+	req := mustRequest(env.ctx, t, http.MethodGet, url, nil)
+	// No Authorization header.
+	resp := mustDo(t, env.client, req)
+	defer func() { _ = resp.Body.Close() }()
+	assertStatus(t, resp, http.StatusUnauthorized)
+}

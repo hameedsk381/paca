@@ -752,3 +752,118 @@ func TestIntegrationProjectCreation_DefaultTaskRecords(t *testing.T) {
 		}
 	}
 }
+
+// ---------------------------------------------------------------------------
+// GetMyProjectPermissions integration tests
+// ---------------------------------------------------------------------------
+
+func TestIntegrationGetMyProjectPermissions_Success(t *testing.T) {
+	repo := newFakeProjectRepo()
+	projectID := uuid.New()
+	roleID := uuid.New()
+	userID := uuid.New()
+
+	repo.projects[projectID] = &projectdom.Project{ID: projectID, Name: "Perms Project"}
+	repo.roles[roleID] = &projectdom.ProjectRole{
+		ID:          roleID,
+		ProjectID:   &projectID,
+		RoleName:    "editor",
+		Permissions: map[string]any{"tasks.read": true, "tasks.write": true, "sprints.read": true},
+	}
+	repo.members[memberKey(projectID, userID)] = &projectdom.ProjectMember{
+		ID:            uuid.New(),
+		ProjectID:     projectID,
+		UserID:        userID,
+		ProjectRoleID: roleID,
+	}
+
+	store := &projectPermStore{}
+	r := buildProjectTestRouter(repo, store)
+	tok := issueProjectToken(t, userID.String())
+
+	url := fmt.Sprintf("/api/v1/projects/%s/members/me/permissions", projectID)
+	w := serve(r, authedJSONReq(t.Context(), http.MethodGet, url, tok, nil))
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d (%s)", w.Code, w.Body.String())
+	}
+
+	var env struct {
+		Data map[string]any `json:"data"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&env); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	perms, ok := env.Data["permissions"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected permissions map, got %T: %v", env.Data["permissions"], env.Data["permissions"])
+	}
+	for _, key := range []string{"tasks.read", "tasks.write", "sprints.read"} {
+		if v, _ := perms[key].(bool); !v {
+			t.Errorf("expected %q=true, got %v", key, perms[key])
+		}
+	}
+}
+
+func TestIntegrationGetMyProjectPermissions_NotMember(t *testing.T) {
+	repo := newFakeProjectRepo()
+	projectID := uuid.New()
+	repo.projects[projectID] = &projectdom.Project{ID: projectID, Name: "Perms Project"}
+
+	store := &projectPermStore{}
+	r := buildProjectTestRouter(repo, store)
+	tok := issueProjectToken(t, uuid.NewString())
+
+	url := fmt.Sprintf("/api/v1/projects/%s/members/me/permissions", projectID)
+	w := serve(r, authedJSONReq(t.Context(), http.MethodGet, url, tok, nil))
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d (%s)", w.Code, w.Body.String())
+	}
+	if code := decodeErrorCode(t, w); code != "PROJECT_MEMBER_NOT_FOUND" {
+		t.Fatalf("expected PROJECT_MEMBER_NOT_FOUND, got %q", code)
+	}
+}
+
+func TestIntegrationGetMyProjectPermissions_Unauthenticated(t *testing.T) {
+	repo := newFakeProjectRepo()
+	projectID := uuid.New()
+	repo.projects[projectID] = &projectdom.Project{ID: projectID, Name: "Perms Project"}
+
+	store := &projectPermStore{}
+	r := buildProjectTestRouter(repo, store)
+
+	url := fmt.Sprintf("/api/v1/projects/%s/members/me/permissions", projectID)
+	w := serve(r, httptest.NewRequestWithContext(t.Context(), http.MethodGet, url, nil))
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d (%s)", w.Code, w.Body.String())
+	}
+}
+
+func TestIntegrationGetMyProjectPermissions_BadProjectID(t *testing.T) {
+	repo := newFakeProjectRepo()
+	store := &projectPermStore{}
+	r := buildProjectTestRouter(repo, store)
+	tok := issueProjectToken(t, uuid.NewString())
+
+	url := "/api/v1/projects/not-a-uuid/members/me/permissions"
+	w := serve(r, authedJSONReq(t.Context(), http.MethodGet, url, tok, nil))
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d (%s)", w.Code, w.Body.String())
+	}
+}
+
+func TestIntegrationGetMyProjectPermissions_ProjectNotFound(t *testing.T) {
+	repo := newFakeProjectRepo()
+	store := &projectPermStore{}
+	r := buildProjectTestRouter(repo, store)
+	tok := issueProjectToken(t, uuid.NewString())
+
+	url := fmt.Sprintf("/api/v1/projects/%s/members/me/permissions", uuid.NewString())
+	w := serve(r, authedJSONReq(t.Context(), http.MethodGet, url, tok, nil))
+	// User is not a member of a non-existent project → ErrMemberNotFound → 404.
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d (%s)", w.Code, w.Body.String())
+	}
+	if code := decodeErrorCode(t, w); code != "PROJECT_MEMBER_NOT_FOUND" {
+		t.Fatalf("expected PROJECT_MEMBER_NOT_FOUND, got %q", code)
+	}
+}
