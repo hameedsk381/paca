@@ -126,6 +126,15 @@ export async function removeProjectMember(
 	await apiClient.instance.delete(`/projects/${projectId}/members/${userId}`);
 }
 
+export async function getMyProjectPermissions(
+	projectId: string,
+): Promise<Record<string, boolean>> {
+	const { data } = await apiClient.instance.get<
+		SuccessEnvelope<{ permissions: Record<string, boolean> }>
+	>(`/projects/${projectId}/members/me/permissions`);
+	return data.data.permissions;
+}
+
 // ── Roles ─────────────────────────────────────────────────────────────────────
 
 export async function listProjectRoles(
@@ -459,6 +468,14 @@ export const projectMembersQueryOptions = (projectId: string) =>
 	queryOptions({
 		queryKey: ["projects", projectId, "members"],
 		queryFn: () => listProjectMembers(projectId),
+	});
+
+export const myProjectPermissionsQueryOptions = (projectId: string) =>
+	queryOptions({
+		queryKey: ["projects", projectId, "members", "me", "permissions"],
+		queryFn: () => getMyProjectPermissions(projectId),
+		staleTime: 2 * 60 * 1000,
+		retry: false,
 	});
 
 export const projectRolesQueryOptions = (projectId: string) =>

@@ -23,4 +23,8 @@ type MemberService interface {
 	AddMember(ctx context.Context, projectID uuid.UUID, in AddMemberInput) (*ProjectMember, error)
 	UpdateMemberRole(ctx context.Context, projectID, userID uuid.UUID, in UpdateMemberRoleInput) (*ProjectMember, error)
 	RemoveMember(ctx context.Context, projectID, userID uuid.UUID) error
+	// GetMyProjectPermissions returns the effective permission map of the
+	// calling user's project role. Returns ErrMemberNotFound when the user is
+	// not a member of the project.
+	GetMyProjectPermissions(ctx context.Context, projectID, userID uuid.UUID) (map[string]any, error)
 }

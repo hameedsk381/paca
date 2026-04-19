@@ -175,6 +175,8 @@ func New(deps Deps) *gin.Engine {
 						httpmw.RequirePermissions(deps.Authorizer, httpmw.ProjectScopeFromParam("projectId"), authz.PermissionProjectMembersWrite),
 						deps.Project.AddMember,
 					)
+					// Static sub-path must come before /:userId to avoid the param swallowing it.
+					members.GET("/me/permissions", deps.Project.GetMyProjectPermissions)
 					members.PATCH("/:userId",
 						httpmw.RequirePermissions(deps.Authorizer, httpmw.ProjectScopeFromParam("projectId"), authz.PermissionProjectMembersWrite),
 						deps.Project.UpdateMemberRole,

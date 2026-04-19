@@ -60,6 +60,8 @@ func DefaultProjectRoles() []RoleDefinition {
 			Name: "PROJECT_MEMBER",
 			Permissions: []Permission{
 				PermissionProjectsRead,
+				PermissionProjectMembersRead,
+				PermissionProjectRolesRead,
 				PermissionTasksRead,
 				PermissionTasksWrite,
 				PermissionSprintsRead,

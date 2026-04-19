@@ -28,20 +28,21 @@ import (
 // ---------------------------------------------------------------------------
 
 type mockProjectSvc struct {
-	list           func(ctx context.Context, page, pageSize int) ([]*projectdom.Project, int64, error)
-	listAccessible func(ctx context.Context, userID uuid.UUID, page, pageSize int) ([]*projectdom.Project, int64, error)
-	getByID        func(ctx context.Context, id uuid.UUID) (*projectdom.Project, error)
-	create         func(ctx context.Context, in projectdom.CreateProjectInput) (*projectdom.Project, error)
-	update         func(ctx context.Context, id uuid.UUID, in projectdom.UpdateProjectInput) (*projectdom.Project, error)
-	delete         func(ctx context.Context, id uuid.UUID) error
-	listMembers    func(ctx context.Context, projectID uuid.UUID) ([]*projectdom.ProjectMember, error)
-	addMember      func(ctx context.Context, projectID uuid.UUID, in projectdom.AddMemberInput) (*projectdom.ProjectMember, error)
-	updateMember   func(ctx context.Context, projectID, userID uuid.UUID, in projectdom.UpdateMemberRoleInput) (*projectdom.ProjectMember, error)
-	removeMember   func(ctx context.Context, projectID, userID uuid.UUID) error
-	listRoles      func(ctx context.Context, projectID uuid.UUID) ([]*projectdom.ProjectRole, error)
-	createRole     func(ctx context.Context, projectID uuid.UUID, in projectdom.CreateRoleInput) (*projectdom.ProjectRole, error)
-	updateRole     func(ctx context.Context, projectID, roleID uuid.UUID, in projectdom.UpdateRoleInput) (*projectdom.ProjectRole, error)
-	deleteRole     func(ctx context.Context, projectID, roleID uuid.UUID) error
+	list                    func(ctx context.Context, page, pageSize int) ([]*projectdom.Project, int64, error)
+	listAccessible          func(ctx context.Context, userID uuid.UUID, page, pageSize int) ([]*projectdom.Project, int64, error)
+	getByID                 func(ctx context.Context, id uuid.UUID) (*projectdom.Project, error)
+	create                  func(ctx context.Context, in projectdom.CreateProjectInput) (*projectdom.Project, error)
+	update                  func(ctx context.Context, id uuid.UUID, in projectdom.UpdateProjectInput) (*projectdom.Project, error)
+	delete                  func(ctx context.Context, id uuid.UUID) error
+	listMembers             func(ctx context.Context, projectID uuid.UUID) ([]*projectdom.ProjectMember, error)
+	addMember               func(ctx context.Context, projectID uuid.UUID, in projectdom.AddMemberInput) (*projectdom.ProjectMember, error)
+	updateMember            func(ctx context.Context, projectID, userID uuid.UUID, in projectdom.UpdateMemberRoleInput) (*projectdom.ProjectMember, error)
+	removeMember            func(ctx context.Context, projectID, userID uuid.UUID) error
+	listRoles               func(ctx context.Context, projectID uuid.UUID) ([]*projectdom.ProjectRole, error)
+	createRole              func(ctx context.Context, projectID uuid.UUID, in projectdom.CreateRoleInput) (*projectdom.ProjectRole, error)
+	updateRole              func(ctx context.Context, projectID, roleID uuid.UUID, in projectdom.UpdateRoleInput) (*projectdom.ProjectRole, error)
+	deleteRole              func(ctx context.Context, projectID, roleID uuid.UUID) error
+	getMyProjectPermissions func(ctx context.Context, projectID, userID uuid.UUID) (map[string]any, error)
 }
 
 func (m *mockProjectSvc) List(ctx context.Context, page, pageSize int) ([]*projectdom.Project, int64, error) {
@@ -140,6 +141,13 @@ func (m *mockProjectSvc) DeleteRole(ctx context.Context, projectID, roleID uuid.
 		return m.deleteRole(ctx, projectID, roleID)
 	}
 	return nil
+}
+
+func (m *mockProjectSvc) GetMyProjectPermissions(ctx context.Context, projectID, userID uuid.UUID) (map[string]any, error) {
+	if m.getMyProjectPermissions != nil {
+		return m.getMyProjectPermissions(ctx, projectID, userID)
+	}
+	return map[string]any{}, nil
 }
 
 // compile-time interface check

@@ -46,6 +46,7 @@ import {
 	SidebarSeparator,
 } from "@/components/ui/sidebar";
 import { usePermissions } from "@/hooks/use-permissions";
+import { useProjectPermissions } from "@/hooks/use-project-permissions";
 import type { ThemeMode } from "@/hooks/use-theme-mode";
 import { useThemeMode } from "@/hooks/use-theme-mode";
 import { sprintsQueryOptions, updateTask } from "@/lib/interaction-api";
@@ -274,8 +275,15 @@ function ProjectInteractionsSection({ projectId }: { projectId: string }) {
 		}
 	});
 
-	const canViewSprints = hasPermission("sprints.read");
-	const canEditTasks = hasPermission("tasks.write");
+	const { hasProjectPermission } = useProjectPermissions(projectId);
+
+	// Check sprints.read via either the global role or the project role so that
+	// users with a project-scoped "Editor" / "Viewer" role (global role = User)
+	// can still see Timeline, Backlog, and open sprints.
+	const canViewSprints =
+		hasPermission("sprints.read") || hasProjectPermission("sprints.read");
+	const canEditTasks =
+		hasPermission("tasks.write") || hasProjectPermission("tasks.write");
 
 	const [dragOverInteractionId, setDragOverInteractionId] = useState<
 		string | null
