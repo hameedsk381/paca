@@ -1134,7 +1134,11 @@ func getMyProjectPermissionsViaAPI(t *testing.T, env *e2eEnv, client *http.Clien
 	var env2 envelope
 	decodeJSON(t, resp, &env2)
 	data := assertDataMap(t, env2)
-	perms, _ := data["permissions"].(map[string]any)
+	rawPerms := data["permissions"]
+	perms, ok := rawPerms.(map[string]any)
+	if !ok {
+		t.Fatalf("expected data.permissions to be an object, got %T: %#v", rawPerms, rawPerms)
+	}
 	return perms
 }
 
