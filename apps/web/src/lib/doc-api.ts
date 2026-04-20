@@ -67,15 +67,20 @@ export interface FieldChange {
 	new: string;
 }
 
+export interface DocActivityContent {
+	text?: unknown;
+	changes?: FieldChange[] | null;
+	[key: string]: unknown;
+}
+
 export interface DocActivity {
 	id: string;
 	document_id: string;
-	actor_id: string;
+	actor_id: string | null;
 	actor_name: string;
 	actor_username: string;
 	activity_type: DocActivityType;
-	content: Record<string, unknown>;
-	changes: FieldChange[] | null;
+	content: string | DocActivityContent | null;
 	created_at: string;
 	updated_at: string;
 }
@@ -85,6 +90,31 @@ export function getCommentText(content: DocActivity["content"]): string {
 	if (content && typeof content === "object" && "text" in content)
 		return String(content.text);
 	return "";
+}
+
+export function getActivityChanges(
+	content: DocActivity["content"],
+): FieldChange[] | null {
+	if (!content || typeof content !== "object" || !("changes" in content)) {
+		return null;
+	}
+
+	const { changes } = content;
+	if (!Array.isArray(changes)) {
+		return null;
+	}
+
+	return changes.filter(
+		(change): change is FieldChange =>
+			!!change &&
+			typeof change === "object" &&
+			"field" in change &&
+			"old" in change &&
+			"new" in change &&
+			typeof change.field === "string" &&
+			typeof change.old === "string" &&
+			typeof change.new === "string",
+	);
 }
 
 export interface DocActivityListResult {
