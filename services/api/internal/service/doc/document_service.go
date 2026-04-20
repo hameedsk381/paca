@@ -199,17 +199,22 @@ func (s *Service) UpdateDocument(ctx context.Context, id uuid.UUID, in docdom.Up
 
 	// Create a snapshot whenever content or title changed.
 	if contentChanged || d.Title != oldTitle {
+		snapTime := time.Now()
 		snap := &docdom.DocSnapshot{
 			ID:         uuid.New(),
 			DocumentID: d.ID,
 			Title:      oldTitle,
 			Content:    oldContent,
 			CreatedBy:  d.UpdatedBy,
-			CreatedAt:  time.Now(),
+			CreatedAt:  snapTime,
 		}
 		// Snapshot creation failures are non-fatal; we still return the
 		// updated document.
-		_ = s.repo.CreateSnapshot(ctx, snap)
+		if err := s.repo.CreateSnapshot(ctx, snap); err == nil {
+			// Prune any other snapshots taken within the past 3 minutes so
+			// that rapid edits do not accumulate excessive history entries.
+			_ = s.repo.DeleteRecentSnapshotsExcept(ctx, d.ID, snap.ID, snapTime.Add(-3*time.Minute))
+		}
 	}
 
 	return d, nil

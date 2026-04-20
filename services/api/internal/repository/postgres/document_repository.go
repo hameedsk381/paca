@@ -403,6 +403,15 @@ func (r *DocumentRepository) CreateSnapshot(_ context.Context, s *docdom.DocSnap
 	return r.db.Create(&rec).Error
 }
 
+// DeleteRecentSnapshotsExcept deletes all snapshots for a document created at
+// or after `since` whose ID is not `excludeID`. This consolidates rapid saves
+// so that at most one snapshot exists per time window.
+func (r *DocumentRepository) DeleteRecentSnapshotsExcept(_ context.Context, documentID uuid.UUID, excludeID uuid.UUID, since time.Time) error {
+	return r.db.
+		Where("document_id = ? AND id != ? AND created_at >= ?", documentID.String(), excludeID.String(), since).
+		Delete(&docSnapshotRecord{}).Error
+}
+
 // =============================================================================
 // Activity CRUD
 // =============================================================================

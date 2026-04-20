@@ -2,6 +2,7 @@ package docdom
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -56,4 +57,8 @@ type DocSnapshotRepository interface {
 	FindLatestSnapshot(ctx context.Context, documentID uuid.UUID) (*DocSnapshot, error)
 	// CreateSnapshot persists a new snapshot.
 	CreateSnapshot(ctx context.Context, s *DocSnapshot) error
+	// DeleteRecentSnapshotsExcept deletes all snapshots for a document that
+	// were created at or after `since` and whose ID is not `excludeID`.
+	// Used to consolidate snapshots within a time window (e.g. 3 minutes).
+	DeleteRecentSnapshotsExcept(ctx context.Context, documentID uuid.UUID, excludeID uuid.UUID, since time.Time) error
 }

@@ -208,6 +208,17 @@ func (r *fakeDocRepo) CreateSnapshot(_ context.Context, s *docdom.DocSnapshot) e
 	return nil
 }
 
+func (r *fakeDocRepo) DeleteRecentSnapshotsExcept(_ context.Context, documentID uuid.UUID, excludeID uuid.UUID, since time.Time) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for id, s := range r.snapshots {
+		if s.DocumentID == documentID && s.ID != excludeID && !s.CreatedAt.Before(since) {
+			delete(r.snapshots, id)
+		}
+	}
+	return nil
+}
+
 // -- ActivityRepository --
 
 func (r *fakeDocRepo) ListActivities(_ context.Context, documentID uuid.UUID) ([]*docdom.Activity, error) {
