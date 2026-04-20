@@ -6,7 +6,7 @@ import type { SuccessEnvelope } from "./api-error";
 // ── Shapes ────────────────────────────────────────────────────────────────────
 
 export interface DocFolder {
-	id?: string | null;
+	id: string;
 	project_id?: string | null;
 	parent_id?: string | null;
 	name: string;
@@ -21,7 +21,7 @@ export interface DocFolderListResult {
 }
 
 export interface Document {
-	id?: string | null;
+	id: string;
 	project_id?: string | null;
 	folder_id?: string | null;
 	title: string;
@@ -38,7 +38,7 @@ export interface DocumentListResult {
 }
 
 export interface DocSnapshot {
-	id?: string | null;
+	id: string;
 	document_id?: string | null;
 	title: string;
 	content: unknown[] | null;

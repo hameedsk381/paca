@@ -35,7 +35,7 @@ export interface ActivityEntry {
 	actor_name: string;
 	actor_username: string;
 	activity_type: string;
-	content: Record<string, unknown>;
+	content: Record<string, unknown> | string | null;
 	created_at: string;
 	updated_at: string;
 }
@@ -49,7 +49,7 @@ export interface ActivityPaneConfig<T extends ActivityEntry> {
 	updateComment?: (commentId: string, text: string) => Promise<unknown>;
 	deleteComment?: (commentId: string) => Promise<void>;
 	describeActivity: (entry: T) => string;
-	getCommentText: (content: Record<string, unknown>) => string;
+	getCommentText: (content: T["content"]) => string;
 	currentUserId?: string;
 	sortAscending?: boolean;
 	nameMaps?: Record<string, Record<string, string>>;
@@ -222,7 +222,7 @@ function timeAgo(iso: string): string {
 interface ActivityItemInnerProps<T extends ActivityEntry> {
 	entry: T;
 	describeActivity: (entry: T) => string;
-	getCommentText: (content: Record<string, unknown>) => string;
+	getCommentText: (content: T["content"]) => string;
 	updateComment?: (commentId: string, text: string) => Promise<unknown>;
 	deleteComment?: (commentId: string) => Promise<void>;
 	queryKey: QueryKey;

@@ -1,7 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 import {
-	type ActivityEntry,
 	ActivityPane,
 } from "@/components/shared/activity-pane";
 import {
@@ -41,7 +40,7 @@ export function TaskActivityPane({ projectId, taskId }: TaskActivityPaneProps) {
 	}, [membersData, sprintsData]);
 
 	const describeActivity = useCallback(
-		(entry: ActivityEntry): string => {
+		(entry: Activity): string => {
 			const c = entry.content ?? {};
 			switch (entry.activity_type) {
 				case "task.created":
