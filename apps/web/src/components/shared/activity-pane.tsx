@@ -280,7 +280,7 @@ function ActivityItemInner<T extends ActivityEntry>({
 			</div>
 			<div className="flex-1 min-w-0">
 				{isComment ? (
-					<div className="rounded-xl rounded-tl-lg border border-border/25 bg-card/70 px-3.5 py-2.5">
+					<div className="group rounded-xl rounded-tl-lg border border-border/25 bg-card/70 px-3.5 py-2.5">
 						<div className="mb-1 flex items-center gap-2">
 							<span className="text-[12px] font-semibold text-foreground">
 								{displayName}
