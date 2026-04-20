@@ -1,4 +1,5 @@
 import {
+	BookOpen,
 	Layers,
 	ListTodo,
 	type LucideIcon,
@@ -86,6 +87,19 @@ export const PROJECT_KNOWN_PERMISSIONS: KnownPermission[] = [
 		description: "Create, update, and close sprints",
 		domain: "sprints",
 	},
+	// docs
+	{
+		key: "docs.read",
+		label: "View Documents",
+		description: "Browse and read documents in the project",
+		domain: "docs",
+	},
+	{
+		key: "docs.write",
+		label: "Edit Documents",
+		description: "Create, update, and delete documents and folders",
+		domain: "docs",
+	},
 ];
 
 export interface PermissionGroup {
@@ -100,4 +114,5 @@ export const PROJECT_PERMISSION_GROUPS: PermissionGroup[] = [
 	{ domain: "project.roles", label: "Roles", Icon: Shield },
 	{ domain: "tasks", label: "Tasks", Icon: ListTodo },
 	{ domain: "sprints", label: "Sprints", Icon: Layers },
+	{ domain: "docs", label: "Documents", Icon: BookOpen },
 ];

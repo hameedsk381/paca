@@ -148,6 +148,27 @@ const (
 	CodeActivityNotAComment Code = "ACTIVITY_NOT_A_COMMENT"
 	// CodeCommentTextInvalid indicates an empty or invalid comment text.
 	CodeCommentTextInvalid Code = "ACTIVITY_COMMENT_TEXT_INVALID"
+
+	// CodeDocNotFound indicates the requested document does not exist.
+	CodeDocNotFound Code = "DOC_NOT_FOUND"
+	// CodeDocTitleInvalid indicates an empty or invalid document title.
+	CodeDocTitleInvalid Code = "DOC_TITLE_INVALID"
+	// CodeDocFolderNotFound indicates the requested document folder does not exist.
+	CodeDocFolderNotFound Code = "DOC_FOLDER_NOT_FOUND"
+	// CodeDocFolderNameInvalid indicates an empty or invalid folder name.
+	CodeDocFolderNameInvalid Code = "DOC_FOLDER_NAME_INVALID"
+	// CodeDocFolderNotInProject indicates the folder does not belong to the project.
+	CodeDocFolderNotInProject Code = "DOC_FOLDER_NOT_IN_PROJECT"
+	// CodeDocSnapshotNotFound indicates the requested snapshot does not exist.
+	CodeDocSnapshotNotFound Code = "DOC_SNAPSHOT_NOT_FOUND"
+	// CodeDocActivityNotFound indicates the requested doc activity does not exist.
+	CodeDocActivityNotFound Code = "DOC_ACTIVITY_NOT_FOUND"
+	// CodeDocActivityForbidden indicates the caller is not the author of the comment.
+	CodeDocActivityForbidden Code = "DOC_ACTIVITY_FORBIDDEN"
+	// CodeDocActivityNotAComment indicates the entry cannot be edited as a comment.
+	CodeDocActivityNotAComment Code = "DOC_ACTIVITY_NOT_A_COMMENT"
+	// CodeDocCommentTextInvalid indicates an empty or invalid comment text.
+	CodeDocCommentTextInvalid Code = "DOC_COMMENT_TEXT_INVALID"
 )
 
 // Error carries a machine-readable Code alongside a human-readable Message.

@@ -444,4 +444,98 @@ CREATE TABLE IF NOT EXISTS task_activities (
 CREATE INDEX IF NOT EXISTS idx_task_activities_task_id ON task_activities (task_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_task_activities_actor_id ON task_activities (actor_id) WHERE actor_id IS NOT NULL;
 
+-- -------------------------------------------------------------------------
+-- DOC FOLDERS
+-- Self-referencing hierarchy: parent_id = NULL means root-level folder.
+-- -------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS doc_folders (
+    id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    project_id UUID        NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    parent_id  UUID        REFERENCES doc_folders(id) ON DELETE CASCADE,
+    name       TEXT        NOT NULL,
+    position   INTEGER     NOT NULL DEFAULT 0,
+    created_by UUID        REFERENCES project_members(id) ON DELETE SET NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_doc_folders_project_id ON doc_folders (project_id);
+CREATE INDEX IF NOT EXISTS idx_doc_folders_parent_id  ON doc_folders (parent_id);
+
+-- -------------------------------------------------------------------------
+-- DOCUMENTS
+-- BlockNote content stored as JSONB. Soft-deleted via deleted_at.
+-- -------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS documents (
+    id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    project_id UUID        NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    folder_id  UUID        REFERENCES doc_folders(id) ON DELETE SET NULL,
+    title      TEXT        NOT NULL DEFAULT 'Untitled',
+    content    JSONB,
+    position   INTEGER     NOT NULL DEFAULT 0,
+    created_by UUID        REFERENCES project_members(id) ON DELETE SET NULL,
+    updated_by UUID        REFERENCES project_members(id) ON DELETE SET NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    deleted_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_documents_project_id ON documents (project_id);
+CREATE INDEX IF NOT EXISTS idx_documents_folder_id  ON documents (folder_id);
+CREATE INDEX IF NOT EXISTS idx_documents_deleted_at ON documents (deleted_at) WHERE deleted_at IS NOT NULL;
+
+-- -------------------------------------------------------------------------
+-- DOC SNAPSHOTS
+-- Point-in-time copies of document content for history and diffing.
+-- snapshot_number is auto-incremented per document by the trigger below.
+-- -------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS doc_snapshots (
+    id              UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    document_id     UUID        NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+    title           TEXT        NOT NULL,
+    content         JSONB,
+    snapshot_number BIGINT      NOT NULL DEFAULT 0,
+    created_by      UUID        REFERENCES project_members(id) ON DELETE SET NULL,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_doc_snapshots_document_id ON doc_snapshots (document_id);
+CREATE UNIQUE INDEX IF NOT EXISTS uni_doc_snapshots_doc_number
+    ON doc_snapshots (document_id, snapshot_number);
+
+CREATE OR REPLACE FUNCTION fn_doc_snapshot_number()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN
+    NEW.snapshot_number := COALESCE(
+        (SELECT MAX(snapshot_number) FROM doc_snapshots WHERE document_id = NEW.document_id),
+        0
+    ) + 1;
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_doc_snapshot_number ON doc_snapshots;
+CREATE TRIGGER trg_doc_snapshot_number
+    BEFORE INSERT ON doc_snapshots
+    FOR EACH ROW EXECUTE FUNCTION fn_doc_snapshot_number();
+
+-- -------------------------------------------------------------------------
+-- DOC ACTIVITIES
+-- Audit log for system events (doc.created, doc.updated, doc.deleted,
+-- doc.moved) and user comments. Same pattern as task_activities.
+-- -------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS doc_activities (
+    id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    document_id   UUID        NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+    actor_id      UUID        REFERENCES project_members(id) ON DELETE SET NULL,
+    activity_type TEXT        NOT NULL,
+    content       JSONB       NOT NULL DEFAULT '{}'::jsonb,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    deleted_at    TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_doc_activities_document_id ON doc_activities (document_id);
+CREATE INDEX IF NOT EXISTS idx_doc_activities_deleted_at  ON doc_activities (deleted_at) WHERE deleted_at IS NOT NULL;
+
 COMMIT;

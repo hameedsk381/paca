@@ -43,6 +43,7 @@ func DefaultProjectRoles() []RoleDefinition {
 				PermissionProjectRolesAll,
 				PermissionTasksAll,
 				PermissionSprintsAll,
+				PermissionDocsAll,
 			},
 		},
 		{
@@ -54,6 +55,7 @@ func DefaultProjectRoles() []RoleDefinition {
 				PermissionProjectMembersWrite,
 				PermissionTasksAll,
 				PermissionSprintsAll,
+				PermissionDocsAll,
 			},
 		},
 		{
@@ -65,6 +67,8 @@ func DefaultProjectRoles() []RoleDefinition {
 				PermissionTasksRead,
 				PermissionTasksWrite,
 				PermissionSprintsRead,
+				PermissionDocsRead,
+				PermissionDocsWrite,
 			},
 		},
 		{
@@ -73,6 +77,7 @@ func DefaultProjectRoles() []RoleDefinition {
 				PermissionProjectsRead,
 				PermissionTasksRead,
 				PermissionSprintsRead,
+				PermissionDocsRead,
 			},
 		},
 	}

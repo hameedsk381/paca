@@ -38,4 +38,8 @@ const (
 	PermissionSprintsRead  Permission = "sprints.read"
 	PermissionSprintsWrite Permission = "sprints.write"
 	PermissionSprintsAll   Permission = "sprints.*"
+
+	PermissionDocsRead  Permission = "docs.read"
+	PermissionDocsWrite Permission = "docs.write"
+	PermissionDocsAll   Permission = "docs.*"
 )

@@ -8,7 +8,7 @@ Interactive diagram: [https://dbdiagram.io/d/Paca-69c212ae78c6c4bc7a4fc190](http
 
 | File | Purpose |
 |---|---|
-| `000001_init.sql` | Full consolidated schema: `global_roles`, `users`, projects, project roles/members (with `deleted_at` for soft-delete and a partial unique index on `(project_id, user_id) WHERE deleted_at IS NULL`), task configuration (`task_types`, `task_statuses`), `sprints`, `sprint_views` (with `view_type`, `config`, `position`, `view_context`), `view_task_positions` (manual task order), `custom_field_definitions`, `tasks` (with `task_number`, `start_date`, `due_date`, `tags`, `description` as JSONB BlockNote blocks), `task_attachments`, `task_checklists`, `task_checklist_items`, `bdd_scenarios` (id, task_id, title, given_text, when_text, then_text, timestamps — no position field), `task_activities` (`actor_id` references `project_members(id)`), seed data. On project creation the seed inserts three user-manageable task types (Bug, Story, Task — where Task is `is_default = true`) and two system task types (Epic, Subtask — where `is_system = true`). The API now seeds one backlog Table view with `config.column_by = "sprint"` and non-system task types, plus one timeline Roadmap view filtered to Epics; sprint creation seeds Board and Table views scoped to that sprint. |
+| `000001_init.sql` | Full consolidated schema: `global_roles`, `users`, projects, project roles/members, task configuration (`task_types`, `task_statuses`), `sprints`, `sprint_views`, `view_task_positions`, `custom_field_definitions`, `tasks`, `task_attachments`, `task_checklists`, `task_checklist_items`, `bdd_scenarios`, `task_activities`, `doc_folders` (hierarchical folders with `parent_id` self-reference, `position`, `created_by`), `documents` (BlockNote `content` JSONB, `folder_id`, `position`, soft-delete via `deleted_at`, `created_by`/`updated_by` referencing `project_members`), `doc_snapshots` (point-in-time content copies for diff/history, `snapshot_number` auto-incremented per document via a trigger), `doc_activities` (audit log + comments), and seed data. |
 
 ## Schema (DBML)
 
@@ -202,12 +202,51 @@ Table time_logs {
   logged_date date
 }
 
+// --- DOCUMENTATION ---
+Table doc_folders {
+  id         uuid [primary key]
+  project_id uuid [not null, ref: > projects.id]
+  parent_id  uuid [null, ref: > doc_folders.id, note: 'null = root; self-reference for nested folders']
+  name       varchar [not null]
+  position   integer [not null, default: 0, note: 'Zero-based order among siblings']
+  created_by uuid [null, ref: > project_members.id]
+  created_at timestamp
+  updated_at timestamp
+}
+
 Table documents {
-  id uuid [primary key]
-  project_id uuid
-  title varchar
-  content text
-  created_by uuid
+  id         uuid [primary key]
+  project_id uuid [not null, ref: > projects.id]
+  folder_id  uuid [null, ref: > doc_folders.id, note: 'null = root (no folder)']
+  title      varchar [not null, default: 'Untitled']
+  content    jsonb [null, note: 'BlockNote rich-text document stored as a JSON array of block objects. null means no content. Each block follows the BlockNote schema: { id, type, props, content, children }.']
+  position   integer [not null, default: 0, note: 'Zero-based order within the same folder/root']
+  created_by uuid [null, ref: > project_members.id]
+  updated_by uuid [null, ref: > project_members.id]
+  created_at timestamp
+  updated_at timestamp
+  deleted_at timestamp [null, note: 'Soft-delete timestamp']
+}
+
+Table doc_snapshots {
+  id              uuid [primary key]
+  document_id     uuid [not null, ref: > documents.id]
+  title           varchar [not null, note: 'Title at the time of the snapshot']
+  content         jsonb [null, note: 'BlockNote content at the time of the snapshot']
+  snapshot_number bigint [not null, default: 0, note: 'Monotonically increasing per document; set by trigger']
+  created_by      uuid [null, ref: > project_members.id]
+  created_at      timestamp
+}
+
+Table doc_activities {
+  id            uuid [primary key]
+  document_id   uuid [not null, ref: > documents.id]
+  actor_id      uuid [null, ref: > project_members.id, note: 'NULL for system events or if the member was removed']
+  activity_type varchar [not null, note: 'doc.created | doc.updated | doc.deleted | doc.moved | doc.folder.created | doc.folder.updated | doc.folder.deleted | comment']
+  content       jsonb [not null, default: '{}', note: 'For doc.updated: [{field, old, new}]. For comment: {text}. For doc.moved: {from_folder_id, to_folder_id}.']
+  created_at    timestamp
+  updated_at    timestamp
+  deleted_at    timestamp [null, note: 'Soft-delete for comments']
 }
 
 Table dashboards {
@@ -285,9 +324,18 @@ Ref: tasks.id < time_logs.task_id
 Ref: tasks.id < task_activities.task_id
 Ref: projects.id < documents.project_id
 Ref: projects.id < dashboards.project_id
+Ref: projects.id < doc_folders.project_id
+Ref: doc_folders.id < doc_folders.parent_id
+Ref: doc_folders.id < documents.folder_id
+Ref: documents.id < doc_snapshots.document_id
+Ref: documents.id < doc_activities.document_id
+Ref: project_members.id < doc_folders.created_by
+Ref: project_members.id < documents.created_by
+Ref: project_members.id < documents.updated_by
+Ref: project_members.id < doc_snapshots.created_by
+Ref: project_members.id < doc_activities.actor_id
 
 Ref: users.id < projects.created_by
-Ref: project_members.id < documents.created_by
 Ref: project_members.id < time_logs.member_id
 Ref: project_members.id < task_activities.member_id
 Ref: project_members.id < tasks.assignee_id

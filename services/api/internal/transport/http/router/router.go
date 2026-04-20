@@ -28,6 +28,7 @@ type Deps struct {
 	Sprint       *handler.SprintHandler
 	View         *handler.ViewHandler
 	Attachment   *handler.AttachmentHandler
+	Document     *handler.DocumentHandler
 	Log          *slog.Logger
 }
 
@@ -507,6 +508,110 @@ func New(deps Deps) *gin.Engine {
 						httpmw.RequirePermissions(deps.Authorizer, httpmw.ProjectScopeFromParam("projectId"), authz.PermissionTasksWrite),
 						deps.Task.DeleteCustomFieldDefinition,
 					)
+				}
+
+				// Documentation — project documents with folder hierarchy, snapshots, and activity
+				docs := project.Group("/docs")
+				{
+					// Folders
+					folders := docs.Group("/folders")
+					{
+						folders.GET("",
+							httpmw.RequireAnyPermissions(deps.Authorizer,
+								httpmw.PermissionGroup{Scope: httpmw.GlobalScope(), Permissions: []authz.Permission{authz.PermissionProjectsRead}},
+								httpmw.PermissionGroup{Scope: httpmw.ProjectScopeFromParam("projectId"), Permissions: []authz.Permission{authz.PermissionDocsRead}},
+							),
+							deps.Document.ListFolders,
+						)
+						folders.POST("",
+							httpmw.RequirePermissions(deps.Authorizer, httpmw.ProjectScopeFromParam("projectId"), authz.PermissionDocsWrite),
+							deps.Document.CreateFolder,
+						)
+						folders.PATCH("/:folderId",
+							httpmw.RequirePermissions(deps.Authorizer, httpmw.ProjectScopeFromParam("projectId"), authz.PermissionDocsWrite),
+							deps.Document.UpdateFolder,
+						)
+						folders.DELETE("/:folderId",
+							httpmw.RequirePermissions(deps.Authorizer, httpmw.ProjectScopeFromParam("projectId"), authz.PermissionDocsWrite),
+							deps.Document.DeleteFolder,
+						)
+					}
+
+					// Documents — collection
+					docs.GET("",
+						httpmw.RequireAnyPermissions(deps.Authorizer,
+							httpmw.PermissionGroup{Scope: httpmw.GlobalScope(), Permissions: []authz.Permission{authz.PermissionProjectsRead}},
+							httpmw.PermissionGroup{Scope: httpmw.ProjectScopeFromParam("projectId"), Permissions: []authz.Permission{authz.PermissionDocsRead}},
+						),
+						deps.Document.ListDocuments,
+					)
+					docs.POST("",
+						httpmw.RequirePermissions(deps.Authorizer, httpmw.ProjectScopeFromParam("projectId"), authz.PermissionDocsWrite),
+						deps.Document.CreateDocument,
+					)
+
+					// Documents — single item
+					doc := docs.Group("/:docId")
+					{
+						doc.GET("",
+							httpmw.RequireAnyPermissions(deps.Authorizer,
+								httpmw.PermissionGroup{Scope: httpmw.GlobalScope(), Permissions: []authz.Permission{authz.PermissionProjectsRead}},
+								httpmw.PermissionGroup{Scope: httpmw.ProjectScopeFromParam("projectId"), Permissions: []authz.Permission{authz.PermissionDocsRead}},
+							),
+							deps.Document.GetDocument,
+						)
+						doc.PATCH("",
+							httpmw.RequirePermissions(deps.Authorizer, httpmw.ProjectScopeFromParam("projectId"), authz.PermissionDocsWrite),
+							deps.Document.UpdateDocument,
+						)
+						doc.DELETE("",
+							httpmw.RequirePermissions(deps.Authorizer, httpmw.ProjectScopeFromParam("projectId"), authz.PermissionDocsWrite),
+							deps.Document.DeleteDocument,
+						)
+
+						// Snapshots — version history
+						snapshots := doc.Group("/snapshots")
+						{
+							snapshots.GET("",
+								httpmw.RequireAnyPermissions(deps.Authorizer,
+									httpmw.PermissionGroup{Scope: httpmw.GlobalScope(), Permissions: []authz.Permission{authz.PermissionProjectsRead}},
+									httpmw.PermissionGroup{Scope: httpmw.ProjectScopeFromParam("projectId"), Permissions: []authz.Permission{authz.PermissionDocsRead}},
+								),
+								deps.Document.ListSnapshots,
+							)
+							snapshots.GET("/:snapshotId",
+								httpmw.RequireAnyPermissions(deps.Authorizer,
+									httpmw.PermissionGroup{Scope: httpmw.GlobalScope(), Permissions: []authz.Permission{authz.PermissionProjectsRead}},
+									httpmw.PermissionGroup{Scope: httpmw.ProjectScopeFromParam("projectId"), Permissions: []authz.Permission{authz.PermissionDocsRead}},
+								),
+								deps.Document.GetSnapshot,
+							)
+						}
+
+						// Activity log and comments
+						doc.GET("/activities",
+							httpmw.RequireAnyPermissions(deps.Authorizer,
+								httpmw.PermissionGroup{Scope: httpmw.GlobalScope(), Permissions: []authz.Permission{authz.PermissionProjectsRead}},
+								httpmw.PermissionGroup{Scope: httpmw.ProjectScopeFromParam("projectId"), Permissions: []authz.Permission{authz.PermissionDocsRead}},
+							),
+							deps.Document.ListActivities,
+						)
+						comments := doc.Group("/comments")
+						{
+							comments.POST("",
+								httpmw.RequirePermissions(deps.Authorizer, httpmw.ProjectScopeFromParam("projectId"), authz.PermissionDocsWrite),
+								deps.Document.AddComment,
+							)
+							comments.PATCH("/:commentId",
+								httpmw.RequirePermissions(deps.Authorizer, httpmw.ProjectScopeFromParam("projectId"), authz.PermissionDocsWrite),
+								deps.Document.UpdateComment,
+							)
+							comments.DELETE("/:commentId",
+								httpmw.RequirePermissions(deps.Authorizer, httpmw.ProjectScopeFromParam("projectId"), authz.PermissionDocsWrite),
+								deps.Document.DeleteComment,
+							)
+						}
+					}
 				}
 			}
 		}

@@ -348,6 +348,7 @@ describe("ProjectRoleFormDialog", () => {
 			expect(screen.getByText("Roles")).toBeInTheDocument();
 			expect(screen.getByText("Tasks")).toBeInTheDocument();
 			expect(screen.getByText("Sprints")).toBeInTheDocument();
+			expect(screen.getByText("Documents")).toBeInTheDocument();
 		});
 
 		it("pre-selects permissions from the existing role and sends them in the update payload", async () => {

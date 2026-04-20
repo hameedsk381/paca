@@ -1,0 +1,24 @@
+package docdom
+
+import "errors"
+
+// Sentinel domain errors for the document aggregate.
+var (
+	// Document errors.
+	ErrDocNotFound     = errors.New("document: not found")
+	ErrDocTitleInvalid = errors.New("document: title is empty or invalid")
+
+	// Folder errors.
+	ErrFolderNotFound     = errors.New("doc folder: not found")
+	ErrFolderNameInvalid  = errors.New("doc folder: name is empty or invalid")
+	ErrFolderNotInProject = errors.New("doc folder: folder does not belong to this project")
+
+	// Snapshot errors.
+	ErrSnapshotNotFound = errors.New("doc snapshot: not found")
+
+	// Activity / comment errors.
+	ErrActivityNotFound    = errors.New("doc activity: not found")
+	ErrActivityForbidden   = errors.New("doc activity: only the author can modify this comment")
+	ErrActivityNotAComment = errors.New("doc activity: this entry is not a comment and cannot be edited")
+	ErrCommentTextInvalid  = errors.New("doc activity: comment text must not be empty")
+)
