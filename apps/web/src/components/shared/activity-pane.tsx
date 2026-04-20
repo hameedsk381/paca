@@ -252,7 +252,7 @@ function ActivityItemInner<T extends ActivityEntry>({
 	const canDelete = isComment && isOwn && !!deleteComment;
 
 	const updateMutation = useMutation({
-		mutationFn: (text: string) => updateComment?.(entry.id, text),
+		mutationFn: (text: string) => updateComment!(entry.id, text),
 		onSuccess: () => {
 			qc.invalidateQueries({ queryKey });
 			setEditing(false);
@@ -260,7 +260,7 @@ function ActivityItemInner<T extends ActivityEntry>({
 	});
 
 	const deleteMutation = useMutation({
-		mutationFn: () => deleteComment?.(entry.id),
+		mutationFn: () => deleteComment!(entry.id),
 		onSuccess: () => {
 			qc.invalidateQueries({ queryKey });
 		},
