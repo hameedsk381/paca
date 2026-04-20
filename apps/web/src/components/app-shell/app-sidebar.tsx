@@ -858,9 +858,8 @@ function ProjectNavItems({ projectId }: { projectId: string }) {
 	const [collapsed, setCollapsed] = useState(() => {
 		try {
 			return (
-				localStorage.getItem(
-					`paca:sidebar-project-collapsed:${projectId}`,
-				) === "true"
+				localStorage.getItem(`paca:sidebar-project-collapsed:${projectId}`) ===
+				"true"
 			);
 		} catch {
 			return false;
