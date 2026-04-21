@@ -8,10 +8,10 @@
 // 20 minutes so that a connection established near a token boundary is not
 // evicted before the client has time to reconnect with a fresh token.
 //
-// Project permissions are cached lazily inside the session the first time the
-// client joins a project room.  They are refreshed by calling the API again
-// only when a second join is requested for the same project (e.g. after a
-// socket reconnect that creates a new session record).
+// The session payload includes a projectPermissions cache that callers may
+// populate and reuse across requests while the session record exists.  This
+// module only persists that cached data; whether permissions are read from the
+// session or refreshed from the API is determined by the calling code.
 
 import type Redis from "ioredis";
 
