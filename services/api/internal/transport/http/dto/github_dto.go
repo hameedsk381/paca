@@ -101,6 +101,7 @@ type LinkPRRequest struct {
 type PullRequestResponse struct {
 	ID         uuid.UUID  `json:"id"`
 	ProjectID  uuid.UUID  `json:"project_id"`
+	RepoID     uuid.UUID  `json:"repo_id"`
 	PRNumber   int        `json:"pr_number"`
 	Title      string     `json:"title"`
 	State      string     `json:"state"`
@@ -118,6 +119,7 @@ func PullRequestFromEntity(pr *githubdom.PullRequest) PullRequestResponse {
 	return PullRequestResponse{
 		ID:         pr.ID,
 		ProjectID:  pr.ProjectID,
+		RepoID:     pr.RepoID,
 		PRNumber:   pr.PRNumber,
 		Title:      pr.Title,
 		State:      pr.State,

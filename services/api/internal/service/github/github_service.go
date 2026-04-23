@@ -316,8 +316,15 @@ func (s *Service) LinkPRToTask(ctx context.Context, projectID, taskID, repoID uu
 	ghPR, err := ghClient.GetPullRequest(ctx, linked.Owner, linked.RepoName, prNumber)
 	if err != nil {
 		var apiErr *githubclient.APIError
-		if errors.As(err, &apiErr) && apiErr.StatusCode == 404 {
-			return nil, githubdom.ErrPRNotFound
+		if errors.As(err, &apiErr) {
+			switch {
+			case apiErr.StatusCode == 404:
+				return nil, githubdom.ErrPRNotFound
+			case apiErr.StatusCode == 401 || apiErr.StatusCode == 403:
+				return nil, githubdom.ErrTokenInsufficientPermissions
+			default:
+				return nil, apierr.New(apierr.CodeBadRequest, apiErr.Error())
+			}
 		}
 		return nil, fmt.Errorf("github: fetch pull request: %w", err)
 	}

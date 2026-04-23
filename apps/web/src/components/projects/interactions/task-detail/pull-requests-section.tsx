@@ -9,9 +9,8 @@ import {
 	Loader2,
 	Plus,
 	Trash2,
-	X,
 } from "lucide-react";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { ApiErrorCode, getApiErrorCode } from "@/lib/api-error";
 import {
 	type LinkedRepository,
@@ -139,7 +138,6 @@ function parseGitHubPRUrl(
 	try {
 		const url = new URL(raw.trim());
 		if (url.hostname !== "github.com") return null;
-		// pathname: /owner/repo/pull/42[/anything]
 		const parts = url.pathname.replace(/^\//, "").split("/");
 		if (parts.length < 4 || parts[2] !== "pull") return null;
 		const prNumber = Number(parts[3]);
@@ -169,18 +167,13 @@ function LinkPRForm({
 	);
 	const [value, setValue] = useState("");
 	const [error, setError] = useState<string | null>(null);
-	const inputRef = useRef<HTMLInputElement>(null);
 
-	// Detect when the user pastes a full GitHub PR URL and derive repo + number.
+	// Detect when the user types a full GitHub PR URL.
 	const parsed = parseGitHubPRUrl(value);
 	const urlMatchedRepo = parsed
 		? repos.find((r) => r.full_name === parsed.fullName) ?? null
 		: null;
-	// When a URL is detected, lock the repo selector to the matched repo (or
-	// show an error if none of the linked repos match).
-	const effectiveRepoId = parsed
-		? (urlMatchedRepo?.id ?? "")
-		: selectedRepoId;
+	const effectiveRepoId = parsed ? (urlMatchedRepo?.id ?? "") : selectedRepoId;
 
 	const mutation = useMutation({
 		mutationFn: () => {
@@ -215,13 +208,25 @@ function LinkPRForm({
 				setError(`PR #${displayNum} is already linked to this task.`);
 				return;
 			}
+			if (code === ApiErrorCode.GitHubTokenInsufficientPermissions) {
+				setError(
+					"Your GitHub token does not have permission to read pull requests. Update it in Project Settings > GitHub.",
+				);
+				return;
+			}
+			if (code === ApiErrorCode.BadRequest) {
+				const msg = (
+					err as { response?: { data?: { error?: string } } }
+				)?.response?.data?.error;
+				setError(msg || "Failed to link pull request. Please try again.");
+				return;
+			}
 			setError("Failed to link pull request. Please try again.");
 		},
 	});
 
 	function submit() {
 		if (parsed) {
-			// URL mode — validate that the repo is linked
 			if (!urlMatchedRepo) {
 				setError(
 					`Repository "${parsed.fullName}" is not linked to this project.`,
@@ -229,7 +234,6 @@ function LinkPRForm({
 				return;
 			}
 		} else {
-			// Manual mode — need a repo and a valid number
 			if (!effectiveRepoId) {
 				setError("Select a repository.");
 				return;
@@ -244,87 +248,88 @@ function LinkPRForm({
 	}
 
 	return (
-		<div className="flex flex-col gap-1.5">
-			{/* Repo selector — always shown so the user knows which repo they're targeting */}
-			<select
-				value={parsed ? (urlMatchedRepo?.id ?? "") : selectedRepoId}
-				onChange={(e) => {
-					setSelectedRepoId(e.target.value);
-					setError(null);
-				}}
-				disabled={mutation.isPending || !!parsed}
-				className="flex h-8 w-full rounded-md border border-input bg-background px-2.5 text-xs ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50"
-			>
-				<option value="">Select repository…</option>
-				{repos.map((r) => (
-					<option key={r.id} value={r.id}>
-						{r.full_name}
-					</option>
-				))}
-			</select>
-			<div className="flex items-center gap-2">
-				<div className="relative flex-1">
-					{!parsed && (
-						<span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/60 text-sm select-none pointer-events-none">
-							#
-						</span>
+		<div className="space-y-3 rounded-lg border border-border/50 bg-card px-3 py-3">
+			{/* Repository selector */}
+			<div>
+				<p className="text-[11px] text-muted-foreground mb-1">Repository</p>
+				<select
+					value={parsed ? (urlMatchedRepo?.id ?? "") : selectedRepoId}
+					onChange={(e) => {
+						setSelectedRepoId(e.target.value);
+						setError(null);
+					}}
+					disabled={mutation.isPending || !!parsed}
+					className="w-full rounded-md border border-border/60 bg-background px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50"
+				>
+					<option value="">Select repository…</option>
+					{repos.map((r) => (
+						<option key={r.id} value={r.id}>
+							{r.full_name}
+						</option>
+					))}
+				</select>
+			</div>
+
+			{/* PR number or URL */}
+			<div>
+				<p className="text-[11px] text-muted-foreground mb-1">
+					PR number or GitHub URL
+				</p>
+				<input
+					type="text"
+					value={value}
+					onChange={(e) => {
+						setValue(e.target.value);
+						setError(null);
+					}}
+					onKeyDown={(e) => {
+						if (e.key === "Enter") submit();
+						if (e.key === "Escape") onDone();
+					}}
+					placeholder="42 or https://github.com/owner/repo/pull/42"
+					className={cn(
+						"w-full rounded-md border bg-background px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-ring",
+						error ? "border-destructive" : "border-border/60",
 					)}
-					<input
-						ref={inputRef}
-						type="text"
-						value={value}
-						onChange={(e) => {
-							setValue(e.target.value);
-							setError(null);
-						}}
-						onKeyDown={(e) => {
-							if (e.key === "Enter") submit();
-							if (e.key === "Escape") onDone();
-						}}
-						placeholder="PR number or GitHub PR URL"
-						className={cn(
-							"flex h-8 w-full rounded-md border bg-background pr-3 text-sm ring-offset-background placeholder:text-muted-foreground/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50",
-							parsed ? "pl-3" : "pl-7",
-							error
-								? "border-destructive focus-visible:ring-destructive/30"
-								: "border-input",
-						)}
-						// biome-ignore lint/a11y/noAutofocus: intentional for inline form
-						autoFocus
-						disabled={mutation.isPending}
-					/>
-				</div>
+					// biome-ignore lint/a11y/noAutofocus: intentional for inline form
+					autoFocus
+					disabled={mutation.isPending}
+				/>
+				{parsed && urlMatchedRepo && (
+					<p className="mt-1 text-[11px] text-muted-foreground">
+						Will link PR #{parsed.prNumber} from{" "}
+						<span className="font-medium">{urlMatchedRepo.full_name}</span>
+					</p>
+				)}
+			</div>
+
+			{error && (
+				<p className="text-[11px] text-destructive/80 leading-relaxed">{error}</p>
+			)}
+
+			{/* Action buttons */}
+			<div className="flex items-center gap-2 pt-0.5">
 				<button
 					type="button"
 					onClick={submit}
 					disabled={!value.trim() || mutation.isPending}
-					className="flex h-8 items-center gap-1.5 rounded-md bg-primary px-3 text-xs font-semibold text-primary-foreground transition-opacity disabled:opacity-50 hover:opacity-90"
+					className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60 transition-colors"
 				>
 					{mutation.isPending ? (
 						<Loader2 className="size-3.5 animate-spin" />
 					) : (
-						<Plus className="size-3.5" />
+						<GitPullRequest className="size-3.5" />
 					)}
-					Link
+					Link pull request
 				</button>
 				<button
 					type="button"
 					onClick={onDone}
-					className="flex size-8 items-center justify-center rounded-md text-muted-foreground/70 hover:text-foreground hover:bg-muted/50 transition-colors"
-					aria-label="Cancel"
+					className="text-xs text-muted-foreground/60 hover:text-muted-foreground transition-colors"
 				>
-					<X className="size-3.5" />
+					Cancel
 				</button>
 			</div>
-			{parsed && urlMatchedRepo && (
-				<p className="text-[11px] text-muted-foreground pl-0.5">
-					Will link PR #{parsed.prNumber} from{" "}
-					<span className="font-medium">{urlMatchedRepo.full_name}</span>
-				</p>
-			)}
-			{error ? (
-				<p className="text-[11px] text-destructive pl-0.5">{error}</p>
-			) : null}
 		</div>
 	);
 }
