@@ -66,7 +66,7 @@ func New(deps Deps) *gin.Engine {
 		{
 			// Password change is allowed even when MustChangePassword=true so
 			// that users can fulfil the forced-change requirement.
-			users.PATCH("/me/password", deps.User.ChangeMyPassword)
+			users.PATCH("/me/password", httpmw.RequireJWTAuth(), deps.User.ChangeMyPassword)
 
 			// All other self-service routes require a fresh (non-forced) password.
 			me := users.Group("")
