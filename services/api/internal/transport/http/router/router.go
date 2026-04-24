@@ -58,7 +58,7 @@ func New(deps Deps) *gin.Engine {
 		{
 			auth.POST("/login", deps.Auth.Login)
 			auth.POST("/refresh", deps.Auth.Refresh)
-			auth.POST("/logout", httpmw.Authn(deps.TokenManager, deps.APIKeyAuth), deps.Auth.Logout)
+			auth.POST("/logout", httpmw.Authn(deps.TokenManager), deps.Auth.Logout)
 		}
 
 		users := v1.Group("/users")
