@@ -1,80 +1,89 @@
 <p align="center">
-	<img src="docs/assets/paca-logo.svg" alt="Paca logo" width="414" />
+  <img src="docs/assets/paca-logo.svg" alt="Paca logo" width="414" />
 </p>
 
 <h1 align="center">Paca</h1>
 
-<p align="center"><strong>The lightweight open-source collaborative task management engine</strong></p>
+<p align="center"><strong>The open-source, AI-native alternative to Jira, ClickUp, and Monday.</strong></p>
 
 <p align="center">
-	Seamlessly orchestrate workflows between human intelligence and AI agents.<br />
-	Built on BDD and Scrumban so teams can assign work to the best mind for the job, whether human or AI.
+  A collaborative task management engine designed specifically for Scrum teams.<br />
+  Where Human Intelligence and AI Agents work side-by-side on a single board.
 </p>
 
 <p align="center">
-	<a href="docs/guides/getting-started.md">Getting Started</a>
-	·
-	<a href="docs/architecture/overview.md">Architecture</a>
-	·
-	<a href="CONTRIBUTING.md">Contributing</a>
-	·
-	<a href="ROADMAP.md">Roadmap</a>
+  <a href="docs/guides/getting-started.md">Getting Started</a>
+  ·
+  <a href="docs/architecture/overview.md">Architecture</a>
+  ·
+  <a href="CONTRIBUTING.md">Contributing</a>
+  ·
+  <a href="ROADMAP.md">Roadmap</a>
 </p>
 
-Paca is a next-generation task management platform where human creativity and AI efficiency merge into a unified workflow. Built on the core cycle of **Plan - Act - Check - Adapt**, Paca dissolves traditional role boundaries, allowing humans and AI Agents to work as true teammates on a shared Scrumban board.
+---
 
-## The Synergy: One Team, One Board
+## Why Paca?
 
-In Paca, software development is a collective, borderless effort. We do not segregate machine tasks from human tasks. Instead, we create a **Collaborative Ecosystem**.
+Traditional project management tools like Jira or ClickUp were built before the AI revolution. They treat AI as a "plugin" or a "chatbot" on the side. 
 
-### Fluid Roles
+**Paca is different.** It is built from the ground up to treat AI Agents as **first-class team members**. In Paca, a Scrum team consists of both humans and AI, sharing the same backlog, the same Scrumban board, and the same objectives.
 
-Every position, from strategic planning (PO/BA) to technical execution (Dev/QA), is open to both humans and AI. A User Story might be drafted by an AI and refined by a human, or a complex module built by a human and verified by an AI.
+## Key Collaborative Pillars
 
-### Contextual Assignment
+### 1. Unified Teamwork (Human-in-the-Loop)
+Paca doesn't replace humans; it augments the team. Whether it's a Product Owner drafting stories or a Developer writing code, tasks can be assigned to either a human or an AI Agent. The human remains the orchestrator, reviewing and refining AI output within the natural Scrum flow.
 
-Paca optimizes team performance by coordinating tasks based on the strengths of each member. The system encourages flexible assignment: AI handles data-intensive speed and precision, while humans lead with deep experience and creative intuition.
+### 2. Documentation-First (BDD & SDD)
+Collaboration often fails because of fragmented context. Paca centralizes the source of truth:
+* **BDD (Behavior-Driven Development):** Align POs, BAs, and Agents through Gherkin-style scenarios.
+* **SDD (System Design Document):** A dedicated module for technical design and documentation. By keeping docs on Paca instead of buried in source code, non-tech stakeholders (and AI Agents) stay perfectly in sync without needing to parse complex Git repos.
 
-### Human-in-Control
+### 3. Server-Side Agent Execution
+Unlike "Local-first" tools, Paca's agents run directly on your server. This ensures that the entire team shares the same environment, logs, and progress, making it a true enterprise-ready collaborative platform.
 
-To ensure reliability and mitigate fear of autonomous AI, every action in Paca is transparent. Humans remain the ultimate decision-makers regarding who performs which task, ensuring that all AI contributions are supervised and aligned with the team's vision.
+---
+
+## Comparison: Paca vs. Others
+
+| Feature | Paca | Multica | Paperclip |
+| :--- | :--- | :--- | :--- |
+| **Primary Use Case** | Team Collaboration (Scrum/Kanban) | Personal AI Research/Dev | AI-assisted Coding |
+| **Workflow** | **Human-in-the-loop** (Team-centric) | Solo-user (Agent-centric) | Individual Developer |
+| **Execution** | **Server-side** (Centralized for team) | Local machine | Local/IDE-based |
+| **Target Audience** | Cross-functional Teams (PO/BA/Dev/QA) | Power Users / Researchers | Software Engineers |
+| **Architecture** | BDD & SDD Integrated | Multi-agent Swarm | Context-aware Chat |
+| **Management** | Jira/ClickUp Alternative | Browser/Desktop Tool | VS Code Extension |
+
+---
 
 ## The P-A-C-A Cycle
 
-The operational flow of Paca revolves around four stages of continuous improvement:
+1. **Plan**: Draft User Stories (BDD) and System Designs (SDD).
+2. **Act**: Execute tasks. Humans and Agents pick up tickets from the Scrumban board.
+3. **Check**: Continuous verification via automated QA agents and human review.
+4. **Adapt**: Retrospectives driven by data-driven insights from the previous sprint.
 
-1. **Plan**: Strategic planning and documentation of BDD (Behavior-Driven Development) specifications.
-2. **Act**: Sprint execution where AI and humans collaborate to write source code and documentation.
-3. **Check**: Continuous verification through BDD scenarios and automated validation agents.
-4. **Adapt**: Data-driven analysis from the previous cycle to optimize the workflow for the next steps.
+## Features
 
-## Key Features
+- **AI-PO & BA Support**: Transform raw ideas into structured BDD scenarios and Acceptance Criteria.
+- **SDD Management**: Build and maintain system architecture docs that both humans and Agents can read and update.
+- **Unified Scrumban Board**: Real-time status updates for all team members (Carbon-based or Silicon-based).
+- **Open Source**: Complete control over your data and your AI orchestration.
 
-- **Collaborative AI-PO Support**: AI partners with the Product Owner to break down raw ideas into coherent User Stories, optimizing the backlog from the moment of inception.
-- **Smart BA Analysis**: Assists Business Analysts in detailing stories, establishing Acceptance Criteria, and creating logical BDD scenarios.
-- **Flexible Task Assignment**: Any task, from writing stories and BA analysis to coding and testing, can be assigned to a human or an AI Agent. You maintain full control over resource allocation.
-- **Unified Scrumban Board**: A real-time workspace where both humans and machines update statuses, discuss requirements, and complete tasks together.
-- **B2B Transparency**: Clear activity logs help organizations closely monitor the interactions and contributions of every entity within the project.
+## The "Paca" Story
 
-## Open Source and Forever Free
+Why the name Paca? It started as a small pun on the Japanese word **"Baka" (ばか)**, meaning "silly." 
 
-Paca is committed to remaining open-source and forever free. We believe the infrastructure for human-AI collaboration should be accessible to every team, everywhere, without financial barriers.
+When we started, our AI assistants would often "hallucinate" or act a bit silly. Instead of getting frustrated, we embraced it. Building a comprehensive management engine as an open-source project is also, in a way, a "silly" endeavor in a world of massive SaaS corporations. 
 
-## The "Paca" Backstory (A Little Secret)
-
-Why the name Paca? Well, beyond the alpaca mascot, it is a playful nod to the Japanese word "Baka" (ばか), meaning "silly" or "foolish."
-
-In our team, we often jokingly call our AI assistants "silly" when they hallucinate. But truth be told, the creator feels like a bit of a baka too, building a massive, high-end platform with no profit motive, driven purely by the love for open-source and human-AI synergy.
-
-We believe there is a certain wisdom in being "foolish" enough to chase a vision where collaboration matters more than the bottom line. 🦙✨
+Paca is a passion project. We’re building it because we believe the future of work isn't just humans using AI, but humans and AI working together as a team. 🦙
 
 ## Documentation Map
 
-- [CONTRIBUTING.md](CONTRIBUTING.md): how to contribute to Paca.
-- [ROADMAP.md](ROADMAP.md): redirect to the GitHub Project roadmap.
-- [docs/README.md](docs/README.md): documentation index.
-- [docs/architecture/overview.md](docs/architecture/overview.md): high-level system architecture.
-- [docs/guides/getting-started.md](docs/guides/getting-started.md): first-step onboarding guide.
+- [CONTRIBUTING.md](CONTRIBUTING.md): How to contribute.
+- [docs/README.md](docs/README.md): Documentation index.
+- [docs/architecture/overview.md](docs/architecture/overview.md): System design.
 
 ## License
 
