@@ -50,7 +50,6 @@ Unlike "Local-first" tools, Paca's agents run directly on your server. This ensu
 | :--- | :--- | :--- | :--- |
 | **Primary Use Case** | Team Collaboration (Scrum/Kanban) | Personal AI Research/Dev | AI-assisted Coding |
 | **Workflow** | **Human-in-the-loop** (Team-centric) | Solo-user (Agent-centric) | Individual Developer |
-| **Execution** | **Server-side** (Centralized for team) | Local machine | Local/IDE-based |
 | **Target Audience** | Cross-functional Teams (PO/BA/Dev/QA) | Power Users / Researchers | Software Engineers |
 | **Architecture** | BDD & SDD Integrated | Multi-agent Swarm | Context-aware Chat |
 | **Management** | Jira/ClickUp Alternative | Browser/Desktop Tool | VS Code Extension |
