@@ -86,8 +86,8 @@ func (s *Service) Revoke(ctx context.Context, userID, keyID uuid.UUID) error {
 }
 
 // Authenticate validates a raw API key and returns the matching record.
-// It also asynchronously updates last_used_at (best-effort, no error on
-// update failure to avoid blocking the request).
+// It also performs a best-effort update of last_used_at. Any update error is
+// ignored so authentication does not fail due to last_used_at persistence.
 func (s *Service) Authenticate(ctx context.Context, rawKey string) (*apikeydom.APIKey, error) {
 	hash := sha256.Sum256([]byte(rawKey))
 	keyHash := hex.EncodeToString(hash[:])
