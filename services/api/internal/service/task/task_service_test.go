@@ -5,6 +5,7 @@ package tasksvc_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -19,13 +20,15 @@ import (
 // ---------------------------------------------------------------------------
 
 type fakeTaskRepo struct {
-	mu           sync.RWMutex
-	types        map[uuid.UUID]*taskdom.TaskType
-	statuses     map[uuid.UUID]*taskdom.TaskStatus
-	tasks        map[uuid.UUID]*taskdom.Task
-	customFields map[uuid.UUID]*taskdom.CustomFieldDefinition
-	counters     map[uuid.UUID]int64 // project-scoped task number counters
-	bddScenarios map[uuid.UUID]*taskdom.BDDScenario
+	mu                  sync.RWMutex
+	types               map[uuid.UUID]*taskdom.TaskType
+	statuses            map[uuid.UUID]*taskdom.TaskStatus
+	tasks               map[uuid.UUID]*taskdom.Task
+	customFields        map[uuid.UUID]*taskdom.CustomFieldDefinition
+	counters            map[uuid.UUID]int64 // project-scoped task number counters
+	bddScenarios        map[uuid.UUID]*taskdom.BDDScenario
+	findDefaultTypeErr  error // injected error for FindDefaultTaskType
+	findDefaultStatusErr error // injected error for FindDefaultTaskStatus
 }
 
 func newFakeTaskRepo() *fakeTaskRepo {
@@ -114,6 +117,9 @@ func (r *fakeTaskRepo) SetDefaultTaskType(_ context.Context, projectID, typeID u
 func (r *fakeTaskRepo) FindDefaultTaskType(_ context.Context, projectID uuid.UUID) (*taskdom.TaskType, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
+	if r.findDefaultTypeErr != nil {
+		return nil, r.findDefaultTypeErr
+	}
 	for _, t := range r.types {
 		if t.ProjectID == projectID && t.IsDefault {
 			cp := *t
@@ -198,6 +204,9 @@ func (r *fakeTaskRepo) SetDefaultTaskStatus(_ context.Context, projectID, status
 func (r *fakeTaskRepo) FindDefaultTaskStatus(_ context.Context, projectID uuid.UUID) (*taskdom.TaskStatus, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
+	if r.findDefaultStatusErr != nil {
+		return nil, r.findDefaultStatusErr
+	}
 	for _, s := range r.statuses {
 		if s.ProjectID == projectID && s.IsDefault {
 			cp := *s
@@ -643,6 +652,98 @@ func TestCreateTask_EmptyTitle(t *testing.T) {
 	}
 }
 
+func TestCreateTask_UsesDefaultTaskTypeAndStatus(t *testing.T) {
+	ctx := context.Background()
+	repo := newFakeTaskRepo()
+	svc := tasksvc.New(repo)
+	projectID := uuid.New()
+
+	tt, _ := svc.CreateTaskType(ctx, taskdom.CreateTaskTypeInput{ProjectID: projectID, Name: "Task"})
+	st, _ := svc.CreateTaskStatus(ctx, taskdom.CreateTaskStatusInput{
+		ProjectID: projectID, Name: "Backlog", Category: taskdom.StatusCategoryTodo,
+	})
+	_, _ = svc.SetDefaultTaskType(ctx, projectID, tt.ID)
+	_, _ = svc.SetDefaultTaskStatus(ctx, projectID, st.ID)
+
+	task, err := svc.CreateTask(ctx, taskdom.CreateTaskInput{
+		ProjectID: projectID,
+		Title:     "My Task",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if task.TaskTypeID == nil || *task.TaskTypeID != tt.ID {
+		t.Errorf("expected TaskTypeID=%v (default), got %v", tt.ID, task.TaskTypeID)
+	}
+	if task.StatusID == nil || *task.StatusID != st.ID {
+		t.Errorf("expected StatusID=%v (default), got %v", st.ID, task.StatusID)
+	}
+}
+
+func TestCreateTask_ExplicitIDsBypassDefaultLookup(t *testing.T) {
+	ctx := context.Background()
+	repo := newFakeTaskRepo()
+	svc := tasksvc.New(repo)
+	projectID := uuid.New()
+
+	defaultType, _ := svc.CreateTaskType(ctx, taskdom.CreateTaskTypeInput{ProjectID: projectID, Name: "Task"})
+	defaultStatus, _ := svc.CreateTaskStatus(ctx, taskdom.CreateTaskStatusInput{
+		ProjectID: projectID, Name: "Backlog", Category: taskdom.StatusCategoryTodo,
+	})
+	_, _ = svc.SetDefaultTaskType(ctx, projectID, defaultType.ID)
+	_, _ = svc.SetDefaultTaskStatus(ctx, projectID, defaultStatus.ID)
+
+	explicitTypeID := uuid.New()
+	explicitStatusID := uuid.New()
+	task, err := svc.CreateTask(ctx, taskdom.CreateTaskInput{
+		ProjectID:  projectID,
+		Title:      "Explicit IDs Task",
+		TaskTypeID: &explicitTypeID,
+		StatusID:   &explicitStatusID,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if task.TaskTypeID == nil || *task.TaskTypeID != explicitTypeID {
+		t.Errorf("expected explicit TaskTypeID=%v, got %v", explicitTypeID, task.TaskTypeID)
+	}
+	if task.StatusID == nil || *task.StatusID != explicitStatusID {
+		t.Errorf("expected explicit StatusID=%v, got %v", explicitStatusID, task.StatusID)
+	}
+}
+
+func TestCreateTask_DefaultTaskTypeErrorPropagates(t *testing.T) {
+	ctx := context.Background()
+	repo := newFakeTaskRepo()
+	svc := tasksvc.New(repo)
+
+	repo.findDefaultTypeErr = errors.New("db unavailable")
+
+	_, err := svc.CreateTask(ctx, taskdom.CreateTaskInput{
+		ProjectID: uuid.New(),
+		Title:     "Task",
+	})
+	if err == nil || err.Error() != "db unavailable" {
+		t.Errorf("expected db unavailable error, got %v", err)
+	}
+}
+
+func TestCreateTask_DefaultTaskStatusErrorPropagates(t *testing.T) {
+	ctx := context.Background()
+	repo := newFakeTaskRepo()
+	svc := tasksvc.New(repo)
+
+	repo.findDefaultStatusErr = errors.New("db timeout")
+
+	_, err := svc.CreateTask(ctx, taskdom.CreateTaskInput{
+		ProjectID: uuid.New(),
+		Title:     "Task",
+	})
+	if err == nil || err.Error() != "db timeout" {
+		t.Errorf("expected db timeout error, got %v", err)
+	}
+}
+
 func TestUpdateTask_OK(t *testing.T) {
 	ctx := context.Background()
 	repo := newFakeTaskRepo()
@@ -1048,6 +1149,65 @@ func TestListTaskStatuses_MultiProject(t *testing.T) {
 	p2Statuses, _ := svc.ListTaskStatuses(ctx, p2)
 	if len(p2Statuses) != 1 {
 		t.Errorf("expected 1 status for p2, got %d", len(p2Statuses))
+	}
+}
+
+func TestSetDefaultTaskStatus_OK(t *testing.T) {
+	ctx := context.Background()
+	repo := newFakeTaskRepo()
+	svc := tasksvc.New(repo)
+	projectID := uuid.New()
+
+	st1, _ := svc.CreateTaskStatus(ctx, taskdom.CreateTaskStatusInput{ProjectID: projectID, Name: "Backlog", Category: taskdom.StatusCategoryTodo})
+	st2, _ := svc.CreateTaskStatus(ctx, taskdom.CreateTaskStatusInput{ProjectID: projectID, Name: "Done", Category: taskdom.StatusCategoryDone})
+
+	got, err := svc.SetDefaultTaskStatus(ctx, projectID, st1.ID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !got.IsDefault {
+		t.Errorf("expected returned status to have IsDefault=true")
+	}
+
+	other, _ := svc.GetTaskStatus(ctx, st2.ID)
+	if other.IsDefault {
+		t.Errorf("expected %q to have IsDefault=false after SetDefaultTaskStatus", other.Name)
+	}
+}
+
+func TestSetDefaultTaskStatus_SwitchDefault(t *testing.T) {
+	ctx := context.Background()
+	repo := newFakeTaskRepo()
+	svc := tasksvc.New(repo)
+	projectID := uuid.New()
+
+	st1, _ := svc.CreateTaskStatus(ctx, taskdom.CreateTaskStatusInput{ProjectID: projectID, Name: "Backlog", Category: taskdom.StatusCategoryTodo})
+	st2, _ := svc.CreateTaskStatus(ctx, taskdom.CreateTaskStatusInput{ProjectID: projectID, Name: "Done", Category: taskdom.StatusCategoryDone})
+
+	_, _ = svc.SetDefaultTaskStatus(ctx, projectID, st1.ID)
+
+	got, err := svc.SetDefaultTaskStatus(ctx, projectID, st2.ID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !got.IsDefault {
+		t.Errorf("expected Done to now be default")
+	}
+
+	prev, _ := svc.GetTaskStatus(ctx, st1.ID)
+	if prev.IsDefault {
+		t.Errorf("expected Backlog to no longer be default after switching to Done")
+	}
+}
+
+func TestSetDefaultTaskStatus_NotFound(t *testing.T) {
+	ctx := context.Background()
+	repo := newFakeTaskRepo()
+	svc := tasksvc.New(repo)
+
+	_, err := svc.SetDefaultTaskStatus(ctx, uuid.New(), uuid.New())
+	if err != taskdom.ErrStatusNotFound {
+		t.Errorf("expected ErrStatusNotFound, got %v", err)
 	}
 }
 
