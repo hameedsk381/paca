@@ -17,7 +17,7 @@ The Paca MCP server is available as a GitHub package — no installation or buil
 ### Package Information
 
 - **Package**: `github:paca-ai/paca-mcp`
-- **Repository**: [github.com/paca-ai/paca-mcp](https://github.com/paca-ai/paca-mcp)
+- **Repository**: [github.com/paca-ai/paca](https://github.com/paca-ai/paca) (MCP server source lives under `apps/mcp`)
 
 ### Checking the Package
 
@@ -243,8 +243,8 @@ Use the client's built-in testing tools to:
 To test with the MCP Inspector, clone the repository and run it locally:
 
 ```bash
-git clone https://github.com/paca-ai/paca-mcp.git
-cd paca-mcp
+git clone https://github.com/paca-ai/paca.git
+cd paca/apps/mcp
 npm install
 npm run inspector
 ```
