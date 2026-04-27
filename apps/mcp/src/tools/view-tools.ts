@@ -1,0 +1,733 @@
+import type { Tool } from "@modelcontextprotocol/sdk/types.js";
+import { z } from "zod";
+import type { PacaAPIViewsClient } from "../api/index.js";
+import { formatList } from "../utils/index.js";
+
+const ListViewsSchema = z.object({
+	projectId: z.string(),
+});
+
+const CreateViewSchema = z.object({
+	projectId: z.string(),
+	name: z.string(),
+	context: z.string(),
+	viewType: z.string(),
+	sprintId: z.string().optional(),
+});
+
+const ReorderViewsSchema = z.object({
+	projectId: z.string(),
+	viewIds: z.array(z.string()),
+});
+
+const GetViewSchema = z.object({
+	projectId: z.string(),
+	viewId: z.string(),
+});
+
+const UpdateViewSchema = z.object({
+	projectId: z.string(),
+	viewId: z.string(),
+	name: z.string().optional(),
+	context: z.string().optional(),
+	viewType: z.string().optional(),
+	sprintId: z.string().optional(),
+});
+
+const DeleteViewSchema = z.object({
+	projectId: z.string(),
+	viewId: z.string(),
+});
+
+const ListTaskPositionsSchema = z.object({
+	projectId: z.string(),
+	viewId: z.string(),
+});
+
+const BulkMoveTasksSchema = z.object({
+	projectId: z.string(),
+	viewId: z.string(),
+	taskId: z.string(),
+	targetViewId: z.string(),
+	targetStatusId: z.string().nullable().optional(),
+	targetPosition: z.number().optional(),
+});
+
+const MoveTaskSchema = z.object({
+	projectId: z.string(),
+	viewId: z.string(),
+	taskId: z.string(),
+	targetViewId: z.string(),
+	targetStatusId: z.string().nullable().optional(),
+	targetPosition: z.number().optional(),
+});
+
+const ListCustomFieldsSchema = z.object({
+	projectId: z.string(),
+});
+
+const CreateCustomFieldSchema = z.object({
+	projectId: z.string(),
+	fieldKey: z.string(),
+	displayName: z.string(),
+	fieldType: z.string(),
+	options: z.array(z.string()).optional(),
+	isRequired: z.boolean().optional(),
+});
+
+const GetCustomFieldSchema = z.object({
+	projectId: z.string(),
+	fieldId: z.string(),
+});
+
+const UpdateCustomFieldSchema = z.object({
+	projectId: z.string(),
+	fieldId: z.string(),
+	displayName: z.string().optional(),
+	fieldType: z.string().optional(),
+	options: z.array(z.string()).optional(),
+	isRequired: z.boolean().optional(),
+});
+
+const DeleteCustomFieldSchema = z.object({
+	projectId: z.string(),
+	fieldId: z.string(),
+});
+
+/**
+ * Returns all view-related MCP tools.
+ */
+export function getViewTools(): Tool[] {
+	return [
+		{
+			name: "list_views",
+			description: "List all views in a project",
+			inputSchema: {
+				type: "object",
+				properties: {
+					projectId: {
+						type: "string",
+						description: "The ID of the project",
+					},
+				},
+				required: ["projectId"],
+			},
+		},
+		{
+			name: "create_view",
+			description: "Create a new view",
+			inputSchema: {
+				type: "object",
+				properties: {
+					projectId: {
+						type: "string",
+						description: "The ID of the project",
+					},
+					name: {
+						type: "string",
+						description: "The name of the view",
+					},
+					context: {
+						type: "string",
+						description: "The context (sprint, backlog, timeline)",
+					},
+					viewType: {
+						type: "string",
+						description: "The type of view (table, board, roadmap)",
+					},
+					sprintId: {
+						type: "string",
+						description: "The sprint ID (required for sprint context)",
+					},
+				},
+				required: ["projectId", "name", "context", "viewType"],
+			},
+		},
+		{
+			name: "reorder_views",
+			description: "Reorder views in a project",
+			inputSchema: {
+				type: "object",
+				properties: {
+					projectId: {
+						type: "string",
+						description: "The ID of the project",
+					},
+					viewIds: {
+						type: "array",
+						items: { type: "string" },
+						description: "Array of view IDs in new order",
+					},
+				},
+				required: ["projectId", "viewIds"],
+			},
+		},
+		{
+			name: "get_view",
+			description: "Get details of a specific view",
+			inputSchema: {
+				type: "object",
+				properties: {
+					projectId: {
+						type: "string",
+						description: "The ID of the project",
+					},
+					viewId: {
+						type: "string",
+						description: "The ID of the view",
+					},
+				},
+				required: ["projectId", "viewId"],
+			},
+		},
+		{
+			name: "update_view",
+			description: "Update an existing view",
+			inputSchema: {
+				type: "object",
+				properties: {
+					projectId: {
+						type: "string",
+						description: "The ID of the project",
+					},
+					viewId: {
+						type: "string",
+						description: "The ID of the view",
+					},
+					name: {
+						type: "string",
+						description: "The new name",
+					},
+					context: {
+						type: "string",
+						description: "The new context",
+					},
+					viewType: {
+						type: "string",
+						description: "The type of view (table, board, roadmap)",
+					},
+					sprintId: {
+						type: "string",
+						description: "The new sprint ID",
+					},
+				},
+				required: ["projectId", "viewId"],
+			},
+		},
+		{
+			name: "delete_view",
+			description: "Delete a view",
+			inputSchema: {
+				type: "object",
+				properties: {
+					projectId: {
+						type: "string",
+						description: "The ID of the project",
+					},
+					viewId: {
+						type: "string",
+						description: "The ID of the view",
+					},
+				},
+				required: ["projectId", "viewId"],
+			},
+		},
+		{
+			name: "list_task_positions",
+			description: "List task positions in a view",
+			inputSchema: {
+				type: "object",
+				properties: {
+					projectId: {
+						type: "string",
+						description: "The ID of the project",
+					},
+					viewId: {
+						type: "string",
+						description: "The ID of the view",
+					},
+				},
+				required: ["projectId", "viewId"],
+			},
+		},
+		{
+			name: "bulk_move_tasks",
+			description: "Bulk move tasks in a view",
+			inputSchema: {
+				type: "object",
+				properties: {
+					projectId: {
+						type: "string",
+						description: "The ID of the project",
+					},
+					viewId: {
+						type: "string",
+						description: "The ID of the view",
+					},
+					taskId: {
+						type: "string",
+						description: "The ID of the task to move",
+					},
+					targetViewId: {
+						type: "string",
+						description: "The target view ID",
+					},
+					targetStatusId: {
+						type: "string",
+						description: "The target status ID",
+					},
+					targetPosition: {
+						type: "number",
+						description: "The target position",
+					},
+				},
+				required: ["projectId", "viewId", "taskId", "targetViewId"],
+			},
+		},
+		{
+			name: "move_task",
+			description: "Move a task within a view",
+			inputSchema: {
+				type: "object",
+				properties: {
+					projectId: {
+						type: "string",
+						description: "The ID of the project",
+					},
+					viewId: {
+						type: "string",
+						description: "The ID of the view",
+					},
+					taskId: {
+						type: "string",
+						description: "The ID of the task",
+					},
+					targetViewId: {
+						type: "string",
+						description: "The target view ID",
+					},
+					targetStatusId: {
+						type: "string",
+						description: "The target status ID",
+					},
+					targetPosition: {
+						type: "number",
+						description: "The target position",
+					},
+				},
+				required: ["projectId", "viewId", "taskId", "targetViewId"],
+			},
+		},
+	];
+}
+
+/**
+ * Returns all custom field related MCP tools.
+ */
+export function getCustomFieldTools(): Tool[] {
+	return [
+		{
+			name: "list_custom_fields",
+			description: "List all custom field definitions in a project",
+			inputSchema: {
+				type: "object",
+				properties: {
+					projectId: {
+						type: "string",
+						description: "The ID of the project",
+					},
+				},
+				required: ["projectId"],
+			},
+		},
+		{
+			name: "create_custom_field",
+			description: "Create a new custom field definition",
+			inputSchema: {
+				type: "object",
+				properties: {
+					projectId: {
+						type: "string",
+						description: "The ID of the project",
+					},
+					fieldKey: {
+						type: "string",
+						description: "The field key",
+					},
+					displayName: {
+						type: "string",
+						description: "The display name",
+					},
+					fieldType: {
+						type: "string",
+						description:
+							"The field type (text, number, date, select, multi_select, boolean, url)",
+					},
+					options: {
+						type: "array",
+						items: { type: "string" },
+						description: "Options for select/multi_select types",
+					},
+					isRequired: {
+						type: "boolean",
+						description: "Whether the field is required",
+					},
+				},
+				required: ["projectId", "fieldKey", "displayName", "fieldType"],
+			},
+		},
+		{
+			name: "get_custom_field",
+			description: "Get details of a custom field definition",
+			inputSchema: {
+				type: "object",
+				properties: {
+					projectId: {
+						type: "string",
+						description: "The ID of the project",
+					},
+					fieldId: {
+						type: "string",
+						description: "The ID of the field",
+					},
+				},
+				required: ["projectId", "fieldId"],
+			},
+		},
+		{
+			name: "update_custom_field",
+			description: "Update a custom field definition",
+			inputSchema: {
+				type: "object",
+				properties: {
+					projectId: {
+						type: "string",
+						description: "The ID of the project",
+					},
+					fieldId: {
+						type: "string",
+						description: "The ID of the field",
+					},
+					displayName: {
+						type: "string",
+						description: "The new display name",
+					},
+					fieldType: {
+						type: "string",
+						description: "The new field type",
+					},
+					options: {
+						type: "array",
+						items: { type: "string" },
+						description: "New options",
+					},
+					isRequired: {
+						type: "boolean",
+						description: "Whether the field is required",
+					},
+				},
+				required: ["projectId", "fieldId"],
+			},
+		},
+		{
+			name: "delete_custom_field",
+			description: "Delete a custom field definition",
+			inputSchema: {
+				type: "object",
+				properties: {
+					projectId: {
+						type: "string",
+						description: "The ID of the project",
+					},
+					fieldId: {
+						type: "string",
+						description: "The ID of the field",
+					},
+				},
+				required: ["projectId", "fieldId"],
+			},
+		},
+	];
+}
+
+function formatView(view: any): string {
+	return `View: ${view.name}
+ID: ${view.id}
+Context: ${view.context}
+Sprint ID: ${view.sprint_id || "None"}
+Position: ${view.position}
+Created: ${view.created_at}`;
+}
+
+function formatCustomField(field: any): string {
+	return `Custom Field: ${field.display_name}
+ID: ${field.id}
+Key: ${field.field_key}
+Type: ${field.field_type}
+Options: ${field.options.length > 0 ? field.options.join(", ") : "None"}
+Required: ${field.is_required}
+Created: ${field.created_at}`;
+}
+
+/**
+ * Handles view and custom field tool calls.
+ */
+export async function handleViewTool(
+	toolName: string,
+	args: any,
+	client: PacaAPIViewsClient,
+): Promise<any> {
+	switch (toolName) {
+		case "list_views": {
+			const { projectId } = ListViewsSchema.parse(args);
+			const views = await client.listViews(projectId);
+			const formatted = formatList(views, formatView);
+			return {
+				content: [
+					{
+						type: "text",
+						text: `Views:\n\n${formatted}`,
+					},
+				],
+			};
+		}
+
+		case "create_view": {
+			const { projectId, name, context, viewType, sprintId } =
+				CreateViewSchema.parse(args);
+			const view = await client.createView(projectId, {
+				name,
+				context,
+				view_type: viewType as any,
+				sprint_id: sprintId ?? null,
+			});
+			return {
+				content: [
+					{
+						type: "text",
+						text: `View created successfully:\n\n${formatView(view)}`,
+					},
+				],
+			};
+		}
+
+		case "reorder_views": {
+			const { projectId, viewIds } = ReorderViewsSchema.parse(args);
+			await client.reorderViews(projectId, { view_ids: viewIds });
+			return {
+				content: [
+					{
+						type: "text",
+						text: `Views reordered successfully`,
+					},
+				],
+			};
+		}
+
+		case "get_view": {
+			const { projectId, viewId } = GetViewSchema.parse(args);
+			const view = await client.getView(projectId, viewId);
+			return {
+				content: [
+					{
+						type: "text",
+						text: formatView(view),
+					},
+				],
+			};
+		}
+
+		case "update_view": {
+			const { projectId, viewId, name, context, viewType, sprintId } =
+				UpdateViewSchema.parse(args);
+			const view = await client.updateView(projectId, viewId, {
+				name,
+				context,
+				view_type: viewType as any,
+				sprint_id: sprintId ?? null,
+			});
+			return {
+				content: [
+					{
+						type: "text",
+						text: `View updated successfully:\n\n${formatView(view)}`,
+					},
+				],
+			};
+		}
+
+		case "delete_view": {
+			const { projectId, viewId } = DeleteViewSchema.parse(args);
+			await client.deleteView(projectId, viewId);
+			return {
+				content: [
+					{
+						type: "text",
+						text: `View ${viewId} deleted successfully`,
+					},
+				],
+			};
+		}
+
+		case "list_task_positions": {
+			const { projectId, viewId } = ListTaskPositionsSchema.parse(args);
+			const positions = await client.listTaskPositions(projectId, viewId);
+			return {
+				content: [
+					{
+						type: "text",
+						text: `Task Positions:\n\n${JSON.stringify(positions, null, 2)}`,
+					},
+				],
+			};
+		}
+
+		case "bulk_move_tasks": {
+			const {
+				projectId,
+				viewId,
+				taskId,
+				targetViewId,
+				targetStatusId,
+				targetPosition,
+			} = BulkMoveTasksSchema.parse(args);
+			await client.bulkMoveTasks(projectId, viewId, {
+				task_id: taskId,
+				target_view_id: targetViewId,
+				target_status_id: targetStatusId ?? null,
+				target_position: targetPosition,
+			});
+			return {
+				content: [
+					{
+						type: "text",
+						text: `Tasks moved successfully`,
+					},
+				],
+			};
+		}
+
+		case "move_task": {
+			const {
+				projectId,
+				viewId,
+				taskId,
+				targetViewId,
+				targetStatusId,
+				targetPosition,
+			} = MoveTaskSchema.parse(args);
+			await client.bulkMoveTasks(projectId, viewId, {
+				task_id: taskId,
+				target_view_id: targetViewId,
+				target_status_id: targetStatusId ?? null,
+				target_position: targetPosition,
+			});
+			return {
+				content: [
+					{
+						type: "text",
+						text: `Task moved successfully`,
+					},
+				],
+			};
+		}
+
+		case "list_custom_fields": {
+			const { projectId } = ListCustomFieldsSchema.parse(args);
+			const fields = await client.listCustomFieldDefinitions(projectId);
+			const formatted = formatList(fields, formatCustomField);
+			return {
+				content: [
+					{
+						type: "text",
+						text: `Custom Fields:\n\n${formatted}`,
+					},
+				],
+			};
+		}
+
+		case "create_custom_field": {
+			const {
+				projectId,
+				fieldKey,
+				displayName,
+				fieldType,
+				options,
+				isRequired,
+			} = CreateCustomFieldSchema.parse(args);
+			const field = await client.createCustomFieldDefinition(projectId, {
+				field_key: fieldKey,
+				display_name: displayName,
+				field_type: fieldType as any,
+				options,
+				is_required: isRequired,
+			});
+			return {
+				content: [
+					{
+						type: "text",
+						text: `Custom field created successfully:\n\n${formatCustomField(field)}`,
+					},
+				],
+			};
+		}
+
+		case "get_custom_field": {
+			const { projectId, fieldId } = GetCustomFieldSchema.parse(args);
+			const field = await client.getCustomFieldDefinition(projectId, fieldId);
+			return {
+				content: [
+					{
+						type: "text",
+						text: formatCustomField(field),
+					},
+				],
+			};
+		}
+
+		case "update_custom_field": {
+			const {
+				projectId,
+				fieldId,
+				displayName,
+				fieldType,
+				options,
+				isRequired,
+			} = UpdateCustomFieldSchema.parse(args);
+			const field = await client.updateCustomFieldDefinition(
+				projectId,
+				fieldId,
+				{
+					display_name: displayName,
+					field_type: fieldType as any,
+					options,
+					is_required: isRequired,
+				},
+			);
+			return {
+				content: [
+					{
+						type: "text",
+						text: `Custom field updated successfully:\n\n${formatCustomField(field)}`,
+					},
+				],
+			};
+		}
+
+		case "delete_custom_field": {
+			const { projectId, fieldId } = DeleteCustomFieldSchema.parse(args);
+			await client.deleteCustomFieldDefinition(projectId, fieldId);
+			return {
+				content: [
+					{
+						type: "text",
+						text: `Custom field ${fieldId} deleted successfully`,
+					},
+				],
+			};
+		}
+
+		default:
+			throw new Error(`Unknown view/custom field tool: ${toolName}`);
+	}
+}

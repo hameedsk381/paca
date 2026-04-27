@@ -141,6 +141,10 @@ CREATE TABLE IF NOT EXISTS task_types (
     updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- At most one default task type per project.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_task_types_one_default
+    ON task_types (project_id) WHERE is_default = true;
+
 -- -------------------------------------------------------------------------
 -- TASK STATUSES
 -- -------------------------------------------------------------------------
@@ -152,9 +156,14 @@ CREATE TABLE IF NOT EXISTS task_statuses (
     color       TEXT,
     position    INTEGER     NOT NULL DEFAULT 0,
     category    TEXT        NOT NULL CHECK (category IN ('backlog','refinement','ready','todo','inprogress','done')),
+    is_default  BOOLEAN     NOT NULL DEFAULT false,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- At most one default task status per project.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_task_statuses_one_default
+    ON task_statuses (project_id) WHERE is_default = true;
 
 -- -------------------------------------------------------------------------
 -- SPRINTS
