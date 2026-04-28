@@ -216,7 +216,6 @@ jobs:
       - name: Upgrade npm
         run: npm install -g npm@latest
 
-      # Publish from build/ where package.json has the correct bin path (./index.js).
       # For prerelease versions (e.g. 1.0.0-alpha.1), npm requires an explicit
       # --tag to avoid accidentally tagging as "latest".
       - name: Publish to npm
@@ -229,4 +228,3 @@ jobs:
           else
             npm publish --provenance --access public
           fi
-        working-directory: apps/mcp/build
