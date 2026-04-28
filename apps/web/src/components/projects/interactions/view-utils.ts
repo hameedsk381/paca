@@ -247,6 +247,14 @@ export function sortTasksByConfig(
 			if (!bd) return -1;
 			return ad.localeCompare(bd);
 		}
+		if (sortBy === "story_points") {
+			const av = a.story_points ?? null;
+			const bv = b.story_points ?? null;
+			if (av === null && bv === null) return 0;
+			if (av === null) return 1; // nulls last
+			if (bv === null) return -1;
+			return bv - av; // descending (higher points first)
+		}
 
 		// Custom field sort
 		const cf = ctx.customFields.find((f) => f.field_key === sortBy);
