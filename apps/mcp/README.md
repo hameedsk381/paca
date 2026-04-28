@@ -35,7 +35,7 @@ Add the following to your Claude Desktop config file:
   "mcpServers": {
     "paca": {
       "command": "npx",
-      "args": ["-y", "github:paca-ai/paca-mcp"],
+      "args": ["-y", "@paca-ai/paca-mcp"],
       "env": {
         "PACA_API_KEY": "your-api-key-here",
         "PACA_API_URL": "http://localhost:8080"
@@ -57,7 +57,7 @@ Add to your VS Code `settings.json` or `.vscode/mcp.json`:
     "servers": {
       "paca": {
         "command": "npx",
-        "args": ["-y", "github:paca-ai/paca-mcp"],
+        "args": ["-y", "@paca-ai/paca-mcp"],
         "env": {
           "PACA_API_KEY": "your-api-key-here",
           "PACA_API_URL": "http://localhost:8080"
@@ -76,7 +76,7 @@ Any MCP-compatible client can use the server with:
 {
   "name": "paca",
   "command": "npx",
-  "args": ["-y", "github:paca-ai/paca-mcp"],
+  "args": ["-y", "@paca-ai/paca-mcp"],
   "env": {
     "PACA_API_KEY": "your-api-key-here",
     "PACA_API_URL": "http://localhost:8080"

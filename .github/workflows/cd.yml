@@ -167,6 +167,9 @@ jobs:
     name: Publish MCP package
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
 
     defaults:
       run:
@@ -210,6 +213,4 @@ jobs:
           scope: "@paca-ai"
 
       - name: Publish to npm
-        run: npm publish
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --provenance --access public

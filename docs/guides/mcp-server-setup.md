@@ -16,7 +16,7 @@ The Paca MCP server is available as a GitHub package — no installation or buil
 
 ### Package Information
 
-- **Package**: `github:paca-ai/paca-mcp`
+- **Package**: `@paca-ai/paca-mcp`
 - **Repository**: [github.com/paca-ai/paca](https://github.com/paca-ai/paca) (MCP server source lives under `apps/mcp`)
 
 ### Checking the Package
@@ -24,7 +24,7 @@ The Paca MCP server is available as a GitHub package — no installation or buil
 To inspect the latest version of the MCP package:
 
 ```bash
-npx github:paca-ai/paca-mcp --version
+npx @paca-ai/paca-mcp --version
 ```
 
 ## Agent-Specific Setup
@@ -50,7 +50,7 @@ Claude Desktop provides the most seamless integration with the Paca MCP server.
       "command": "npx",
       "args": [
         "-y",
-        "github:paca-ai/paca-mcp"
+        "@paca-ai/paca-mcp"
       ],
       "env": {
         "PACA_API_KEY": "your-api-key-here",
@@ -67,7 +67,7 @@ Claude Desktop provides the most seamless integration with the Paca MCP server.
 
 4. Restart Claude Desktop
 
-**Note**: The `npx -y github:paca-ai/paca-mcp` command automatically downloads and runs the latest version of the Paca MCP server directly from GitHub.
+**Note**: The `npx -y @paca-ai/paca-mcp` command automatically downloads and runs the latest version of the Paca MCP server from npm.
 
 **Usage in Claude Desktop:**
 
@@ -85,7 +85,7 @@ The Paca MCP server follows the standard MCP protocol and can be used with any M
 
 **Required Configuration:**
 
-1. **Command**: Use `npx -y github:paca-ai/paca-mcp` to automatically download and run the latest version
+1. **Command**: Use `npx -y @paca-ai/paca-mcp` to automatically download and run the latest version
 2. **Environment Variables**:
    - `PACA_API_KEY` (required): Your Paca API key
    - `PACA_API_URL` (optional): Paca API URL (default: `http://localhost:8080`)
@@ -100,7 +100,7 @@ Most MCP clients will accept configuration in this format:
   "command": "npx",
   "args": [
     "-y",
-    "github:paca-ai/paca-mcp"
+    "@paca-ai/paca-mcp"
   ],
   "env": {
     "PACA_API_KEY": "your-api-key-here",
@@ -119,7 +119,7 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 
 const transport = new StdioClientTransport({
   command: "npx",
-  args: ["-y", "github:paca-ai/paca-mcp"],
+  args: ["-y", "@paca-ai/paca-mcp"],
   env: {
     PACA_API_KEY: "your-api-key-here",
     PACA_API_URL: "http://localhost:8080"
@@ -265,8 +265,8 @@ npm run inspector
 **Issue**: Claude Desktop doesn't show Paca tools
 - **Solution**: Check config file path, verify JSON syntax, and restart Claude Desktop
 
-**Issue**: "Cannot find package 'github:paca-ai/paca-mcp'" error
-- **Solution**: Ensure you have internet connectivity and access to GitHub
+**Issue**: "Cannot find package '@paca-ai/paca-mcp'" error
+- **Solution**: Ensure you have internet connectivity and npm registry access
 
 ### Debug Mode
 
