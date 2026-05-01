@@ -381,15 +381,16 @@ func buildProjectTestRouterWithTaskRepo(repo *fakeProjectRepo, store *projectPer
 	log := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
 	return router.New(router.Deps{
-		TokenManager: tm,
-		Authorizer:   authz.NewAuthorizer(store),
-		Health:       handler.NewHealthHandler(),
-		Auth:         handler.NewAuthHandler(authService, testCookieCfg),
-		User:         handler.NewUserHandler(userService),
-		GlobalRole:   handler.NewGlobalRoleHandler(&fakeGlobalRoleService{}),
-		Project:      handler.NewProjectHandler(projectService, authz.NewAuthorizer(store)),
-		Task:         handler.NewTaskHandler(tasksvc.New(taskRepo), sprintsvc.NewViewService(newFakeViewRepoIT()), tasksvc.NewActivityService(newFakeTaskActivityRepo(), &fakeActivityMemberRepo{}, nil)),
-		Log:          log,
+		TokenManager:         tm,
+		Authorizer:           authz.NewAuthorizer(store),
+		ProjectVisibilitySvc: projectService,
+		Health:               handler.NewHealthHandler(),
+		Auth:                 handler.NewAuthHandler(authService, testCookieCfg),
+		User:                 handler.NewUserHandler(userService),
+		GlobalRole:           handler.NewGlobalRoleHandler(&fakeGlobalRoleService{}),
+		Project:              handler.NewProjectHandler(projectService, authz.NewAuthorizer(store)),
+		Task:                 handler.NewTaskHandler(tasksvc.New(taskRepo), sprintsvc.NewViewService(newFakeViewRepoIT()), tasksvc.NewActivityService(newFakeTaskActivityRepo(), &fakeActivityMemberRepo{}, nil)),
+		Log:                  log,
 	}), taskRepo
 }
 
@@ -875,5 +876,93 @@ func TestIntegrationGetMyProjectPermissions_ProjectNotFound(t *testing.T) {
 	}
 	if code := decodeErrorCode(t, w); code != "PROJECT_MEMBER_NOT_FOUND" {
 		t.Fatalf("expected PROJECT_MEMBER_NOT_FOUND, got %q", code)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Public project integration tests
+// ---------------------------------------------------------------------------
+
+func TestIntegrationProject_IsPublicField(t *testing.T) {
+	repo := newFakeProjectRepo()
+	store := &projectPermStore{
+		globalPerms: []authz.Permission{
+			authz.PermissionProjectsRead,
+			authz.PermissionProjectsCreate,
+		},
+	}
+	r := buildProjectTestRouter(repo, store)
+	tok := issueProjectToken(t, uuid.NewString())
+
+	// Create a project with is_public: true.
+	createW := serve(r, authedJSONReq(t.Context(), http.MethodPost, "/api/v1/projects", tok, map[string]any{
+		"name":      "Public Project",
+		"is_public": true,
+	}))
+	if createW.Code != http.StatusCreated {
+		t.Fatalf("create: expected 201, got %d (%s)", createW.Code, createW.Body.String())
+	}
+	var createEnv struct {
+		Data map[string]any `json:"data"`
+	}
+	if err := json.NewDecoder(createW.Body).Decode(&createEnv); err != nil {
+		t.Fatalf("decode create response: %v", err)
+	}
+	if isPublic, _ := createEnv.Data["is_public"].(bool); !isPublic {
+		t.Fatalf("expected is_public=true in create response, got %v", createEnv.Data["is_public"])
+	}
+	projectID, _ := createEnv.Data["id"].(string)
+
+	// GET the project and verify is_public persists.
+	getW := serve(r, authedJSONReq(t.Context(), http.MethodGet, "/api/v1/projects/"+projectID, tok, nil))
+	if getW.Code != http.StatusOK {
+		t.Fatalf("get: expected 200, got %d (%s)", getW.Code, getW.Body.String())
+	}
+	var getEnv struct {
+		Data map[string]any `json:"data"`
+	}
+	if err := json.NewDecoder(getW.Body).Decode(&getEnv); err != nil {
+		t.Fatalf("decode get response: %v", err)
+	}
+	if isPublic, _ := getEnv.Data["is_public"].(bool); !isPublic {
+		t.Fatalf("expected is_public=true in get response, got %v", getEnv.Data["is_public"])
+	}
+}
+
+func TestIntegrationProject_AnonymousAccess_PublicProject(t *testing.T) {
+	repo := newFakeProjectRepo()
+	projectID := uuid.New()
+	repo.projects[projectID] = &projectdom.Project{
+		ID:       projectID,
+		Name:     "Public Project",
+		IsPublic: true,
+	}
+	store := &projectPermStore{}
+	r := buildProjectTestRouter(repo, store)
+
+	// Anonymous GET (no Authorization header) on a public project should succeed.
+	url := "/api/v1/projects/" + projectID.String()
+	w := serve(r, httptest.NewRequestWithContext(t.Context(), http.MethodGet, url, nil))
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d (%s)", w.Code, w.Body.String())
+	}
+}
+
+func TestIntegrationProject_AnonymousAccess_PrivateProject_Returns401(t *testing.T) {
+	repo := newFakeProjectRepo()
+	projectID := uuid.New()
+	repo.projects[projectID] = &projectdom.Project{
+		ID:       projectID,
+		Name:     "Private Project",
+		IsPublic: false,
+	}
+	store := &projectPermStore{}
+	r := buildProjectTestRouter(repo, store)
+
+	// Anonymous GET on a private project should return 401.
+	url := "/api/v1/projects/" + projectID.String()
+	w := serve(r, httptest.NewRequestWithContext(t.Context(), http.MethodGet, url, nil))
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d (%s)", w.Code, w.Body.String())
 	}
 }

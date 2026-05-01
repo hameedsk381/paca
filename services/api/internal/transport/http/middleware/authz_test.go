@@ -262,3 +262,120 @@ func TestRequireAnyPermissions_InvalidProjectID_GlobalGroupSucceeds(t *testing.T
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// RequirePublicProjectOrPermissions
+// ---------------------------------------------------------------------------
+
+type mockVisibilityChecker struct {
+	isPublic bool
+	err      error
+}
+
+func (m *mockVisibilityChecker) IsProjectPublic(_ context.Context, _ uuid.UUID) (bool, error) {
+	return m.isPublic, m.err
+}
+
+func TestRequirePublicProjectOrPermissions_AnonymousPublicProject_Allows(t *testing.T) {
+	// No claims (anonymous), checker says project is public → 200.
+	checker := &mockVisibilityChecker{isPublic: true}
+	r := gin.New()
+	r.GET("/projects/:projectId/tasks",
+		RequirePublicProjectOrPermissions(checker, authz.NewAuthorizer(nil),
+			PermissionGroup{Scope: ProjectScopeFromParam("projectId"), Permissions: []authz.Permission{authz.PermissionTasksRead}},
+		),
+		func(c *gin.Context) { c.Status(http.StatusOK) },
+	)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/projects/"+uuid.NewString()+"/tasks", nil)
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+}
+
+func TestRequirePublicProjectOrPermissions_AnonymousPrivateProject_Returns401(t *testing.T) {
+	// No claims, checker says project is private → 401.
+	checker := &mockVisibilityChecker{isPublic: false}
+	r := gin.New()
+	r.GET("/projects/:projectId/tasks",
+		RequirePublicProjectOrPermissions(checker, authz.NewAuthorizer(nil),
+			PermissionGroup{Scope: ProjectScopeFromParam("projectId"), Permissions: []authz.Permission{authz.PermissionTasksRead}},
+		),
+		func(c *gin.Context) { c.Status(http.StatusOK) },
+	)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/projects/"+uuid.NewString()+"/tasks", nil)
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", w.Code)
+	}
+}
+
+func TestRequirePublicProjectOrPermissions_AnonymousInvalidProjectID_Returns400(t *testing.T) {
+	// No claims, invalid project UUID → 400.
+	checker := &mockVisibilityChecker{isPublic: false}
+	r := gin.New()
+	r.GET("/projects/:projectId/tasks",
+		RequirePublicProjectOrPermissions(checker, authz.NewAuthorizer(nil),
+			PermissionGroup{Scope: ProjectScopeFromParam("projectId"), Permissions: []authz.Permission{authz.PermissionTasksRead}},
+		),
+		func(c *gin.Context) { c.Status(http.StatusOK) },
+	)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/projects/not-a-uuid/tasks", nil)
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", w.Code)
+	}
+}
+
+func TestRequirePublicProjectOrPermissions_AuthenticatedWithPermission_Allows(t *testing.T) {
+	// Authenticated user with sufficient permission → 200.
+	store := &mockPermissionStore{projectPerms: []authz.Permission{authz.PermissionTasksRead}}
+	checker := &mockVisibilityChecker{isPublic: false}
+	r := gin.New()
+	r.GET("/projects/:projectId/tasks",
+		withClaims("USER"),
+		RequirePublicProjectOrPermissions(checker, authz.NewAuthorizer(store),
+			PermissionGroup{Scope: ProjectScopeFromParam("projectId"), Permissions: []authz.Permission{authz.PermissionTasksRead}},
+		),
+		func(c *gin.Context) { c.Status(http.StatusOK) },
+	)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/projects/"+uuid.NewString()+"/tasks", nil)
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+}
+
+func TestRequirePublicProjectOrPermissions_AuthenticatedWithoutPermission_Returns403(t *testing.T) {
+	// Authenticated user without permission, private project → 403.
+	store := &mockPermissionStore{}
+	checker := &mockVisibilityChecker{isPublic: false}
+	r := gin.New()
+	r.GET("/projects/:projectId/tasks",
+		withClaims("USER"),
+		RequirePublicProjectOrPermissions(checker, authz.NewAuthorizer(store),
+			PermissionGroup{Scope: ProjectScopeFromParam("projectId"), Permissions: []authz.Permission{authz.PermissionTasksRead}},
+		),
+		func(c *gin.Context) { c.Status(http.StatusOK) },
+	)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/projects/"+uuid.NewString()+"/tasks", nil)
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", w.Code)
+	}
+}

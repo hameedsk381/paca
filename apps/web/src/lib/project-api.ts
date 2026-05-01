@@ -9,6 +9,7 @@ export interface Project {
 	id: string;
 	name: string;
 	description: string;
+	is_public: boolean;
 	task_id_prefix: string;
 	settings: Record<string, unknown>;
 	created_by?: string;
@@ -64,6 +65,7 @@ export async function createProject(payload: {
 	name: string;
 	description?: string;
 	task_id_prefix?: string;
+	is_public?: boolean;
 }): Promise<Project> {
 	const { data } = await apiClient.instance.post<SuccessEnvelope<Project>>(
 		"/projects",
@@ -74,7 +76,12 @@ export async function createProject(payload: {
 
 export async function updateProject(
 	projectId: string,
-	payload: { name?: string; description?: string; task_id_prefix?: string },
+	payload: {
+		name?: string;
+		description?: string;
+		task_id_prefix?: string;
+		is_public?: boolean;
+	},
 ): Promise<Project> {
 	const { data } = await apiClient.instance.patch<SuccessEnvelope<Project>>(
 		`/projects/${projectId}`,

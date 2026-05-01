@@ -13,6 +13,7 @@ type Project struct {
 	Name         string
 	Description  string
 	TaskIDPrefix string
+	IsPublic     bool
 	Settings     map[string]any
 	CreatedBy    *uuid.UUID
 	CreatedAt    time.Time

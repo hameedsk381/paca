@@ -68,6 +68,7 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { useProjectPermissions } from "@/hooks/use-project-permissions";
 import type { ThemeMode } from "@/hooks/use-theme-mode";
 import { useThemeMode } from "@/hooks/use-theme-mode";
+import { currentUserOptionalQueryOptions } from "@/lib/auth-api";
 import {
 	createDocument,
 	createFolder,
@@ -711,6 +712,19 @@ function ProjectSwitcher({
 		? currentProject.name.slice(0, 2).toUpperCase()
 		: null;
 
+	const { data: user } = useQuery(currentUserOptionalQueryOptions);
+
+	if (!user) {
+		return (
+			<div className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-sm font-medium text-sidebar-foreground/80 select-none">
+				<div className="flex size-5 shrink-0 items-center justify-center rounded-md bg-primary/15 text-primary text-[10px] font-bold">
+					{initials ?? <FolderKanban className="size-3" />}
+				</div>
+				<span className="flex-1 truncate text-left">{label}</span>
+			</div>
+		);
+	}
+
 	return (
 		<DropdownMenu open={open} onOpenChange={setOpen}>
 			<DropdownMenuTrigger
@@ -852,7 +866,15 @@ function ProjectNav() {
 	);
 }
 
-function ProjectNavItems({ projectId }: { projectId: string }) {
+const ANON_HIDDEN_SEGMENTS = new Set(["team", "settings"]);
+
+function ProjectNavItems({
+	projectId,
+	isAnonymous,
+}: {
+	projectId: string;
+	isAnonymous?: boolean;
+}) {
 	const location = useRouterState({ select: (s) => s.location.pathname });
 
 	const [collapsed, setCollapsed] = useState(() => {
@@ -899,7 +921,9 @@ function ProjectNavItems({ projectId }: { projectId: string }) {
 			{!collapsed && (
 				<SidebarGroupContent>
 					<SidebarMenu>
-						{PROJECT_NAV_ITEMS.map(({ segment, icon: Icon, label }) => {
+						{PROJECT_NAV_ITEMS.filter(
+							(item) => !isAnonymous || !ANON_HIDDEN_SEGMENTS.has(item.segment),
+						).map(({ segment, icon: Icon, label }) => {
 							const href = segment
 								? `/projects/${projectId}/${segment}`
 								: `/projects/${projectId}`;
@@ -933,7 +957,13 @@ function ProjectNavItems({ projectId }: { projectId: string }) {
 }
 
 // ── Project Interactions Section ───────────────────────────────────────────────
-function ProjectInteractionsSection({ projectId }: { projectId: string }) {
+function ProjectInteractionsSection({
+	projectId,
+	isAnonymous,
+}: {
+	projectId: string;
+	isAnonymous?: boolean;
+}) {
 	const location = useRouterState({ select: (s) => s.location.pathname });
 	const { hasPermission } = usePermissions();
 	const qc = useQueryClient();
@@ -991,7 +1021,7 @@ function ProjectInteractionsSection({ projectId }: { projectId: string }) {
 		e: React.DragEvent,
 		interactionId: string,
 	) => {
-		if (!canEditTasks) return;
+		if (!canEditTasks || isAnonymous) return;
 		if (!e.dataTransfer.types.includes("application/x-paca-task-id")) return;
 		e.preventDefault();
 		e.dataTransfer.dropEffect = "move";
@@ -1029,7 +1059,8 @@ function ProjectInteractionsSection({ projectId }: { projectId: string }) {
 	});
 
 	// Hide entire section if user lacks the "View Sprints" permission
-	if (!canViewSprints) return null;
+	// (anonymous visitors on public projects can always view interactions)
+	if (!canViewSprints && !isAnonymous) return null;
 
 	const openSprints = sprints
 		.filter((s) => s.status === "active")
@@ -1211,6 +1242,7 @@ export function AppSidebar() {
 	const { hasPermission } = usePermissions();
 	const { resolvedMode } = useThemeMode();
 	const { projectId } = useParams({ strict: false });
+	const { data: user } = useQuery(currentUserOptionalQueryOptions);
 
 	const canAccessGlobalRoles =
 		hasPermission("global_roles.read") || hasPermission("global_roles.write");
@@ -1222,13 +1254,26 @@ export function AppSidebar() {
 
 	const showAdminSection = canAccessGlobalRoles || canAccessUsers;
 	const isProjectContext = !!projectId;
+	const isAnonymous = !user;
 
 	return (
 		<Sidebar collapsible="icon">
 			{/* Brand */}
 			<SidebarHeader className="gap-2 pb-2">
 				<div className="flex items-center gap-2.5 px-2 pt-1">
-					<Link to="/home">
+					{user ? (
+						<Link to="/home">
+							<img
+								src={
+									resolvedMode === "dark"
+										? "/paca-logo-dark.svg"
+										: "/paca-logo.svg"
+								}
+								alt="Paca Logo"
+								className="size-8 shrink-0"
+							/>
+						</Link>
+					) : (
 						<img
 							src={
 								resolvedMode === "dark"
@@ -1238,7 +1283,7 @@ export function AppSidebar() {
 							alt="Paca Logo"
 							className="size-8 shrink-0"
 						/>
-					</Link>
+					)}
 					<span className="font-[Syne] font-bold text-[15px] tracking-tight text-sidebar-foreground group-data-[collapsible=icon]:hidden">
 						paca
 					</span>
@@ -1257,23 +1302,28 @@ export function AppSidebar() {
 			<SidebarContent>
 				{isProjectContext ? (
 					<>
-						<ProjectNav />
-						<SidebarSeparator />
-						<ProjectInteractionsSection projectId={projectId} />
+						{user && <ProjectNav />}
+						{user && <SidebarSeparator />}
+						<ProjectInteractionsSection
+							projectId={projectId}
+							isAnonymous={isAnonymous}
+						/>
 						<SidebarSeparator />
 						<DocsSidebarSection projectId={projectId} />
 						<SidebarSeparator />
-						<ProjectNavItems projectId={projectId} />
+						<ProjectNavItems projectId={projectId} isAnonymous={isAnonymous} />
 					</>
 				) : (
 					<>
-						<SidebarGroup>
-							<SidebarGroupContent>
-								<SidebarMenu>
-									<NavItem to="/home" icon={Home} label="Home" />
-								</SidebarMenu>
-							</SidebarGroupContent>
-						</SidebarGroup>
+						{user && (
+							<SidebarGroup>
+								<SidebarGroupContent>
+									<SidebarMenu>
+										<NavItem to="/home" icon={Home} label="Home" />
+									</SidebarMenu>
+								</SidebarGroupContent>
+							</SidebarGroup>
+						)}
 
 						{/* Admin section */}
 						{showAdminSection ? (

@@ -140,6 +140,86 @@ func Authn(tm *jwttoken.Manager, apiKeyAuth ...APIKeyAuthenticator) gin.HandlerF
 	}
 }
 
+// OptionalAuthn tries to authenticate the request using the same credential
+// sources as Authn (cookie → Bearer → API key), but does NOT abort if no
+// credentials are present.  Downstream handlers must check ClaimsFrom for nil
+// to determine whether the caller is authenticated.
+func OptionalAuthn(tm *jwttoken.Manager, apiKeyAuth ...APIKeyAuthenticator) gin.HandlerFunc {
+	var apiKeyAuthenticator APIKeyAuthenticator
+	if len(apiKeyAuth) > 0 {
+		apiKeyAuthenticator = apiKeyAuth[0]
+	}
+	return func(c *gin.Context) {
+		tokenStr := ""
+		isAPIKey := false
+
+		if cookie, err := c.Cookie("access_token"); err == nil && cookie != "" {
+			tokenStr = cookie
+		}
+		if tokenStr == "" {
+			header := c.GetHeader("Authorization")
+			if header != "" {
+				parts := strings.SplitN(header, " ", 2)
+				if len(parts) == 2 {
+					switch strings.ToLower(parts[0]) {
+					case "bearer":
+						tokenStr = parts[1]
+					case "apikey":
+						tokenStr = parts[1]
+						isAPIKey = true
+					}
+				}
+			}
+		}
+		if tokenStr == "" {
+			if v := c.GetHeader("X-API-Key"); v != "" {
+				tokenStr = v
+				isAPIKey = true
+			}
+		}
+
+		// No credentials at all — allow the request through as anonymous.
+		if tokenStr == "" {
+			c.Next()
+			return
+		}
+
+		if isAPIKey {
+			if apiKeyAuthenticator != nil {
+				key, err := apiKeyAuthenticator.Authenticate(c.Request.Context(), tokenStr)
+				if err == nil {
+					syntheticClaims := &domainauth.Claims{
+						RegisteredClaims: jwt.RegisteredClaims{
+							Subject: key.UserID.String(),
+						},
+						Kind: "access",
+					}
+					c.Set(claimsKey, syntheticClaims)
+					c.Set(authMethodKey, "apikey")
+					ctx := context.WithValue(c.Request.Context(), actorContextKey{}, key.UserID)
+					c.Request = c.Request.WithContext(ctx)
+				}
+			}
+			c.Next()
+			return
+		}
+
+		claims, err := tm.Verify(tokenStr)
+		if err != nil || claims.Kind != "access" {
+			// Invalid token provided — reject rather than silently downgrade.
+			presenter.Error(c, apierr.New(apierr.CodeTokenInvalid, "invalid or expired token"))
+			return
+		}
+
+		c.Set(claimsKey, claims)
+		if actorID, parseErr := uuid.Parse(claims.Subject); parseErr == nil {
+			ctx := context.WithValue(c.Request.Context(), actorContextKey{}, actorID)
+			c.Request = c.Request.WithContext(ctx)
+		}
+		c.Next()
+	}
+}
+
 // ClaimsFrom retrieves the authenticated claims from the Gin context.
 // It returns nil if no claims are present (e.g. on unauthenticated routes).
 func ClaimsFrom(c *gin.Context) *domainauth.Claims {

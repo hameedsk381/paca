@@ -214,21 +214,22 @@ func newE2EEnv(t *testing.T) *e2eEnv {
 		RefreshSessionTTL: e2eRefreshSessionTTL,
 	}
 	engine := router.New(router.Deps{
-		TokenManager: tm,
-		APIKeyAuth:   apiKeyService,
-		Authorizer:   authz.NewAuthorizer(authzStore),
-		Health:       handler.NewHealthHandler(),
-		Auth:         handler.NewAuthHandler(authService, cookieCfg),
-		User:         handler.NewUserHandler(userService),
-		GlobalRole:   handler.NewGlobalRoleHandler(globalRoleService),
-		Project:      handler.NewProjectHandler(projectService, authz.NewAuthorizer(authzStore)),
-		Task:         handler.NewTaskHandler(taskService, viewService, activityService),
-		Sprint:       handler.NewSprintHandler(sprintService, viewService),
-		View:         handler.NewViewHandler(viewService),
-		Attachment:   handler.NewAttachmentHandler(attachmentService),
-		APIKey:       handler.NewAPIKeyHandler(apiKeyService),
-		GitHub:       nil, // GitHub handler is wired per-test in github_test.go
-		Log:          log,
+		TokenManager:         tm,
+		APIKeyAuth:           apiKeyService,
+		Authorizer:           authz.NewAuthorizer(authzStore),
+		ProjectVisibilitySvc: projectService,
+		Health:               handler.NewHealthHandler(),
+		Auth:                 handler.NewAuthHandler(authService, cookieCfg),
+		User:                 handler.NewUserHandler(userService),
+		GlobalRole:           handler.NewGlobalRoleHandler(globalRoleService),
+		Project:              handler.NewProjectHandler(projectService, authz.NewAuthorizer(authzStore)),
+		Task:                 handler.NewTaskHandler(taskService, viewService, activityService),
+		Sprint:               handler.NewSprintHandler(sprintService, viewService),
+		View:                 handler.NewViewHandler(viewService),
+		Attachment:           handler.NewAttachmentHandler(attachmentService),
+		APIKey:               handler.NewAPIKeyHandler(apiKeyService),
+		GitHub:               nil, // GitHub handler is wired per-test in github_test.go
+		Log:                  log,
 	})
 
 	srv := httptest.NewServer(engine)

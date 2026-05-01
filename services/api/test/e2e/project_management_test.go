@@ -1214,3 +1214,98 @@ func TestE2EGetMyProjectPermissions_Unauthenticated(t *testing.T) {
 	defer func() { _ = resp.Body.Close() }()
 	assertStatus(t, resp, http.StatusUnauthorized)
 }
+
+// ---------------------------------------------------------------------------
+// Public project e2e tests
+// ---------------------------------------------------------------------------
+
+func TestE2EProject_PublicProjectAnonymousAccess(t *testing.T) {
+	env := newE2EEnv(t)
+	seedProjectAdminUser(t, env, "pub-anon-admin", "pubpass1")
+	adminClient, adminToken := projectAdminLogin(t, env, "pub-anon-admin", "pubpass1")
+
+	// Create a public project.
+	body := jsonBody(t, map[string]any{
+		"name":      "public-project-" + uuid.NewString(),
+		"is_public": true,
+	})
+	req := mustRequest(env.ctx, t, http.MethodPost, env.base+"/api/v1/projects", body)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+adminToken)
+	resp := mustDo(t, adminClient, req)
+	defer func() { _ = resp.Body.Close() }()
+	assertStatus(t, resp, http.StatusCreated)
+	var env2 envelope
+	decodeJSON(t, resp, &env2)
+	data := assertDataMap(t, env2)
+	projID, _ := data["id"].(string)
+	if isPublic, _ := data["is_public"].(bool); !isPublic {
+		t.Fatalf("expected is_public=true in create response")
+	}
+
+	// Anonymous GET (no auth) should succeed.
+	getURL := fmt.Sprintf("%s/api/v1/projects/%s", env.base, projID)
+	anonReq := mustRequest(env.ctx, t, http.MethodGet, getURL, nil)
+	anonResp := mustDo(t, env.client, anonReq)
+	defer func() { _ = anonResp.Body.Close() }()
+	assertStatus(t, anonResp, http.StatusOK)
+	var getEnv envelope
+	decodeJSON(t, anonResp, &getEnv)
+	getData := assertDataMap(t, getEnv)
+	if isPublic, _ := getData["is_public"].(bool); !isPublic {
+		t.Fatalf("expected is_public=true in anonymous get response")
+	}
+}
+
+func TestE2EProject_PrivateProjectAnonymousAccessDenied(t *testing.T) {
+	env := newE2EEnv(t)
+	seedProjectAdminUser(t, env, "priv-anon-admin", "privpass1")
+	adminClient, adminToken := projectAdminLogin(t, env, "priv-anon-admin", "privpass1")
+
+	// Create a private project (default is_public: false).
+	projID := createProjectViaAPI(t, env, adminClient, adminToken, "private-project-"+uuid.NewString(), "")
+
+	// Anonymous GET should return 401.
+	getURL := fmt.Sprintf("%s/api/v1/projects/%s", env.base, projID)
+	anonReq := mustRequest(env.ctx, t, http.MethodGet, getURL, nil)
+	anonResp := mustDo(t, env.client, anonReq)
+	defer func() { _ = anonResp.Body.Close() }()
+	assertStatus(t, anonResp, http.StatusUnauthorized)
+}
+
+func TestE2EProject_UpdateProjectVisibility(t *testing.T) {
+	env := newE2EEnv(t)
+	seedProjectAdminUser(t, env, "vis-admin", "vispass1")
+	adminClient, adminToken := projectAdminLogin(t, env, "vis-admin", "vispass1")
+
+	// Create a private project.
+	projID := createProjectViaAPI(t, env, adminClient, adminToken, "vis-project-"+uuid.NewString(), "")
+
+	// Anonymous access should fail.
+	getURL := fmt.Sprintf("%s/api/v1/projects/%s", env.base, projID)
+	anonReq := mustRequest(env.ctx, t, http.MethodGet, getURL, nil)
+	anonResp := mustDo(t, env.client, anonReq)
+	defer func() { _ = anonResp.Body.Close() }()
+	assertStatus(t, anonResp, http.StatusUnauthorized)
+
+	// PATCH to make it public.
+	patchBody := jsonBody(t, map[string]any{"is_public": true})
+	patchReq := mustRequest(env.ctx, t, http.MethodPatch, getURL, patchBody)
+	patchReq.Header.Set("Content-Type", "application/json")
+	patchReq.Header.Set("Authorization", "Bearer "+adminToken)
+	patchResp := mustDo(t, adminClient, patchReq)
+	defer func() { _ = patchResp.Body.Close() }()
+	assertStatus(t, patchResp, http.StatusOK)
+	var patchEnv envelope
+	decodeJSON(t, patchResp, &patchEnv)
+	patchData := assertDataMap(t, patchEnv)
+	if isPublic, _ := patchData["is_public"].(bool); !isPublic {
+		t.Fatalf("expected is_public=true after PATCH")
+	}
+
+	// Anonymous GET should now succeed.
+	anonReq2 := mustRequest(env.ctx, t, http.MethodGet, getURL, nil)
+	anonResp2 := mustDo(t, env.client, anonReq2)
+	defer func() { _ = anonResp2.Body.Close() }()
+	assertStatus(t, anonResp2, http.StatusOK)
+}

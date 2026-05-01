@@ -7,10 +7,11 @@ import { projectQueryOptions } from "@/lib/project-api";
 
 export const Route = createFileRoute("/_authenticated/projects/$projectId")({
 	loader: async ({ context: { queryClient }, params: { projectId } }) => {
+		const user = queryClient.getQueryData(["auth", "me-optional"]);
 		await queryClient
 			.ensureQueryData(projectQueryOptions(projectId))
 			.catch(() => {
-				throw redirect({ to: "/home" });
+				throw redirect({ to: user ? "/home" : "/" });
 			});
 	},
 	component: ProjectLayout,

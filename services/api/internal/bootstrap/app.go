@@ -184,14 +184,15 @@ func New(cfg *config.Config) (*App, error) {
 	}
 
 	deps := router.Deps{
-		TokenManager: tokenManager,
-		APIKeyAuth:   apiKeyService,
-		Authorizer:   authorizer,
-		Health:       handler.NewHealthHandler(),
-		Auth:         handler.NewAuthHandler(authService, cookieCfg),
-		User:         handler.NewUserHandler(userService, authService),
-		GlobalRole:   handler.NewGlobalRoleHandler(globalRoleService),
-		Project:      handler.NewProjectHandler(projectService, authorizer, handler.WithProjectDefaultViews(viewService, taskService)),
+		TokenManager:         tokenManager,
+		APIKeyAuth:           apiKeyService,
+		Authorizer:           authorizer,
+		Health:               handler.NewHealthHandler(),
+		Auth:                 handler.NewAuthHandler(authService, cookieCfg),
+		User:                 handler.NewUserHandler(userService, authService),
+		GlobalRole:           handler.NewGlobalRoleHandler(globalRoleService),
+		ProjectVisibilitySvc: projectService,
+		Project:              handler.NewProjectHandler(projectService, authorizer, handler.WithProjectDefaultViews(viewService, taskService)),
 		Task: handler.NewTaskHandler(taskService, viewService, activityService,
 			handler.WithTaskPublisher(publisher)),
 		Sprint:       handler.NewSprintHandler(sprintService, viewService, handler.WithSprintDefaultTaskTypes(taskService)),

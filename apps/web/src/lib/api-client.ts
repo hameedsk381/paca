@@ -46,6 +46,7 @@ export class ApiClient {
 			async (error) => {
 				const originalRequest = error.config as InternalAxiosRequestConfig & {
 					_retry?: boolean;
+					_skipAuthRefresh?: boolean;
 				};
 
 				// Redirect to the forced password-change page on this specific 403.
@@ -63,6 +64,12 @@ export class ApiClient {
 				}
 
 				if (error.response?.status !== 401 || originalRequest._retry) {
+					return Promise.reject(error);
+				}
+
+				// Skip refresh for requests marked as public access (e.g. optional
+				// /users/me calls on public project pages).
+				if (originalRequest._skipAuthRefresh) {
 					return Promise.reject(error);
 				}
 

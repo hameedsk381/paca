@@ -14,6 +14,7 @@ type CreateProjectRequest struct {
 	Name         string         `json:"name" binding:"required"`
 	Description  string         `json:"description"`
 	TaskIDPrefix string         `json:"task_id_prefix"`
+	IsPublic     bool           `json:"is_public"`
 	Settings     map[string]any `json:"settings"`
 }
 
@@ -22,6 +23,7 @@ type UpdateProjectRequest struct {
 	Name         string         `json:"name"`
 	Description  string         `json:"description"`
 	TaskIDPrefix string         `json:"task_id_prefix"`
+	IsPublic     *bool          `json:"is_public"`
 	Settings     map[string]any `json:"settings"`
 }
 
@@ -31,6 +33,7 @@ type ProjectResponse struct {
 	Name         string         `json:"name"`
 	Description  string         `json:"description"`
 	TaskIDPrefix string         `json:"task_id_prefix"`
+	IsPublic     bool           `json:"is_public"`
 	Settings     map[string]any `json:"settings"`
 	CreatedBy    *uuid.UUID     `json:"created_by,omitempty"`
 	CreatedAt    time.Time      `json:"created_at"`
@@ -47,6 +50,7 @@ func ProjectFromEntity(p *projectdom.Project) ProjectResponse {
 		Name:         p.Name,
 		Description:  p.Description,
 		TaskIDPrefix: p.TaskIDPrefix,
+		IsPublic:     p.IsPublic,
 		Settings:     settings,
 		CreatedBy:    p.CreatedBy,
 		CreatedAt:    p.CreatedAt,

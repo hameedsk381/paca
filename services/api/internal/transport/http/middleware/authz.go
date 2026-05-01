@@ -1,9 +1,13 @@
 package middleware
 
 import (
+	"context"
+	"errors"
+
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/paca/api/internal/apierr"
+	projectdom "github.com/paca/api/internal/domain/project"
 	"github.com/paca/api/internal/platform/authz"
 	"github.com/paca/api/internal/transport/http/presenter"
 )
@@ -147,5 +151,91 @@ func RequireAnyPermissions(authorizer *authz.Authorizer, groups ...PermissionGro
 			return
 		}
 		presenter.Error(c, apierr.New(apierr.CodeForbidden, "insufficient permissions"))
+	}
+}
+
+// ProjectVisibilityChecker is the minimal interface the public-project
+// middleware requires.  It is satisfied by *projectsvc.Service.
+type ProjectVisibilityChecker interface {
+	IsProjectPublic(ctx context.Context, id uuid.UUID) (bool, error)
+}
+
+// RequirePublicProjectOrPermissions grants access when at least one of the
+// following conditions is true:
+//
+//   - The request is authenticated and the caller satisfies any of the
+//     provided PermissionGroups (same logic as RequireAnyPermissions).
+//   - The project identified by the "projectId" route parameter has
+//     is_public = true, regardless of authentication status.
+//
+// Use this instead of RequireAnyPermissions on read-only project-scoped routes
+// that should be accessible to anonymous users when the project is public.
+func RequirePublicProjectOrPermissions(checker ProjectVisibilityChecker, authorizer *authz.Authorizer, groups ...PermissionGroup) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		claims := ClaimsFrom(c)
+
+		// Authenticated path: run normal permission check.
+		if claims != nil {
+			userID, err := uuid.Parse(claims.Subject)
+			if err != nil {
+				presenter.Error(c, apierr.New(apierr.CodeBadRequest, "invalid subject claim"))
+				return
+			}
+			var firstScopeErr error
+			for _, group := range groups {
+				resolver := group.Scope
+				if resolver == nil {
+					resolver = GlobalScope()
+				}
+				projectID, err := resolver(c)
+				if err != nil {
+					if firstScopeErr == nil {
+						firstScopeErr = err
+					}
+					continue
+				}
+				allowed, err := authorizer.HasPermissions(c.Request.Context(), userID, projectID, claims.Role, group.Permissions...)
+				if err != nil {
+					presenter.Error(c, err)
+					return
+				}
+				if allowed {
+					c.Next()
+					return
+				}
+			}
+			if firstScopeErr != nil {
+				presenter.Error(c, firstScopeErr)
+				return
+			}
+			presenter.Error(c, apierr.New(apierr.CodeForbidden, "insufficient permissions"))
+			return
+		}
+
+		// Unauthenticated path: allow only when the project is public.
+		projectIDStr := c.Param("projectId")
+		if projectIDStr == "" {
+			presenter.Error(c, apierr.New(apierr.CodeUnauthenticated, "unauthenticated"))
+			return
+		}
+		projectID, err := uuid.Parse(projectIDStr)
+		if err != nil {
+			presenter.Error(c, apierr.New(apierr.CodeBadRequest, "invalid project id"))
+			return
+		}
+		isPublic, err := checker.IsProjectPublic(c.Request.Context(), projectID)
+		if err != nil {
+			if errors.Is(err, projectdom.ErrNotFound) {
+				presenter.Error(c, apierr.New(apierr.CodeUnauthenticated, "unauthenticated"))
+				return
+			}
+			presenter.Error(c, err)
+			return
+		}
+		if !isPublic {
+			presenter.Error(c, apierr.New(apierr.CodeUnauthenticated, "unauthenticated"))
+			return
+		}
+		c.Next()
 	}
 }

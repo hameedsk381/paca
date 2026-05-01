@@ -241,18 +241,19 @@ func buildAttachmentTestRouter(attachRepo *fakeAttachmentRepo, store *fakeStorag
 	log := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
 	return router.New(router.Deps{
-		TokenManager: tm,
-		Authorizer:   authz.NewAuthorizer(permStore),
-		Health:       handler.NewHealthHandler(),
-		Auth:         handler.NewAuthHandler(authService, testCookieCfg),
-		User:         handler.NewUserHandler(userService),
-		GlobalRole:   handler.NewGlobalRoleHandler(&fakeGlobalRoleService{}),
-		Project:      handler.NewProjectHandler(projectService, authz.NewAuthorizer(permStore)),
-		Task:         handler.NewTaskHandler(taskService, viewService, active),
-		Sprint:       handler.NewSprintHandler(sprintService, viewService),
-		View:         handler.NewViewHandler(viewService),
-		Attachment:   handler.NewAttachmentHandler(attachmentService),
-		Log:          log,
+		TokenManager:         tm,
+		Authorizer:           authz.NewAuthorizer(permStore),
+		ProjectVisibilitySvc: projectService,
+		Health:               handler.NewHealthHandler(),
+		Auth:                 handler.NewAuthHandler(authService, testCookieCfg),
+		User:                 handler.NewUserHandler(userService),
+		GlobalRole:           handler.NewGlobalRoleHandler(&fakeGlobalRoleService{}),
+		Project:              handler.NewProjectHandler(projectService, authz.NewAuthorizer(permStore)),
+		Task:                 handler.NewTaskHandler(taskService, viewService, active),
+		Sprint:               handler.NewSprintHandler(sprintService, viewService),
+		View:                 handler.NewViewHandler(viewService),
+		Attachment:           handler.NewAttachmentHandler(attachmentService),
+		Log:                  log,
 	})
 }
 

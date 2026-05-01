@@ -45,9 +45,28 @@ export async function getMe(): Promise<User> {
 	return data.data;
 }
 
+export async function getMeOptional(): Promise<User | null> {
+	try {
+		const { data } = await apiClient.instance.get<SuccessEnvelope<User>>(
+			"/users/me",
+			{ _skipAuthRefresh: true } as Record<string, unknown>,
+		);
+		return data.data;
+	} catch {
+		return null;
+	}
+}
+
 export const currentUserQueryOptions = queryOptions({
 	queryKey: ["auth", "me"],
 	queryFn: getMe,
+	retry: false,
+	staleTime: 5 * 60 * 1000,
+});
+
+export const currentUserOptionalQueryOptions = queryOptions({
+	queryKey: ["auth", "me-optional"],
+	queryFn: getMeOptional,
 	retry: false,
 	staleTime: 5 * 60 * 1000,
 });

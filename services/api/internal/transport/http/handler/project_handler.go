@@ -122,6 +122,7 @@ func (h *ProjectHandler) CreateProject(c *gin.Context) {
 		Name:         req.Name,
 		Description:  req.Description,
 		TaskIDPrefix: req.TaskIDPrefix,
+		IsPublic:     req.IsPublic,
 		Settings:     req.Settings,
 		CreatedBy:    createdBy,
 	})
@@ -162,6 +163,7 @@ func (h *ProjectHandler) UpdateProject(c *gin.Context) {
 		Name:         req.Name,
 		Description:  req.Description,
 		TaskIDPrefix: req.TaskIDPrefix,
+		IsPublic:     req.IsPublic,
 		Settings:     req.Settings,
 	})
 	if err != nil {

@@ -60,6 +60,7 @@ const mockProject: Project = {
 	id: "p1",
 	name: "Alpha",
 	description: "First project",
+	is_public: false,
 	task_id_prefix: "ALPH",
 	settings: {},
 	created_by: "u1",
@@ -165,6 +166,17 @@ describe("project-api", () => {
 		});
 	});
 
+	it("createProject forwards is_public when provided", async () => {
+		const publicProject = { ...mockProject, is_public: true };
+		mockPost.mockResolvedValue(ok(publicProject));
+
+		await createProject({ name: "Public", is_public: true });
+		expect(mockPost).toHaveBeenCalledWith("/projects", {
+			name: "Public",
+			is_public: true,
+		});
+	});
+
 	it("updateProject patches by id and unwraps the updated project", async () => {
 		const updated = { ...mockProject, name: "Alpha v2" };
 		mockPatch.mockResolvedValue(ok(updated));
@@ -175,6 +187,16 @@ describe("project-api", () => {
 		expect(mockPatch).toHaveBeenCalledWith("/projects/p1", {
 			name: "Alpha v2",
 		});
+	});
+
+	it("updateProject forwards is_public when toggling visibility", async () => {
+		const publicProject = { ...mockProject, is_public: true };
+		mockPatch.mockResolvedValue(ok(publicProject));
+
+		await expect(updateProject("p1", { is_public: true })).resolves.toEqual(
+			publicProject,
+		);
+		expect(mockPatch).toHaveBeenCalledWith("/projects/p1", { is_public: true });
 	});
 
 	it("deleteProject sends DELETE to correct URL and returns undefined", async () => {

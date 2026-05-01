@@ -18,7 +18,11 @@ import {
 	SidebarMenuButton,
 	SidebarMenuItem,
 } from "@/components/ui/sidebar";
-import { currentUserQueryOptions, logout } from "@/lib/auth-api";
+import {
+	currentUserOptionalQueryOptions,
+	currentUserQueryOptions,
+	logout,
+} from "@/lib/auth-api";
 
 function getInitials(name: string): string {
 	return name
@@ -33,10 +37,27 @@ function getInitials(name: string): string {
 export function UserMenu() {
 	const navigate = useNavigate();
 	const queryClient = useQueryClient();
-	const { data: user } = useQuery(currentUserQueryOptions);
+	const { data: user } = useQuery(currentUserOptionalQueryOptions);
 	const [isLoggingOut, setIsLoggingOut] = useState(false);
 
-	if (!user) return null;
+	if (!user) {
+		return (
+			<SidebarMenu>
+				<SidebarMenuItem>
+					<SidebarMenuButton
+						tooltip="Sign in"
+						onClick={() => {
+							window.location.href = "/";
+						}}
+						className="text-muted-foreground hover:text-foreground hover:bg-sidebar-accent/60 transition-all"
+					>
+						<User className="size-4" />
+						<span>Sign in</span>
+					</SidebarMenuButton>
+				</SidebarMenuItem>
+			</SidebarMenu>
+		);
+	}
 
 	const displayName = user.full_name || user.username;
 	const initials = getInitials(displayName);

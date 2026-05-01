@@ -19,6 +19,7 @@ type projectRecord struct {
 	Name         string `gorm:"not null"`
 	Description  string
 	TaskIDPrefix string  `gorm:"column:task_id_prefix;not null;default:''"`
+	IsPublic     bool    `gorm:"column:is_public;not null;default:false"`
 	Settings     []byte  `gorm:"type:jsonb;not null"`
 	CreatedBy    *string `gorm:"type:uuid"`
 	CreatedAt    time.Time
@@ -200,6 +201,7 @@ func (r *ProjectRepository) Update(ctx context.Context, p *projectdom.Project) e
 			"name":           p.Name,
 			"description":    p.Description,
 			"task_id_prefix": p.TaskIDPrefix,
+			"is_public":      p.IsPublic,
 			"settings":       settings,
 			"created_by":     createdBy,
 		})
@@ -504,6 +506,7 @@ func toProjectEntity(rec *projectRecord) (*projectdom.Project, error) {
 		Name:         rec.Name,
 		Description:  rec.Description,
 		TaskIDPrefix: rec.TaskIDPrefix,
+		IsPublic:     rec.IsPublic,
 		Settings:     settings,
 		CreatedBy:    createdBy,
 		CreatedAt:    rec.CreatedAt,
@@ -525,6 +528,7 @@ func fromProjectEntity(p *projectdom.Project) (*projectRecord, error) {
 		Name:         p.Name,
 		Description:  p.Description,
 		TaskIDPrefix: p.TaskIDPrefix,
+		IsPublic:     p.IsPublic,
 		Settings:     settings,
 		CreatedBy:    createdBy,
 		CreatedAt:    p.CreatedAt,

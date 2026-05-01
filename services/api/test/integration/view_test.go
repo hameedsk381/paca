@@ -199,17 +199,18 @@ func buildViewTestRouter(viewRepo *fakeViewRepoIT, sprintRepo *fakeSprintRepoIT,
 	log := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
 	return router.New(router.Deps{
-		TokenManager: tm,
-		Authorizer:   authz.NewAuthorizer(store),
-		Health:       handler.NewHealthHandler(),
-		Auth:         handler.NewAuthHandler(authService, testCookieCfg),
-		User:         handler.NewUserHandler(userService),
-		GlobalRole:   handler.NewGlobalRoleHandler(&fakeGlobalRoleService{}),
-		Project:      handler.NewProjectHandler(projectService, authz.NewAuthorizer(store)),
-		Task:         handler.NewTaskHandler(taskService, viewService, activityService),
-		Sprint:       handler.NewSprintHandler(sprintService, viewService),
-		View:         handler.NewViewHandler(viewService),
-		Log:          log,
+		TokenManager:         tm,
+		Authorizer:           authz.NewAuthorizer(store),
+		ProjectVisibilitySvc: projectService,
+		Health:               handler.NewHealthHandler(),
+		Auth:                 handler.NewAuthHandler(authService, testCookieCfg),
+		User:                 handler.NewUserHandler(userService),
+		GlobalRole:           handler.NewGlobalRoleHandler(&fakeGlobalRoleService{}),
+		Project:              handler.NewProjectHandler(projectService, authz.NewAuthorizer(store)),
+		Task:                 handler.NewTaskHandler(taskService, viewService, activityService),
+		Sprint:               handler.NewSprintHandler(sprintService, viewService),
+		View:                 handler.NewViewHandler(viewService),
+		Log:                  log,
 	})
 }
 
