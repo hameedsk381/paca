@@ -6,11 +6,11 @@ name: cd
 #
 # Artefacts produced per release:
 #   ghcr.io/paca-ai/paca-api:<tag>       — Go API service Docker image
-#   docker.io/<dockerhub-username>/paca-api:<tag>     — Go API service Docker image
+#   <dockerhub-username>/paca-api:<tag>  — Go API service Docker image
 #   ghcr.io/paca-ai/paca-realtime:<tag>  — Node realtime service Docker image
-#   docker.io/<dockerhub-username>/paca-realtime:<tag> — Node realtime service Docker image
+#   <dockerhub-username>/paca-realtime:<tag> — Node realtime service Docker image
 #   ghcr.io/paca-ai/paca-web:<tag>       — Web app Docker image (nginx)
-#   docker.io/<dockerhub-username>/paca-web:<tag>     — Web app Docker image (nginx)
+#   <dockerhub-username>/paca-web:<tag>  — Web app Docker image (nginx)
 #   registry.npmjs.org @paca-ai/paca-mcp — MCP server npm package
 
 on:
@@ -24,7 +24,6 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
-  DOCKERHUB_REGISTRY: docker.io
 
 # ─────────────────────────────────────────────────────────────────────────────
 # API service image
@@ -52,7 +51,6 @@ jobs:
       - name: Log in to DockerHub
         uses: docker/login-action@v3
         with:
-          registry: ${{ env.DOCKERHUB_REGISTRY }}
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
@@ -62,7 +60,7 @@ jobs:
         with:
           images: |
             ${{ env.REGISTRY }}/${{ github.repository_owner }}/paca-api
-            ${{ env.DOCKERHUB_REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/paca-api
+            ${{ secrets.DOCKERHUB_USERNAME }}/paca-api
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
@@ -104,7 +102,6 @@ jobs:
       - name: Log in to DockerHub
         uses: docker/login-action@v3
         with:
-          registry: ${{ env.DOCKERHUB_REGISTRY }}
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
@@ -114,7 +111,7 @@ jobs:
         with:
           images: |
             ${{ env.REGISTRY }}/${{ github.repository_owner }}/paca-realtime
-            ${{ env.DOCKERHUB_REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/paca-realtime
+            ${{ secrets.DOCKERHUB_USERNAME }}/paca-realtime
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
@@ -161,7 +158,6 @@ jobs:
       - name: Log in to DockerHub
         uses: docker/login-action@v3
         with:
-          registry: ${{ env.DOCKERHUB_REGISTRY }}
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
@@ -171,7 +167,7 @@ jobs:
         with:
           images: |
             ${{ env.REGISTRY }}/${{ github.repository_owner }}/paca-web
-            ${{ env.DOCKERHUB_REGISTRY }}/${{ secrets.DOCKERHUB_USERNAME }}/paca-web
+            ${{ secrets.DOCKERHUB_USERNAME }}/paca-web
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
