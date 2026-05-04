@@ -21,6 +21,7 @@ import {
 	projectQueryOptions,
 } from "@/lib/project-api";
 import { cn } from "@/lib/utils";
+import { ExtensionPoint } from "@/lib/plugins/extension-point";
 import { getTaskTypeIconComponent } from "../../task-types/task-type-icons";
 import { getPriority } from "../priority";
 import { TaskActivityPane as ActivityPane } from "./activity-pane";
@@ -410,6 +411,14 @@ export function TaskDetailModal({
 								projectId={projectId}
 								taskId={task.id}
 								canEdit={canEdit}
+							/>
+						)}
+
+						{/* Plugin extension points */}
+						{projectId && (
+							<ExtensionPoint
+								point="task.detail.section"
+								componentProps={{ projectId, taskId: task.id, canEdit }}
 							/>
 						)}
 

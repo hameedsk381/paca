@@ -22,6 +22,7 @@ import (
 	"github.com/paca/api/internal/platform/database"
 	"github.com/paca/api/internal/platform/logger"
 	"github.com/paca/api/internal/platform/messaging"
+	pluginrt "github.com/paca/api/internal/platform/plugin"
 	"github.com/paca/api/internal/platform/secret"
 	"github.com/paca/api/internal/platform/storage"
 	jwttoken "github.com/paca/api/internal/platform/token"
@@ -34,6 +35,7 @@ import (
 	githubsvc "github.com/paca/api/internal/service/github"
 	globalrolesvc "github.com/paca/api/internal/service/globalrole"
 	notificationsvc "github.com/paca/api/internal/service/notification"
+	pluginsvc "github.com/paca/api/internal/service/plugin"
 	projectsvc "github.com/paca/api/internal/service/project"
 	sprintsvc "github.com/paca/api/internal/service/sprint"
 	tasksvc "github.com/paca/api/internal/service/task"
@@ -181,6 +183,56 @@ func New(cfg *config.Config) (*App, error) {
 		githubHandler = handler.NewGitHubHandler(githubService)
 	}
 
+	// --- Plugin infrastructure ----------------------------------------------
+	// Get the underlying *sql.DB for plugin-scoped operations (migration runner
+	// and DB host function bridge both need raw database/sql, not GORM).
+	sqlDB, err := db.DB()
+	if err != nil {
+		return nil, fmt.Errorf("bootstrap: plugin: get sql.DB: %w", err)
+	}
+
+	pluginStore, err := pluginrt.NewStore(context.Background(), pluginrt.StoreConfig{
+		Store:    cfg.Plugins.Store,
+		WASMDir:  cfg.Plugins.WASMDir,
+		S3Bucket: cfg.Storage.Bucket,
+		S3Prefix: cfg.Plugins.S3Prefix,
+		S3Region: cfg.Storage.Region,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("bootstrap: plugin store: %w", err)
+	}
+
+	pluginMigrationRunner := pluginrt.NewMigrationRunner(sqlDB, pluginStore, log)
+
+	pluginRuntime := pluginrt.NewRuntime(pluginStore, pluginrt.HostServices{
+		DB:        sqlDB,
+		Log:       log,
+		Publisher: publisher,
+	}, pluginrt.DefaultResourceLimits(), log)
+
+	pluginRepo := pgRepo.NewPluginRepository(db)
+	pluginService := pluginsvc.New(pluginRepo)
+
+	// Load all enabled plugins from the DB into the WASM runtime.
+	installedPlugins, err := pluginService.ListPlugins(context.Background())
+	if err != nil {
+		return nil, fmt.Errorf("bootstrap: plugin: list: %w", err)
+	}
+	// Run per-plugin DB migrations before loading WASM modules.
+	for _, p := range installedPlugins {
+		if !p.Enabled {
+			continue
+		}
+		if err := pluginMigrationRunner.Run(context.Background(), p.Name); err != nil {
+			log.Error("plugin: migration failed", "name", p.Name, "error", err)
+		}
+	}
+	if err := pluginRuntime.LoadAll(context.Background(), installedPlugins); err != nil {
+		log.Error("plugin: some plugins failed to load", "error", err)
+	}
+
+	pluginHandler := handler.NewPluginHandler(pluginService, pluginRuntime)
+
 	// --- Handlers -----------------------------------------------------------
 	cookieCfg := handler.CookieConfig{
 		Secure:            cfg.Server.CookieSecure,
@@ -209,6 +261,7 @@ func New(cfg *config.Config) (*App, error) {
 		Notification: handler.NewNotificationHandler(notificationService),
 		GitHub:       githubHandler,
 		APIKey:       handler.NewAPIKeyHandler(apiKeyService),
+		Plugin:       pluginHandler,
 		Log:          log,
 	}
 

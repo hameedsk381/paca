@@ -35,6 +35,7 @@ type Deps struct {
 	Notification         *handler.NotificationHandler
 	GitHub               *handler.GitHubHandler
 	APIKey               *handler.APIKeyHandler
+	Plugin               *handler.PluginHandler
 	Log                  *slog.Logger
 }
 
@@ -721,6 +722,45 @@ func New(deps Deps) *gin.Engine {
 		// GitHub webhook — public endpoint; signature verification is done in the handler.
 		if deps.GitHub != nil {
 			v1.POST("/github/webhook", deps.GitHub.ReceiveWebhook)
+		}
+
+		// Plugin routes — management (admin), extension settings (admin), and proxy (per-plugin).
+		if deps.Plugin != nil {
+			// Public listing: any authenticated user can see installed plugins.
+			pluginGroup := v1.Group("/plugins")
+			pluginGroup.Use(httpmw.Authn(deps.TokenManager, deps.APIKeyAuth))
+			pluginGroup.Use(httpmw.RequireFreshPassword())
+			{
+				pluginGroup.GET("", deps.Plugin.ListPlugins)
+
+				// Plugin proxy routes — forward requests to plugin WASM handlers.
+				// :path is a wildcard that captures the remainder of the URL after the prefix.
+				pluginGroup.Any("/:pluginId/projects/:projectId/*path",
+					httpmw.RequirePermissions(deps.Authorizer, httpmw.ProjectScopeFromParam("projectId"), authz.PermissionProjectsRead),
+					deps.Plugin.ProxyRequest,
+				)
+			}
+
+			// Admin plugin management — requires global users.write permission
+			// (no dedicated plugin permission exists yet).
+			adminPlugins := v1.Group("/admin/plugins")
+			adminPlugins.Use(httpmw.Authn(deps.TokenManager, deps.APIKeyAuth))
+			adminPlugins.Use(httpmw.RequireFreshPassword())
+			adminPlugins.Use(httpmw.RequirePermissions(deps.Authorizer, httpmw.GlobalScope(), authz.PermissionUsersWrite))
+			{
+				adminPlugins.POST("", deps.Plugin.InstallPlugin)
+				adminPlugins.PATCH("/:pluginId", deps.Plugin.UpdatePlugin)
+				adminPlugins.DELETE("/:pluginId", deps.Plugin.DeletePlugin)
+			}
+
+			// Admin extension settings — system-wide ordering/visibility, super admin only.
+			adminExtSettings := v1.Group("/admin/plugin-extension-settings")
+			adminExtSettings.Use(httpmw.Authn(deps.TokenManager, deps.APIKeyAuth))
+			adminExtSettings.Use(httpmw.RequireFreshPassword())
+			adminExtSettings.Use(httpmw.RequirePermissions(deps.Authorizer, httpmw.GlobalScope(), authz.PermissionUsersWrite))
+			{
+				adminExtSettings.PATCH("", deps.Plugin.UpdateExtensionSetting)
+			}
 		}
 	}
 

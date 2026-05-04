@@ -15,6 +15,7 @@ import {
 	currentUserQueryOptions,
 } from "@/lib/auth-api";
 import { connectSocket, disconnectSocket } from "@/lib/socket-client";
+import { PluginRegistryProvider } from "@/lib/plugins/registry";
 
 const PROJECT_ROUTE_RE = /^\/projects\/[^/]+/;
 
@@ -84,6 +85,7 @@ function AuthenticatedLayout() {
 	}, [queryClient, user]);
 
 	return (
+		<PluginRegistryProvider>
 		<SidebarProvider className="h-svh">
 			<AppSidebar />
 			<SidebarInset className="min-w-0 overflow-hidden">
@@ -102,5 +104,6 @@ function AuthenticatedLayout() {
 				</div>
 			</SidebarInset>
 		</SidebarProvider>
+		</PluginRegistryProvider>
 	);
 }

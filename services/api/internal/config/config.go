@@ -13,6 +13,7 @@ type Config struct {
 	Admin    AdminConfig
 	Storage  StorageConfig
 	GitHub   GitHubConfig
+	Plugins  PluginsConfig
 	Env      string // development | production
 }
 
@@ -90,6 +91,25 @@ type StorageConfig struct {
 	AccessKeyID     string
 	SecretAccessKey string
 	UseSSL          bool // set true when Endpoint is HTTPS
+}
+
+// PluginsConfig holds runtime settings for the plugin subsystem.
+type PluginsConfig struct {
+	// Store selects where WASM plugin binaries are loaded from.
+	// Accepted values: "local" (default) or "s3".
+	// When "local", WASMDir is the root directory on the local filesystem.
+	// When "s3", the Storage bucket and prefix are reused (STORAGE_BUCKET /
+	// PLUGINS_S3_PREFIX).
+	Store string
+
+	// WASMDir is the local filesystem directory that contains plugin WASM
+	// binaries.  Each plugin is expected at {WASMDir}/{pluginName}/backend.wasm.
+	// Only used when Store is "local".  Defaults to "./plugins".
+	WASMDir string
+
+	// S3Prefix is the S3 key prefix used when Store is "s3".
+	// Plugin WASM binaries are fetched from {S3Prefix}/{pluginName}/backend.wasm.
+	S3Prefix string
 }
 
 // GitHubConfig holds settings for the GitHub integration feature.

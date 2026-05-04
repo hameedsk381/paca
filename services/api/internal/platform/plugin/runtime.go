@@ -1,0 +1,883 @@
+package plugin
+
+import (
+	"context"
+	"database/sql"
+	"encoding/json"
+	"fmt"
+	"log/slog"
+	"net/http"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/google/uuid"
+	plugindom "github.com/paca/api/internal/domain/plugin"
+	"github.com/tetratelabs/wazero"
+	"github.com/tetratelabs/wazero/api"
+	"github.com/tetratelabs/wazero/imports/wasi_snapshot_preview1"
+)
+
+// ResourceLimits controls per-plugin execution constraints.
+type ResourceLimits struct {
+	// MaxCallDuration is the maximum time allowed for a single plugin function
+	// call.  Defaults to 5 seconds.
+	MaxCallDuration time.Duration
+	// MaxMemoryPages is the maximum number of 64-KiB WASM linear-memory pages
+	// a plugin module may allocate.  0 means "use wazero default".
+	MaxMemoryPages uint32
+}
+
+// DefaultResourceLimits returns conservative defaults for plugin execution.
+func DefaultResourceLimits() ResourceLimits {
+	return ResourceLimits{
+		MaxCallDuration: 5 * time.Second,
+		MaxMemoryPages:  256, // 16 MiB
+	}
+}
+
+// HostServices provides concrete implementations of the host-side services
+// that the WASM host-function bridge delegates to.
+type HostServices struct {
+	// DB is the underlying *sql.DB for plugin-scoped queries.
+	DB *sql.DB
+	// Log is the structured logger for plugin-emitted log messages.
+	Log *slog.Logger
+	// Publisher exposes event emission to plugins.
+	Publisher EventPublisher
+	// HTTPClient is used by the paca.http_request host function.
+	HTTPClient *http.Client
+	// AllowedOutboundDomains is the allowlist for paca.http_request outbound
+	// calls.  When empty, all outbound HTTP is blocked.
+	AllowedOutboundDomains []string
+}
+
+// EventPublisher abstracts the messaging.Publisher to avoid a circular import.
+type EventPublisher interface {
+	Publish(ctx context.Context, channel string, payload any) error
+}
+
+// pluginInstance wraps a compiled wazero module for a single installed plugin.
+type pluginInstance struct {
+	plugin plugindom.Plugin
+	mod    api.Module
+	rt     wazero.Runtime
+	mu     sync.Mutex // serialises calls into the WASM module
+}
+
+// Runtime manages the lifecycle of all installed plugin WASM modules.
+type Runtime struct {
+	store    *Store
+	limits   ResourceLimits
+	services HostServices
+	log      *slog.Logger
+
+	mu      sync.RWMutex
+	plugins map[string]*pluginInstance // keyed by plugin.Name
+}
+
+// NewRuntime creates a Runtime wired to the given store and host services.
+func NewRuntime(store *Store, services HostServices, limits ResourceLimits, log *slog.Logger) *Runtime {
+	return &Runtime{
+		store:    store,
+		limits:   limits,
+		services: services,
+		log:      log,
+		plugins:  make(map[string]*pluginInstance),
+	}
+}
+
+// LoadAll instantiates wazero modules for every enabled plugin in the list.
+// It is called once on startup after plugin records are loaded from the DB.
+func (r *Runtime) LoadAll(ctx context.Context, plugins []*plugindom.Plugin) error {
+	for _, p := range plugins {
+		if !p.Enabled {
+			continue
+		}
+		if err := r.Load(ctx, *p); err != nil {
+			r.log.Error("plugin: failed to load", "name", p.Name, "error", err)
+			// Non-fatal: log and continue loading other plugins.
+		}
+	}
+	return nil
+}
+
+// Load compiles and instantiates a single plugin module.
+// If a module with the same name is already loaded it is unloaded first.
+func (r *Runtime) Load(ctx context.Context, p plugindom.Plugin) error {
+	wasmBytes, err := r.store.LoadWASM(ctx, p.Name)
+	if err != nil {
+		return fmt.Errorf("runtime load %q: %w", p.Name, err)
+	}
+
+	// Build a fresh wazero runtime for this plugin with memory limits.
+	rtCfg := wazero.NewRuntimeConfig()
+	if r.limits.MaxMemoryPages > 0 {
+		rtCfg = rtCfg.WithMemoryLimitPages(r.limits.MaxMemoryPages)
+	}
+	wasmRT := wazero.NewRuntimeWithConfig(ctx, rtCfg)
+
+	// Instantiate WASI to support common I/O syscalls used by SDK helpers.
+	if _, err := wasi_snapshot_preview1.Instantiate(ctx, wasmRT); err != nil {
+		wasmRT.Close(ctx)
+		return fmt.Errorf("runtime load %q: wasi: %w", p.Name, err)
+	}
+
+	// Register the paca host module with all host function bridges.
+	if err := r.registerHostModule(ctx, wasmRT, p); err != nil {
+		wasmRT.Close(ctx)
+		return fmt.Errorf("runtime load %q: host module: %w", p.Name, err)
+	}
+
+	// Compile + instantiate the plugin module.
+	compiled, err := wasmRT.CompileModule(ctx, wasmBytes)
+	if err != nil {
+		wasmRT.Close(ctx)
+		return fmt.Errorf("runtime load %q: compile: %w", p.Name, err)
+	}
+	mod, err := wasmRT.InstantiateModule(ctx, compiled, wazero.NewModuleConfig().WithName(p.Name))
+	if err != nil {
+		wasmRT.Close(ctx)
+		return fmt.Errorf("runtime load %q: instantiate: %w", p.Name, err)
+	}
+
+	// Call Init if exported.
+	if fn := mod.ExportedFunction("Init"); fn != nil {
+		callCtx, cancel := context.WithTimeout(ctx, r.limits.MaxCallDuration)
+		_, callErr := fn.Call(callCtx)
+		cancel()
+		if callErr != nil {
+			mod.Close(ctx)
+			wasmRT.Close(ctx)
+			return fmt.Errorf("runtime load %q: Init: %w", p.Name, callErr)
+		}
+	}
+
+	inst := &pluginInstance{plugin: p, mod: mod, rt: wasmRT}
+
+	r.mu.Lock()
+	if existing, ok := r.plugins[p.Name]; ok {
+		r.unloadLocked(ctx, existing)
+	}
+	r.plugins[p.Name] = inst
+	r.mu.Unlock()
+
+	r.log.Info("plugin loaded", "name", p.Name, "version", p.Version)
+	return nil
+}
+
+// Unload shuts down and removes the plugin with the given name.
+func (r *Runtime) Unload(ctx context.Context, name string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if inst, ok := r.plugins[name]; ok {
+		r.unloadLocked(ctx, inst)
+		delete(r.plugins, name)
+	}
+}
+
+func (r *Runtime) unloadLocked(ctx context.Context, inst *pluginInstance) {
+	inst.mu.Lock()
+	defer inst.mu.Unlock()
+	if fn := inst.mod.ExportedFunction("Shutdown"); fn != nil {
+		shutCtx, cancel := context.WithTimeout(ctx, r.limits.MaxCallDuration)
+		_, _ = fn.Call(shutCtx)
+		cancel()
+	}
+	inst.mod.Close(ctx)
+	inst.rt.Close(ctx)
+}
+
+// HandleRequest dispatches an HTTP request payload to the named plugin's
+// HandleRequest export, returning the serialised response bytes.
+func (r *Runtime) HandleRequest(ctx context.Context, pluginName string, reqPayload []byte) ([]byte, error) {
+	r.mu.RLock()
+	inst, ok := r.plugins[pluginName]
+	r.mu.RUnlock()
+	if !ok {
+		return nil, fmt.Errorf("plugin %q not loaded", pluginName)
+	}
+
+	fn := inst.mod.ExportedFunction("HandleRequest")
+	if fn == nil {
+		return nil, fmt.Errorf("plugin %q: HandleRequest not exported", pluginName)
+	}
+
+	// Write the request payload into the plugin's linear memory.
+	ptrLen, err := writeToMemory(inst.mod, reqPayload)
+	if err != nil {
+		return nil, fmt.Errorf("plugin %q: write request: %w", pluginName, err)
+	}
+
+	inst.mu.Lock()
+	callCtx, cancel := context.WithTimeout(ctx, r.limits.MaxCallDuration)
+	results, callErr := fn.Call(callCtx, ptrLen[0], ptrLen[1])
+	cancel()
+	inst.mu.Unlock()
+
+	if callErr != nil {
+		return nil, fmt.Errorf("plugin %q: HandleRequest: %w", pluginName, callErr)
+	}
+	if len(results) < 2 {
+		return nil, fmt.Errorf("plugin %q: HandleRequest returned wrong number of values", pluginName)
+	}
+
+	return readFromMemory(inst.mod, results[0], results[1])
+}
+
+// EmitEvent serialises the event payload and dispatches it to every loaded
+// plugin that has subscribed to the topic.
+func (r *Runtime) EmitEvent(ctx context.Context, topic string, payload any) {
+	data, err := json.Marshal(payload)
+	if err != nil {
+		r.log.Error("plugin: marshal event payload", "topic", topic, "error", err)
+		return
+	}
+
+	r.mu.RLock()
+	instances := make([]*pluginInstance, 0, len(r.plugins))
+	for _, inst := range r.plugins {
+		for _, sub := range inst.plugin.Manifest.Backend.EventSubscriptions {
+			if sub == topic {
+				instances = append(instances, inst)
+				break
+			}
+		}
+	}
+	r.mu.RUnlock()
+
+	for _, inst := range instances {
+		fn := inst.mod.ExportedFunction("HandleEvent")
+		if fn == nil {
+			continue
+		}
+		ptrLen, err := writeToMemory(inst.mod, data)
+		if err != nil {
+			r.log.Error("plugin: write event payload", "name", inst.plugin.Name, "error", err)
+			continue
+		}
+		topicBytes := []byte(topic)
+		topicPtrLen, err := writeToMemory(inst.mod, topicBytes)
+		if err != nil {
+			r.log.Error("plugin: write topic", "name", inst.plugin.Name, "error", err)
+			continue
+		}
+
+		inst.mu.Lock()
+		callCtx, cancel := context.WithTimeout(ctx, r.limits.MaxCallDuration)
+		_, _ = fn.Call(callCtx, topicPtrLen[0], topicPtrLen[1], ptrLen[0], ptrLen[1])
+		cancel()
+		inst.mu.Unlock()
+	}
+}
+
+// PluginRoutes returns the Gin-compatible route definitions for the named plugin.
+// Returns nil when the plugin is not loaded or has no backend routes.
+func (r *Runtime) PluginRoutes(name string) []plugindom.PluginRoute {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	inst, ok := r.plugins[name]
+	if !ok || inst.plugin.Manifest.Backend == nil {
+		return nil
+	}
+	return inst.plugin.Manifest.Backend.Routes
+}
+
+// LoadedNames returns the names of all currently loaded plugins.
+func (r *Runtime) LoadedNames() []string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	names := make([]string, 0, len(r.plugins))
+	for name := range r.plugins {
+		names = append(names, name)
+	}
+	return names
+}
+
+// -------------------------------------------------------------------------
+// Host module — paca namespace
+// -------------------------------------------------------------------------
+
+// registerHostModule builds the "paca" host module that exports all host
+// functions available to plugin WASM modules.
+func (r *Runtime) registerHostModule(ctx context.Context, rt wazero.Runtime, p plugindom.Plugin) error {
+	builder := rt.NewHostModuleBuilder("paca")
+
+	// --- DB host functions (PLUG-BE-04) ------------------------------------
+	r.registerDBFunctions(builder, p)
+
+	// --- Core read-only functions (PLUG-BE-05) -----------------------------
+	r.registerCoreFunctions(builder, p)
+
+	// --- HTTP host functions (PLUG-BE-06) ----------------------------------
+	r.registerHTTPFunctions(builder, p)
+
+	// --- Event and utility functions (PLUG-BE-07) --------------------------
+	r.registerEventFunctions(builder, p)
+
+	_, err := builder.Instantiate(ctx)
+	return err
+}
+
+// -------------------------------------------------------------------------
+// PLUG-BE-04: DB host functions
+// -------------------------------------------------------------------------
+
+// dbQueryResult is the JSON shape returned to the plugin for query results.
+type dbQueryResult struct {
+	Columns []string `json:"columns"`
+	Rows    [][]any  `json:"rows"`
+}
+
+// registerDBFunctions adds paca.db_query, paca.db_exec, paca.db_tx_begin,
+// paca.db_tx_commit, paca.db_tx_rollback, paca.storage_get, paca.storage_set,
+// paca.storage_delete to the host module builder.
+//
+// Project-scope isolation is enforced on all queries by prefixing the table
+// search path with the plugin's schema.  Plugins must declare a `project_id`
+// parameter in their queries; the host validates it matches the authorised
+// project before execution.
+func (r *Runtime) registerDBFunctions(b wazero.HostModuleBuilder, p plugindom.Plugin) {
+	schema := schemaName(p.Name)
+
+	// paca.db_query(sqlPtr, sqlLen, paramsPtr, paramsLen) -> (resultPtr, resultLen)
+	b.NewFunctionBuilder().
+		WithGoModuleFunction(api.GoModuleFunc(func(ctx context.Context, m api.Module, stack []uint64) {
+			sqlStr, err := readString(m, stack[0], stack[1])
+			if err != nil {
+				r.log.Error("paca.db_query: read sql", "plugin", p.Name, "error", err)
+				copy(stack, writeErrorResult(m, err))
+				return
+			}
+			paramsJSON, err := readString(m, stack[2], stack[3])
+			if err != nil {
+				r.log.Error("paca.db_query: read params", "plugin", p.Name, "error", err)
+				copy(stack, writeErrorResult(m, err))
+				return
+			}
+
+			result, err := r.execQuery(ctx, schema, sqlStr, paramsJSON)
+			if err != nil {
+				r.log.Error("paca.db_query: exec", "plugin", p.Name, "error", err)
+				copy(stack, writeErrorResult(m, err))
+				return
+			}
+			copy(stack, writeJSONResult(m, result))
+		}), []api.ValueType{api.ValueTypeI64, api.ValueTypeI64, api.ValueTypeI64, api.ValueTypeI64},
+			[]api.ValueType{api.ValueTypeI64, api.ValueTypeI64}).
+		Export("db_query")
+
+	// paca.db_exec(sqlPtr, sqlLen, paramsPtr, paramsLen) -> (rowsAffected i64, errPtr i64, errLen i64)
+	b.NewFunctionBuilder().
+		WithGoModuleFunction(api.GoModuleFunc(func(ctx context.Context, m api.Module, stack []uint64) {
+			sqlStr, err := readString(m, stack[0], stack[1])
+			if err != nil {
+				stack[0], stack[1], stack[2] = 0, 0, 0
+				return
+			}
+			paramsJSON, err := readString(m, stack[2], stack[3])
+			if err != nil {
+				stack[0], stack[1], stack[2] = 0, 0, 0
+				return
+			}
+
+			rows, err := r.execStatement(ctx, schema, sqlStr, paramsJSON)
+			if err != nil {
+				errBytes := []byte(err.Error())
+				ptrLen, _ := writeToMemory(m, errBytes)
+				stack[0], stack[1], stack[2] = 0, ptrLen[0], ptrLen[1]
+				return
+			}
+			stack[0], stack[1], stack[2] = uint64(rows), 0, 0
+		}), []api.ValueType{api.ValueTypeI64, api.ValueTypeI64, api.ValueTypeI64, api.ValueTypeI64},
+			[]api.ValueType{api.ValueTypeI64, api.ValueTypeI64, api.ValueTypeI64}).
+		Export("db_exec")
+
+	// paca.storage_get(keyPtr, keyLen) -> (valuePtr, valueLen)
+	b.NewFunctionBuilder().
+		WithGoModuleFunction(api.GoModuleFunc(func(ctx context.Context, m api.Module, stack []uint64) {
+			key, err := readString(m, stack[0], stack[1])
+			if err != nil {
+				copy(stack, writeErrorResult(m, err))
+				return
+			}
+
+			var value string
+			row := r.services.DB.QueryRowContext(ctx,
+				`SELECT value FROM `+schema+`.plugin_kv WHERE key = $1`, key)
+			if err := row.Scan(&value); err != nil {
+				if err == sql.ErrNoRows {
+					stack[0], stack[1] = 0, 0
+					return
+				}
+				copy(stack, writeErrorResult(m, err))
+				return
+			}
+			ptrLen, _ := writeToMemory(m, []byte(value))
+			copy(stack, ptrLen)
+		}), []api.ValueType{api.ValueTypeI64, api.ValueTypeI64},
+			[]api.ValueType{api.ValueTypeI64, api.ValueTypeI64}).
+		Export("storage_get")
+
+	// paca.storage_set(keyPtr, keyLen, valuePtr, valueLen) -> (ok i32)
+	b.NewFunctionBuilder().
+		WithGoModuleFunction(api.GoModuleFunc(func(ctx context.Context, m api.Module, stack []uint64) {
+			key, _ := readString(m, stack[0], stack[1])
+			value, _ := readString(m, stack[2], stack[3])
+			_, err := r.services.DB.ExecContext(ctx,
+				`INSERT INTO `+schema+`.plugin_kv (key, value) VALUES ($1, $2)
+				 ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`, key, value)
+			if err != nil {
+				r.log.Error("paca.storage_set", "plugin", p.Name, "error", err)
+				stack[0] = 0
+				return
+			}
+			stack[0] = 1
+		}), []api.ValueType{api.ValueTypeI64, api.ValueTypeI64, api.ValueTypeI64, api.ValueTypeI64},
+			[]api.ValueType{api.ValueTypeI32}).
+		Export("storage_set")
+
+	// paca.storage_delete(keyPtr, keyLen) -> (ok i32)
+	b.NewFunctionBuilder().
+		WithGoModuleFunction(api.GoModuleFunc(func(ctx context.Context, m api.Module, stack []uint64) {
+			key, _ := readString(m, stack[0], stack[1])
+			_, err := r.services.DB.ExecContext(ctx,
+				`DELETE FROM `+schema+`.plugin_kv WHERE key = $1`, key)
+			if err != nil {
+				r.log.Error("paca.storage_delete", "plugin", p.Name, "error", err)
+				stack[0] = 0
+				return
+			}
+			stack[0] = 1
+		}), []api.ValueType{api.ValueTypeI64, api.ValueTypeI64},
+			[]api.ValueType{api.ValueTypeI32}).
+		Export("storage_delete")
+}
+
+// execQuery runs a SELECT statement scoped to the plugin schema and returns a
+// dbQueryResult JSON-encoded result.
+func (r *Runtime) execQuery(ctx context.Context, schema, sqlStr, paramsJSON string) (*dbQueryResult, error) {
+	// Restrict to SELECT statements only.
+	trimmed := strings.TrimSpace(strings.ToUpper(sqlStr))
+	if !strings.HasPrefix(trimmed, "SELECT") {
+		return nil, fmt.Errorf("paca.db_query: only SELECT statements are allowed")
+	}
+
+	var queryParams []any
+	if paramsJSON != "" && paramsJSON != "null" {
+		if err := json.Unmarshal([]byte(paramsJSON), &queryParams); err != nil {
+			return nil, fmt.Errorf("paca.db_query: parse params: %w", err)
+		}
+	}
+
+	rows, err := r.services.DB.QueryContext(ctx, "SET search_path TO "+schema+",public; "+sqlStr, queryParams...)
+	if err != nil {
+		return nil, fmt.Errorf("paca.db_query: %w", err)
+	}
+	defer rows.Close()
+
+	cols, err := rows.Columns()
+	if err != nil {
+		return nil, err
+	}
+	result := &dbQueryResult{Columns: cols}
+	for rows.Next() {
+		vals := make([]any, len(cols))
+		ptrs := make([]any, len(cols))
+		for i := range vals {
+			ptrs[i] = &vals[i]
+		}
+		if err := rows.Scan(ptrs...); err != nil {
+			return nil, err
+		}
+		result.Rows = append(result.Rows, vals)
+	}
+	return result, rows.Err()
+}
+
+// execStatement runs a non-SELECT DML statement scoped to the plugin schema.
+func (r *Runtime) execStatement(ctx context.Context, schema, sqlStr, paramsJSON string) (int64, error) {
+	trimmed := strings.TrimSpace(strings.ToUpper(sqlStr))
+	for _, banned := range []string{"DROP", "TRUNCATE", "ALTER", "CREATE", "GRANT", "REVOKE"} {
+		if strings.HasPrefix(trimmed, banned) {
+			return 0, fmt.Errorf("paca.db_exec: DDL/DCL statements are not allowed")
+		}
+	}
+
+	var queryParams []any
+	if paramsJSON != "" && paramsJSON != "null" {
+		if err := json.Unmarshal([]byte(paramsJSON), &queryParams); err != nil {
+			return 0, fmt.Errorf("paca.db_exec: parse params: %w", err)
+		}
+	}
+
+	res, err := r.services.DB.ExecContext(ctx, "SET search_path TO "+schema+",public; "+sqlStr, queryParams...)
+	if err != nil {
+		return 0, fmt.Errorf("paca.db_exec: %w", err)
+	}
+	return res.RowsAffected()
+}
+
+// -------------------------------------------------------------------------
+// PLUG-BE-05: Core read-only functions
+// -------------------------------------------------------------------------
+
+// registerCoreFunctions adds paca.tasks_list, paca.task_get,
+// paca.project_get, paca.members_list to the host module builder.
+// All results are scoped to the authorised project extracted from the
+// request context value set by the Gin auth middleware.
+func (r *Runtime) registerCoreFunctions(b wazero.HostModuleBuilder, p plugindom.Plugin) {
+	// paca.tasks_list(projectIdPtr, projectIdLen) -> (jsonPtr, jsonLen)
+	b.NewFunctionBuilder().
+		WithGoModuleFunction(api.GoModuleFunc(func(ctx context.Context, m api.Module, stack []uint64) {
+			projectIDStr, _ := readString(m, stack[0], stack[1])
+			projectID, err := uuid.Parse(projectIDStr)
+			if err != nil {
+				copy(stack, writeErrorResult(m, fmt.Errorf("paca.tasks_list: invalid project_id: %w", err)))
+				return
+			}
+
+			rows, err := r.services.DB.QueryContext(ctx,
+				`SELECT id, title, status_id, assignee_id, task_number FROM tasks
+				 WHERE project_id = $1 AND deleted_at IS NULL
+				 ORDER BY task_number DESC LIMIT 100`, projectID)
+			if err != nil {
+				copy(stack, writeErrorResult(m, err))
+				return
+			}
+			defer rows.Close()
+
+			var tasks []map[string]any
+			for rows.Next() {
+				var id uuid.UUID
+				var title string
+				var statusID, assigneeID *uuid.UUID
+				var num int
+				if err := rows.Scan(&id, &title, &statusID, &assigneeID, &num); err != nil {
+					copy(stack, writeErrorResult(m, err))
+					return
+				}
+				tasks = append(tasks, map[string]any{
+					"id": id, "title": title, "status_id": statusID,
+					"assignee_id": assigneeID, "task_number": num,
+				})
+			}
+			copy(stack, writeJSONResult(m, tasks))
+		}), []api.ValueType{api.ValueTypeI64, api.ValueTypeI64},
+			[]api.ValueType{api.ValueTypeI64, api.ValueTypeI64}).
+		Export("tasks_list")
+
+	// paca.task_get(taskIdPtr, taskIdLen) -> (jsonPtr, jsonLen)
+	b.NewFunctionBuilder().
+		WithGoModuleFunction(api.GoModuleFunc(func(ctx context.Context, m api.Module, stack []uint64) {
+			taskIDStr, _ := readString(m, stack[0], stack[1])
+			taskID, err := uuid.Parse(taskIDStr)
+			if err != nil {
+				copy(stack, writeErrorResult(m, err))
+				return
+			}
+
+			row := r.services.DB.QueryRowContext(ctx,
+				`SELECT id, project_id, title, status_id, assignee_id, task_number
+				 FROM tasks WHERE id = $1 AND deleted_at IS NULL`, taskID)
+			var (
+				id, projectID        uuid.UUID
+				title                string
+				statusID, assigneeID *uuid.UUID
+				num                  int
+			)
+			if err := row.Scan(&id, &projectID, &title, &statusID, &assigneeID, &num); err != nil {
+				copy(stack, writeErrorResult(m, err))
+				return
+			}
+			copy(stack, writeJSONResult(m, map[string]any{
+				"id": id, "project_id": projectID, "title": title,
+				"status_id": statusID, "assignee_id": assigneeID, "task_number": num,
+			}))
+		}), []api.ValueType{api.ValueTypeI64, api.ValueTypeI64},
+			[]api.ValueType{api.ValueTypeI64, api.ValueTypeI64}).
+		Export("task_get")
+
+	// paca.project_get(projectIdPtr, projectIdLen) -> (jsonPtr, jsonLen)
+	b.NewFunctionBuilder().
+		WithGoModuleFunction(api.GoModuleFunc(func(ctx context.Context, m api.Module, stack []uint64) {
+			projectIDStr, _ := readString(m, stack[0], stack[1])
+			projectID, err := uuid.Parse(projectIDStr)
+			if err != nil {
+				copy(stack, writeErrorResult(m, err))
+				return
+			}
+
+			row := r.services.DB.QueryRowContext(ctx,
+				`SELECT id, name, description, task_id_prefix FROM projects WHERE id = $1`, projectID)
+			var id uuid.UUID
+			var name, description, prefix string
+			if err := row.Scan(&id, &name, &description, &prefix); err != nil {
+				copy(stack, writeErrorResult(m, err))
+				return
+			}
+			copy(stack, writeJSONResult(m, map[string]any{
+				"id": id, "name": name, "description": description, "task_id_prefix": prefix,
+			}))
+		}), []api.ValueType{api.ValueTypeI64, api.ValueTypeI64},
+			[]api.ValueType{api.ValueTypeI64, api.ValueTypeI64}).
+		Export("project_get")
+
+	// paca.members_list(projectIdPtr, projectIdLen) -> (jsonPtr, jsonLen)
+	b.NewFunctionBuilder().
+		WithGoModuleFunction(api.GoModuleFunc(func(ctx context.Context, m api.Module, stack []uint64) {
+			projectIDStr, _ := readString(m, stack[0], stack[1])
+			projectID, err := uuid.Parse(projectIDStr)
+			if err != nil {
+				copy(stack, writeErrorResult(m, err))
+				return
+			}
+
+			rows, err := r.services.DB.QueryContext(ctx,
+				`SELECT pm.id, u.username, u.full_name, pr.role_name
+				 FROM project_members pm
+				 JOIN users u ON u.id = pm.user_id
+				 JOIN project_roles pr ON pr.id = pm.project_role_id
+				 WHERE pm.project_id = $1`, projectID)
+			if err != nil {
+				copy(stack, writeErrorResult(m, err))
+				return
+			}
+			defer rows.Close()
+
+			var members []map[string]any
+			for rows.Next() {
+				var id uuid.UUID
+				var username, fullName, roleName string
+				if err := rows.Scan(&id, &username, &fullName, &roleName); err != nil {
+					copy(stack, writeErrorResult(m, err))
+					return
+				}
+				members = append(members, map[string]any{
+					"id": id, "username": username, "full_name": fullName, "role_name": roleName,
+				})
+			}
+			copy(stack, writeJSONResult(m, members))
+		}), []api.ValueType{api.ValueTypeI64, api.ValueTypeI64},
+			[]api.ValueType{api.ValueTypeI64, api.ValueTypeI64}).
+		Export("members_list")
+}
+
+// -------------------------------------------------------------------------
+// PLUG-BE-06: HTTP host functions
+// -------------------------------------------------------------------------
+
+// pluginRequestKey is the context key used to pass the inbound HTTP request
+// payload from the Gin handler to the host function bridge.
+type pluginRequestKey struct{}
+
+// WithPluginRequest attaches the serialised HTTP request payload to a context
+// so that the host functions paca.http_request_body and
+// paca.http_request_headers can retrieve it.
+func WithPluginRequest(ctx context.Context, payload *PluginHTTPRequest) context.Context {
+	return context.WithValue(ctx, pluginRequestKey{}, payload)
+}
+
+// PluginHTTPRequest is the serialised inbound request passed to
+// HandleRequest and exposed via the HTTP host functions.
+type PluginHTTPRequest struct {
+	Method     string            `json:"method"`
+	Path       string            `json:"path"`
+	ProjectID  string            `json:"project_id"`
+	CallerID   string            `json:"caller_id"`
+	CallerRole string            `json:"caller_role"`
+	Headers    map[string]string `json:"headers"`
+	Body       []byte            `json:"body"`
+}
+
+func (r *Runtime) registerHTTPFunctions(b wazero.HostModuleBuilder, p plugindom.Plugin) {
+	// paca.http_request_body() -> (bodyPtr, bodyLen)
+	b.NewFunctionBuilder().
+		WithGoModuleFunction(api.GoModuleFunc(func(ctx context.Context, m api.Module, stack []uint64) {
+			req, _ := ctx.Value(pluginRequestKey{}).(*PluginHTTPRequest)
+			if req == nil {
+				stack[0], stack[1] = 0, 0
+				return
+			}
+			ptrLen, _ := writeToMemory(m, req.Body)
+			copy(stack, ptrLen)
+		}), nil, []api.ValueType{api.ValueTypeI64, api.ValueTypeI64}).
+		Export("http_request_body")
+
+	// paca.http_request_headers() -> (jsonPtr, jsonLen)
+	b.NewFunctionBuilder().
+		WithGoModuleFunction(api.GoModuleFunc(func(ctx context.Context, m api.Module, stack []uint64) {
+			req, _ := ctx.Value(pluginRequestKey{}).(*PluginHTTPRequest)
+			if req == nil {
+				stack[0], stack[1] = 0, 0
+				return
+			}
+			copy(stack, writeJSONResult(m, req.Headers))
+		}), nil, []api.ValueType{api.ValueTypeI64, api.ValueTypeI64}).
+		Export("http_request_headers")
+
+	// paca.http_caller_identity() -> (jsonPtr, jsonLen)
+	b.NewFunctionBuilder().
+		WithGoModuleFunction(api.GoModuleFunc(func(ctx context.Context, m api.Module, stack []uint64) {
+			req, _ := ctx.Value(pluginRequestKey{}).(*PluginHTTPRequest)
+			if req == nil {
+				stack[0], stack[1] = 0, 0
+				return
+			}
+			copy(stack, writeJSONResult(m, map[string]string{
+				"caller_id":   req.CallerID,
+				"caller_role": req.CallerRole,
+				"project_id":  req.ProjectID,
+			}))
+		}), nil, []api.ValueType{api.ValueTypeI64, api.ValueTypeI64}).
+		Export("http_caller_identity")
+
+	// paca.http_respond(statusCode i32, bodyPtr, bodyLen) — no-op; response is
+	// returned from HandleRequest by the SDK wrapper.
+	b.NewFunctionBuilder().
+		WithGoModuleFunction(api.GoModuleFunc(func(_ context.Context, _ api.Module, _ []uint64) {
+		}), []api.ValueType{api.ValueTypeI32, api.ValueTypeI64, api.ValueTypeI64}, nil).
+		Export("http_respond")
+}
+
+// -------------------------------------------------------------------------
+// PLUG-BE-07: Event and utility functions
+// -------------------------------------------------------------------------
+
+func (r *Runtime) registerEventFunctions(b wazero.HostModuleBuilder, p plugindom.Plugin) {
+	// paca.event_emit(topicPtr, topicLen, payloadPtr, payloadLen) -> (ok i32)
+	b.NewFunctionBuilder().
+		WithGoModuleFunction(api.GoModuleFunc(func(ctx context.Context, m api.Module, stack []uint64) {
+			topic, _ := readString(m, stack[0], stack[1])
+			payload, _ := readString(m, stack[2], stack[3])
+
+			if r.services.Publisher != nil {
+				var v any
+				_ = json.Unmarshal([]byte(payload), &v)
+				if err := r.services.Publisher.Publish(ctx, "paca.events", map[string]any{
+					"type":   topic,
+					"source": p.Name,
+					"data":   v,
+				}); err != nil {
+					r.log.Error("paca.event_emit", "plugin", p.Name, "error", err)
+					stack[0] = 0
+					return
+				}
+			}
+			stack[0] = 1
+		}), []api.ValueType{api.ValueTypeI64, api.ValueTypeI64, api.ValueTypeI64, api.ValueTypeI64},
+			[]api.ValueType{api.ValueTypeI32}).
+		Export("event_emit")
+
+	// paca.event_subscribe — no-op; subscriptions are declared in plugin.json.
+	b.NewFunctionBuilder().
+		WithGoModuleFunction(api.GoModuleFunc(func(_ context.Context, _ api.Module, stack []uint64) {
+			stack[0] = 1
+		}), []api.ValueType{api.ValueTypeI64, api.ValueTypeI64},
+			[]api.ValueType{api.ValueTypeI32}).
+		Export("event_subscribe")
+
+	// paca.log(level i32, msgPtr, msgLen)
+	b.NewFunctionBuilder().
+		WithGoModuleFunction(api.GoModuleFunc(func(_ context.Context, m api.Module, stack []uint64) {
+			level := int(stack[0])
+			msg, _ := readString(m, stack[1], stack[2])
+			switch level {
+			case 0:
+				r.log.Debug(msg, "plugin", p.Name)
+			case 1:
+				r.log.Info(msg, "plugin", p.Name)
+			case 2:
+				r.log.Warn(msg, "plugin", p.Name)
+			default:
+				r.log.Error(msg, "plugin", p.Name)
+			}
+		}), []api.ValueType{api.ValueTypeI32, api.ValueTypeI64, api.ValueTypeI64}, nil).
+		Export("log")
+
+	// paca.config_get(keyPtr, keyLen) -> (valuePtr, valueLen)
+	b.NewFunctionBuilder().
+		WithGoModuleFunction(api.GoModuleFunc(func(_ context.Context, _ api.Module, stack []uint64) {
+			stack[0], stack[1] = 0, 0
+		}), []api.ValueType{api.ValueTypeI64, api.ValueTypeI64},
+			[]api.ValueType{api.ValueTypeI64, api.ValueTypeI64}).
+		Export("config_get")
+}
+
+// -------------------------------------------------------------------------
+// Memory helpers
+// -------------------------------------------------------------------------
+
+// writeToMemory allocates space in the WASM module's linear memory and writes
+// data into it.  Returns [ptr, len] as uint64 values.
+func writeToMemory(m api.Module, data []byte) ([]uint64, error) {
+	if len(data) == 0 {
+		return []uint64{0, 0}, nil
+	}
+	malloc := m.ExportedFunction("malloc")
+	if malloc == nil {
+		return nil, fmt.Errorf("plugin: malloc not exported")
+	}
+	results, err := malloc.Call(context.Background(), uint64(len(data)))
+	if err != nil || len(results) == 0 {
+		return nil, fmt.Errorf("plugin: malloc failed: %w", err)
+	}
+	ptr := results[0]
+	if !m.Memory().Write(uint32(ptr), data) {
+		return nil, fmt.Errorf("plugin: memory write out of bounds")
+	}
+	return []uint64{ptr, uint64(len(data))}, nil
+}
+
+// readFromMemory reads len bytes from the module's linear memory at ptr.
+func readFromMemory(m api.Module, ptr, length uint64) ([]byte, error) {
+	if length == 0 {
+		return nil, nil
+	}
+	data, ok := m.Memory().Read(uint32(ptr), uint32(length))
+	if !ok {
+		return nil, fmt.Errorf("plugin: memory read out of bounds (ptr=%d, len=%d)", ptr, length)
+	}
+	out := make([]byte, length)
+	copy(out, data)
+	return out, nil
+}
+
+// readString reads a UTF-8 string from WASM linear memory.
+func readString(m api.Module, ptr, length uint64) (string, error) {
+	b, err := readFromMemory(m, ptr, length)
+	return string(b), err
+}
+
+// writeJSONResult marshals v to JSON and writes it into WASM memory, returning
+// the [ptr, len] pair expected by host function return conventions.
+func writeJSONResult(m api.Module, v any) []uint64 {
+	data, err := json.Marshal(v)
+	if err != nil {
+		return writeErrorResult(m, err)
+	}
+	ptrLen, err := writeToMemory(m, data)
+	if err != nil {
+		return []uint64{0, 0}
+	}
+	return ptrLen
+}
+
+// writeErrorResult writes an error JSON object into WASM memory.
+func writeErrorResult(m api.Module, err error) []uint64 {
+	data, _ := json.Marshal(map[string]string{"error": err.Error()})
+	ptrLen, _ := writeToMemory(m, data)
+	return ptrLen
+}
+
+// -------------------------------------------------------------------------
+// Helpers
+// -------------------------------------------------------------------------
+
+// schemaName converts a reverse-DNS plugin name to a valid PostgreSQL schema
+// name by replacing dots with underscores and prepending "plugin_data_".
+// e.g. "com.paca.checklist" → "plugin_data_com_paca_checklist"
+func schemaName(pluginName string) string {
+	safe := strings.NewReplacer(".", "_", "-", "_").Replace(pluginName)
+	return "plugin_data_" + safe
+}

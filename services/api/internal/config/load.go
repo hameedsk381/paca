@@ -162,6 +162,14 @@ func Load() (*Config, error) {
 			// webhook creation when linking GitHub repositories.
 			WebhookURL: buildWebhookURL(env("PUBLIC_URL", "")),
 		},
+		Plugins: PluginsConfig{
+			// PLUGINS_STORE controls where WASM binaries are loaded from.
+			// "local" reads from the local filesystem; "s3" reads from the
+			// object-storage bucket configured via STORAGE_* variables.
+			Store:    env("PLUGINS_STORE", "local"),
+			WASMDir:  env("PLUGINS_WASM_DIR", "./plugins"),
+			S3Prefix: env("PLUGINS_S3_PREFIX", "plugins"),
+		},
 	}, nil
 }
 

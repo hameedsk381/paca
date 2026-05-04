@@ -24,6 +24,7 @@ import {
 	MoreHorizontal,
 	Pencil,
 	Plus,
+	Puzzle,
 	Settings,
 	Shield,
 	Sun,
@@ -86,6 +87,7 @@ import { sprintsQueryOptions, updateTask } from "@/lib/interaction-api";
 import { projectQueryOptions, projectsQueryOptions } from "@/lib/project-api";
 import { cn } from "@/lib/utils";
 
+import { ExtensionPoint } from "@/lib/plugins/extension-point";
 import { UserMenu } from "./user-menu";
 
 // ── Docs Tree ─────────────────────────────────────────────────────────────────
@@ -1250,9 +1252,11 @@ export function AppSidebar() {
 	const canAccessUsers =
 		hasPermission("users.read") || hasPermission("users.write");
 
+	const canAccessPlugins = hasPermission("users.write");
+
 	const canCreateProject = hasPermission("projects.create");
 
-	const showAdminSection = canAccessGlobalRoles || canAccessUsers;
+	const showAdminSection = canAccessGlobalRoles || canAccessUsers || canAccessPlugins;
 	const isProjectContext = !!projectId;
 	const isAnonymous = !user;
 
@@ -1312,6 +1316,10 @@ export function AppSidebar() {
 						<DocsSidebarSection projectId={projectId} />
 						<SidebarSeparator />
 						<ProjectNavItems projectId={projectId} isAnonymous={isAnonymous} />
+						<ExtensionPoint
+							point="sidebar.project.section"
+							componentProps={{ projectId }}
+						/>
 					</>
 				) : (
 					<>
@@ -1325,6 +1333,7 @@ export function AppSidebar() {
 							</SidebarGroup>
 						)}
 
+						<ExtensionPoint point="sidebar.general.section" />
 						{/* Admin section */}
 						{showAdminSection ? (
 							<>
@@ -1342,6 +1351,13 @@ export function AppSidebar() {
 											) : null}
 											{canAccessUsers ? (
 												<NavItem to="/admin/users" icon={Users} label="Users" />
+											) : null}
+											{canAccessPlugins ? (
+												<NavItem
+													to="/admin/plugins"
+													icon={Puzzle}
+													label="Plugins"
+												/>
 											) : null}
 										</SidebarMenu>
 									</SidebarGroupContent>

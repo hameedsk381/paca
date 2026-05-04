@@ -38,6 +38,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.12",
+    "@originjs/vite-plugin-federation": "^1.4.1",
     "@tailwindcss/typography": "^0.5.19",
     "@tailwindcss/vite": "^4.2.3",
     "@tanstack/react-router-devtools": "^1.166.13",

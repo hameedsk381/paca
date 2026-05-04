@@ -218,6 +218,11 @@ const (
 	CodeAPIKeyNameInvalid Code = "API_KEY_NAME_INVALID"
 	// CodeAPIKeyNameTooLong indicates the API key name exceeds the maximum length.
 	CodeAPIKeyNameTooLong Code = "API_KEY_NAME_TOO_LONG"
+
+	// CodePluginNotFound indicates the requested plugin does not exist.
+	CodePluginNotFound Code = "PLUGIN_NOT_FOUND"
+	// CodePluginNameTaken indicates a plugin with the same reverse-DNS name is already installed.
+	CodePluginNameTaken Code = "PLUGIN_NAME_TAKEN"
 )
 
 // Error carries a machine-readable Code alongside a human-readable Message.

@@ -16,6 +16,7 @@ import (
 	githubdom "github.com/paca/api/internal/domain/github"
 	globalroledom "github.com/paca/api/internal/domain/globalrole"
 	notificationdom "github.com/paca/api/internal/domain/notification"
+	pluginom "github.com/paca/api/internal/domain/plugin"
 	projectdom "github.com/paca/api/internal/domain/project"
 	sprintdom "github.com/paca/api/internal/domain/sprint"
 	taskdom "github.com/paca/api/internal/domain/task"
@@ -269,6 +270,10 @@ func statusAndCodeFor(err error) (int, apierr.Code) {
 		return http.StatusBadRequest, apierr.CodeAPIKeyNameTooLong
 	case errors.Is(err, apikeydom.ErrForbidden):
 		return http.StatusForbidden, apierr.CodeForbidden
+	case errors.Is(err, pluginom.ErrNotFound):
+		return http.StatusNotFound, apierr.CodePluginNotFound
+	case errors.Is(err, pluginom.ErrNameTaken):
+		return http.StatusConflict, apierr.CodePluginNameTaken
 	default:
 		return http.StatusInternalServerError, apierr.CodeInternalError
 	}

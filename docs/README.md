@@ -17,6 +17,12 @@ This directory is the main documentation home for Paca.
 - [api/http-design.md](api/http-design.md): HTTP API paths, endpoint responsibilities, and future resource design.
 - [deployment/README.md](deployment/README.md): deployment and environment documentation index.
 - [product/overview.md](product/overview.md): product concepts and workflow direction.
+- [plugins/overview.md](plugins/overview.md): plugin system — architecture, extension points, and security model.
+- [plugins/frontend-plugin-system.md](plugins/frontend-plugin-system.md): module federation, extension point registry, and frontend SDK API.
+- [plugins/backend-plugin-system.md](plugins/backend-plugin-system.md): WASM runtime, host function bridge, and route registration.
+- [plugins/sdk-reference.md](plugins/sdk-reference.md): full API reference for `@paca/plugin-sdk` (TypeScript) and `github.com/paca/plugin-sdk` (Go).
+- [plugins/first-party-plugins.md](plugins/first-party-plugins.md): migration plan for BDD, Checklist, GitHub Integration, and Time Tracking plugins.
+- [plugins/developer-guide.md](plugins/developer-guide.md): step-by-step guide to building and publishing a Paca plugin.
 
 ## Principles
 
