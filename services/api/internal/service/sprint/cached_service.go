@@ -98,6 +98,7 @@ func (c *CachedSprintService) GetSprint(ctx context.Context, projectID, id uuid.
 	return sp, nil
 }
 
+// CreateSprint delegates to the underlying service and invalidates the sprint list cache.
 func (c *CachedSprintService) CreateSprint(ctx context.Context, in sprintdom.CreateSprintInput) (*sprintdom.Sprint, error) {
 	sp, err := c.svc.CreateSprint(ctx, in)
 	if err != nil {
@@ -109,6 +110,7 @@ func (c *CachedSprintService) CreateSprint(ctx context.Context, in sprintdom.Cre
 	return sp, nil
 }
 
+// UpdateSprint delegates to the underlying service and invalidates the sprint list and item caches.
 func (c *CachedSprintService) UpdateSprint(ctx context.Context, projectID, id uuid.UUID, in sprintdom.UpdateSprintInput) (*sprintdom.Sprint, error) {
 	sp, err := c.svc.UpdateSprint(ctx, projectID, id, in)
 	if err != nil {
@@ -120,6 +122,7 @@ func (c *CachedSprintService) UpdateSprint(ctx context.Context, projectID, id uu
 	return sp, nil
 }
 
+// DeleteSprint delegates to the underlying service and invalidates the sprint list and item caches.
 func (c *CachedSprintService) DeleteSprint(ctx context.Context, projectID, id uuid.UUID) error {
 	if err := c.svc.DeleteSprint(ctx, projectID, id); err != nil {
 		return err
@@ -130,6 +133,7 @@ func (c *CachedSprintService) DeleteSprint(ctx context.Context, projectID, id uu
 	return nil
 }
 
+// CompleteSprint delegates to the underlying service and invalidates the sprint list and item caches.
 func (c *CachedSprintService) CompleteSprint(ctx context.Context, projectID, id uuid.UUID, in sprintdom.CompleteSprintInput) (*sprintdom.Sprint, error) {
 	sp, err := c.svc.CompleteSprint(ctx, projectID, id, in)
 	if err != nil {

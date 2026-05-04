@@ -79,10 +79,12 @@ func (c *CachedService) ListTaskTypes(ctx context.Context, projectID uuid.UUID) 
 	return result, nil
 }
 
+// GetTaskType delegates directly to the underlying service (not cached).
 func (c *CachedService) GetTaskType(ctx context.Context, id uuid.UUID) (*taskdom.TaskType, error) {
 	return c.svc.GetTaskType(ctx, id)
 }
 
+// CreateTaskType delegates to the underlying service and invalidates the task-types cache.
 func (c *CachedService) CreateTaskType(ctx context.Context, in taskdom.CreateTaskTypeInput) (*taskdom.TaskType, error) {
 	t, err := c.svc.CreateTaskType(ctx, in)
 	if err != nil {
@@ -94,6 +96,7 @@ func (c *CachedService) CreateTaskType(ctx context.Context, in taskdom.CreateTas
 	return t, nil
 }
 
+// UpdateTaskType delegates to the underlying service and invalidates the task-types cache.
 func (c *CachedService) UpdateTaskType(ctx context.Context, projectID, id uuid.UUID, in taskdom.UpdateTaskTypeInput) (*taskdom.TaskType, error) {
 	t, err := c.svc.UpdateTaskType(ctx, projectID, id, in)
 	if err != nil {
@@ -105,6 +108,7 @@ func (c *CachedService) UpdateTaskType(ctx context.Context, projectID, id uuid.U
 	return t, nil
 }
 
+// DeleteTaskType delegates to the underlying service and invalidates the task-types cache.
 func (c *CachedService) DeleteTaskType(ctx context.Context, projectID, id uuid.UUID) error {
 	if err := c.svc.DeleteTaskType(ctx, projectID, id); err != nil {
 		return err
@@ -115,6 +119,7 @@ func (c *CachedService) DeleteTaskType(ctx context.Context, projectID, id uuid.U
 	return nil
 }
 
+// SetDefaultTaskType delegates to the underlying service and invalidates the task-types cache.
 func (c *CachedService) SetDefaultTaskType(ctx context.Context, projectID, typeID uuid.UUID) (*taskdom.TaskType, error) {
 	t, err := c.svc.SetDefaultTaskType(ctx, projectID, typeID)
 	if err != nil {
@@ -152,10 +157,12 @@ func (c *CachedService) ListTaskStatuses(ctx context.Context, projectID uuid.UUI
 	return result, nil
 }
 
+// GetTaskStatus delegates directly to the underlying service (not cached).
 func (c *CachedService) GetTaskStatus(ctx context.Context, id uuid.UUID) (*taskdom.TaskStatus, error) {
 	return c.svc.GetTaskStatus(ctx, id)
 }
 
+// CreateTaskStatus delegates to the underlying service and invalidates the task-statuses cache.
 func (c *CachedService) CreateTaskStatus(ctx context.Context, in taskdom.CreateTaskStatusInput) (*taskdom.TaskStatus, error) {
 	st, err := c.svc.CreateTaskStatus(ctx, in)
 	if err != nil {
@@ -167,6 +174,7 @@ func (c *CachedService) CreateTaskStatus(ctx context.Context, in taskdom.CreateT
 	return st, nil
 }
 
+// UpdateTaskStatus delegates to the underlying service and invalidates the task-statuses cache.
 func (c *CachedService) UpdateTaskStatus(ctx context.Context, projectID, id uuid.UUID, in taskdom.UpdateTaskStatusInput) (*taskdom.TaskStatus, error) {
 	st, err := c.svc.UpdateTaskStatus(ctx, projectID, id, in)
 	if err != nil {
@@ -178,6 +186,7 @@ func (c *CachedService) UpdateTaskStatus(ctx context.Context, projectID, id uuid
 	return st, nil
 }
 
+// DeleteTaskStatus delegates to the underlying service and invalidates the task-statuses cache.
 func (c *CachedService) DeleteTaskStatus(ctx context.Context, projectID, id uuid.UUID) error {
 	if err := c.svc.DeleteTaskStatus(ctx, projectID, id); err != nil {
 		return err
@@ -188,6 +197,7 @@ func (c *CachedService) DeleteTaskStatus(ctx context.Context, projectID, id uuid
 	return nil
 }
 
+// SetDefaultTaskStatus delegates to the underlying service and invalidates the task-statuses cache.
 func (c *CachedService) SetDefaultTaskStatus(ctx context.Context, projectID, statusID uuid.UUID) (*taskdom.TaskStatus, error) {
 	st, err := c.svc.SetDefaultTaskStatus(ctx, projectID, statusID)
 	if err != nil {
@@ -203,26 +213,32 @@ func (c *CachedService) SetDefaultTaskStatus(ctx context.Context, projectID, sta
 // Tasks are not cached because they are highly mutable and queries are filtered
 // in many different ways, making cache key cardinality prohibitively large.
 
+// ListTasks delegates directly to the underlying service (not cached).
 func (c *CachedService) ListTasks(ctx context.Context, projectID uuid.UUID, filter taskdom.TaskFilter, page, pageSize int) ([]*taskdom.Task, int64, error) {
 	return c.svc.ListTasks(ctx, projectID, filter, page, pageSize)
 }
 
+// GetTask delegates directly to the underlying service (not cached).
 func (c *CachedService) GetTask(ctx context.Context, projectID, id uuid.UUID) (*taskdom.Task, error) {
 	return c.svc.GetTask(ctx, projectID, id)
 }
 
+// GetTaskByNumber delegates directly to the underlying service (not cached).
 func (c *CachedService) GetTaskByNumber(ctx context.Context, projectID uuid.UUID, taskNumber int64) (*taskdom.Task, error) {
 	return c.svc.GetTaskByNumber(ctx, projectID, taskNumber)
 }
 
+// CreateTask delegates directly to the underlying service (not cached).
 func (c *CachedService) CreateTask(ctx context.Context, in taskdom.CreateTaskInput) (*taskdom.Task, error) {
 	return c.svc.CreateTask(ctx, in)
 }
 
+// UpdateTask delegates directly to the underlying service (not cached).
 func (c *CachedService) UpdateTask(ctx context.Context, projectID, id uuid.UUID, in taskdom.UpdateTaskInput) (*taskdom.Task, error) {
 	return c.svc.UpdateTask(ctx, projectID, id, in)
 }
 
+// DeleteTask delegates directly to the underlying service (not cached).
 func (c *CachedService) DeleteTask(ctx context.Context, projectID, id uuid.UUID) error {
 	return c.svc.DeleteTask(ctx, projectID, id)
 }
@@ -253,10 +269,12 @@ func (c *CachedService) ListCustomFieldDefinitions(ctx context.Context, projectI
 	return result, nil
 }
 
+// GetCustomFieldDefinition delegates directly to the underlying service (not cached).
 func (c *CachedService) GetCustomFieldDefinition(ctx context.Context, projectID, id uuid.UUID) (*taskdom.CustomFieldDefinition, error) {
 	return c.svc.GetCustomFieldDefinition(ctx, projectID, id)
 }
 
+// CreateCustomFieldDefinition delegates to the underlying service and invalidates the custom-fields cache.
 func (c *CachedService) CreateCustomFieldDefinition(ctx context.Context, in taskdom.CreateCustomFieldDefinitionInput) (*taskdom.CustomFieldDefinition, error) {
 	f, err := c.svc.CreateCustomFieldDefinition(ctx, in)
 	if err != nil {
@@ -268,6 +286,7 @@ func (c *CachedService) CreateCustomFieldDefinition(ctx context.Context, in task
 	return f, nil
 }
 
+// UpdateCustomFieldDefinition delegates to the underlying service and invalidates the custom-fields cache.
 func (c *CachedService) UpdateCustomFieldDefinition(ctx context.Context, projectID, id uuid.UUID, in taskdom.UpdateCustomFieldDefinitionInput) (*taskdom.CustomFieldDefinition, error) {
 	f, err := c.svc.UpdateCustomFieldDefinition(ctx, projectID, id, in)
 	if err != nil {
@@ -279,6 +298,7 @@ func (c *CachedService) UpdateCustomFieldDefinition(ctx context.Context, project
 	return f, nil
 }
 
+// DeleteCustomFieldDefinition delegates to the underlying service and invalidates the custom-fields cache.
 func (c *CachedService) DeleteCustomFieldDefinition(ctx context.Context, projectID, id uuid.UUID) error {
 	if err := c.svc.DeleteCustomFieldDefinition(ctx, projectID, id); err != nil {
 		return err
@@ -293,22 +313,27 @@ func (c *CachedService) DeleteCustomFieldDefinition(ctx context.Context, project
 // BDD scenarios are task-level and change frequently enough that caching adds
 // complexity without meaningful benefit.
 
+// ListBDDScenarios delegates directly to the underlying service (not cached).
 func (c *CachedService) ListBDDScenarios(ctx context.Context, projectID, taskID uuid.UUID) ([]*taskdom.BDDScenario, error) {
 	return c.svc.ListBDDScenarios(ctx, projectID, taskID)
 }
 
+// GetBDDScenario delegates directly to the underlying service (not cached).
 func (c *CachedService) GetBDDScenario(ctx context.Context, projectID, taskID, id uuid.UUID) (*taskdom.BDDScenario, error) {
 	return c.svc.GetBDDScenario(ctx, projectID, taskID, id)
 }
 
+// CreateBDDScenario delegates directly to the underlying service (not cached).
 func (c *CachedService) CreateBDDScenario(ctx context.Context, in taskdom.CreateBDDScenarioInput) (*taskdom.BDDScenario, error) {
 	return c.svc.CreateBDDScenario(ctx, in)
 }
 
+// UpdateBDDScenario delegates directly to the underlying service (not cached).
 func (c *CachedService) UpdateBDDScenario(ctx context.Context, projectID, taskID, id uuid.UUID, in taskdom.UpdateBDDScenarioInput) (*taskdom.BDDScenario, error) {
 	return c.svc.UpdateBDDScenario(ctx, projectID, taskID, id, in)
 }
 
+// DeleteBDDScenario delegates directly to the underlying service (not cached).
 func (c *CachedService) DeleteBDDScenario(ctx context.Context, projectID, taskID, id uuid.UUID) error {
 	return c.svc.DeleteBDDScenario(ctx, projectID, taskID, id)
 }

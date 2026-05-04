@@ -62,6 +62,7 @@ func (c *CachedService) List(ctx context.Context) ([]*globalroledom.GlobalRole, 
 	return result, nil
 }
 
+// Create delegates to the underlying service and invalidates the list cache.
 func (c *CachedService) Create(ctx context.Context, in globalroledom.CreateInput) (*globalroledom.GlobalRole, error) {
 	r, err := c.svc.Create(ctx, in)
 	if err != nil {
@@ -73,6 +74,7 @@ func (c *CachedService) Create(ctx context.Context, in globalroledom.CreateInput
 	return r, nil
 }
 
+// Update delegates to the underlying service and invalidates the list cache.
 func (c *CachedService) Update(ctx context.Context, id uuid.UUID, in globalroledom.UpdateInput) (*globalroledom.GlobalRole, error) {
 	r, err := c.svc.Update(ctx, id, in)
 	if err != nil {
@@ -84,6 +86,7 @@ func (c *CachedService) Update(ctx context.Context, id uuid.UUID, in globalroled
 	return r, nil
 }
 
+// Delete delegates to the underlying service and invalidates the list cache.
 func (c *CachedService) Delete(ctx context.Context, id uuid.UUID) error {
 	if err := c.svc.Delete(ctx, id); err != nil {
 		return err
@@ -94,6 +97,7 @@ func (c *CachedService) Delete(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
+// ReplaceUserRoles delegates directly to the underlying service and invalidates the list cache.
 func (c *CachedService) ReplaceUserRoles(ctx context.Context, userID uuid.UUID, roleIDs []uuid.UUID) ([]*globalroledom.GlobalRole, error) {
 	return c.svc.ReplaceUserRoles(ctx, userID, roleIDs)
 }

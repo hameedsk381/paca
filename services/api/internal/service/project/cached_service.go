@@ -70,10 +70,12 @@ func rolesKey(projectID uuid.UUID) string {
 
 // --- Project -----------------------------------------------------------------
 
+// List delegates directly to the underlying service (not cached).
 func (c *CachedService) List(ctx context.Context, page, pageSize int) ([]*projectdom.Project, int64, error) {
 	return c.svc.List(ctx, page, pageSize)
 }
 
+// ListAccessible delegates directly to the underlying service (not cached).
 func (c *CachedService) ListAccessible(ctx context.Context, userID uuid.UUID, page, pageSize int) ([]*projectdom.Project, int64, error) {
 	return c.svc.ListAccessible(ctx, userID, page, pageSize)
 }
@@ -102,14 +104,17 @@ func (c *CachedService) GetByID(ctx context.Context, id uuid.UUID) (*projectdom.
 	return p, nil
 }
 
+// IsProjectPublic delegates directly to the underlying service (not cached).
 func (c *CachedService) IsProjectPublic(ctx context.Context, id uuid.UUID) (bool, error) {
 	return c.svc.IsProjectPublic(ctx, id)
 }
 
+// Create delegates directly to the underlying service (not cached).
 func (c *CachedService) Create(ctx context.Context, in projectdom.CreateProjectInput) (*projectdom.Project, error) {
 	return c.svc.Create(ctx, in)
 }
 
+// Update delegates to the underlying service and invalidates the project cache entry.
 func (c *CachedService) Update(ctx context.Context, id uuid.UUID, in projectdom.UpdateProjectInput) (*projectdom.Project, error) {
 	p, err := c.svc.Update(ctx, id, in)
 	if err != nil {
@@ -121,6 +126,7 @@ func (c *CachedService) Update(ctx context.Context, id uuid.UUID, in projectdom.
 	return p, nil
 }
 
+// Delete delegates to the underlying service and invalidates all related cache entries.
 func (c *CachedService) Delete(ctx context.Context, id uuid.UUID) error {
 	if err := c.svc.Delete(ctx, id); err != nil {
 		return err
@@ -157,6 +163,7 @@ func (c *CachedService) ListMembers(ctx context.Context, projectID uuid.UUID) ([
 	return result, nil
 }
 
+// AddMember delegates to the underlying service and invalidates the members cache.
 func (c *CachedService) AddMember(ctx context.Context, projectID uuid.UUID, in projectdom.AddMemberInput) (*projectdom.ProjectMember, error) {
 	m, err := c.svc.AddMember(ctx, projectID, in)
 	if err != nil {
@@ -168,6 +175,7 @@ func (c *CachedService) AddMember(ctx context.Context, projectID uuid.UUID, in p
 	return m, nil
 }
 
+// UpdateMemberRole delegates to the underlying service and invalidates the members cache.
 func (c *CachedService) UpdateMemberRole(ctx context.Context, projectID, userID uuid.UUID, in projectdom.UpdateMemberRoleInput) (*projectdom.ProjectMember, error) {
 	m, err := c.svc.UpdateMemberRole(ctx, projectID, userID, in)
 	if err != nil {
@@ -179,6 +187,7 @@ func (c *CachedService) UpdateMemberRole(ctx context.Context, projectID, userID 
 	return m, nil
 }
 
+// RemoveMember delegates to the underlying service and invalidates the members cache.
 func (c *CachedService) RemoveMember(ctx context.Context, projectID, userID uuid.UUID) error {
 	if err := c.svc.RemoveMember(ctx, projectID, userID); err != nil {
 		return err
@@ -189,6 +198,7 @@ func (c *CachedService) RemoveMember(ctx context.Context, projectID, userID uuid
 	return nil
 }
 
+// GetMyProjectPermissions delegates directly to the underlying service (not cached).
 func (c *CachedService) GetMyProjectPermissions(ctx context.Context, projectID, userID uuid.UUID) (map[string]any, error) {
 	return c.svc.GetMyProjectPermissions(ctx, projectID, userID)
 }
@@ -219,6 +229,7 @@ func (c *CachedService) ListRoles(ctx context.Context, projectID uuid.UUID) ([]*
 	return result, nil
 }
 
+// CreateRole delegates to the underlying service and invalidates the roles cache.
 func (c *CachedService) CreateRole(ctx context.Context, projectID uuid.UUID, in projectdom.CreateRoleInput) (*projectdom.ProjectRole, error) {
 	r, err := c.svc.CreateRole(ctx, projectID, in)
 	if err != nil {
@@ -230,6 +241,7 @@ func (c *CachedService) CreateRole(ctx context.Context, projectID uuid.UUID, in 
 	return r, nil
 }
 
+// UpdateRole delegates to the underlying service and invalidates the roles cache.
 func (c *CachedService) UpdateRole(ctx context.Context, projectID, roleID uuid.UUID, in projectdom.UpdateRoleInput) (*projectdom.ProjectRole, error) {
 	r, err := c.svc.UpdateRole(ctx, projectID, roleID, in)
 	if err != nil {
@@ -241,6 +253,7 @@ func (c *CachedService) UpdateRole(ctx context.Context, projectID, roleID uuid.U
 	return r, nil
 }
 
+// DeleteRole delegates to the underlying service and invalidates the roles cache.
 func (c *CachedService) DeleteRole(ctx context.Context, projectID, roleID uuid.UUID) error {
 	if err := c.svc.DeleteRole(ctx, projectID, roleID); err != nil {
 		return err

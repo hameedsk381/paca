@@ -109,6 +109,7 @@ func (c *CachedViewService) GetView(ctx context.Context, projectID, id uuid.UUID
 	return v, nil
 }
 
+// CreateView delegates to the underlying service and invalidates the project view list cache.
 func (c *CachedViewService) CreateView(ctx context.Context, in sprintdom.CreateViewInput) (*sprintdom.SprintView, error) {
 	v, err := c.svc.CreateView(ctx, in)
 	if err != nil {
@@ -121,6 +122,7 @@ func (c *CachedViewService) CreateView(ctx context.Context, in sprintdom.CreateV
 	return v, nil
 }
 
+// UpdateView delegates to the underlying service and invalidates the view item and project list caches.
 func (c *CachedViewService) UpdateView(ctx context.Context, projectID, id uuid.UUID, in sprintdom.UpdateViewInput) (*sprintdom.SprintView, error) {
 	v, err := c.svc.UpdateView(ctx, projectID, id, in)
 	if err != nil {
@@ -138,6 +140,7 @@ func (c *CachedViewService) UpdateView(ctx context.Context, projectID, id uuid.U
 	return v, nil
 }
 
+// DeleteView delegates to the underlying service and invalidates the view item and project list caches.
 func (c *CachedViewService) DeleteView(ctx context.Context, projectID, id uuid.UUID) error {
 	if err := c.svc.DeleteView(ctx, projectID, id); err != nil {
 		return err
@@ -152,14 +155,17 @@ func (c *CachedViewService) DeleteView(ctx context.Context, projectID, id uuid.U
 	return nil
 }
 
+// MoveTask delegates directly to the underlying service (not cached).
 func (c *CachedViewService) MoveTask(ctx context.Context, projectID, viewID uuid.UUID, in sprintdom.MoveTaskInput) error {
 	return c.svc.MoveTask(ctx, projectID, viewID, in)
 }
 
+// BulkMoveTasks delegates directly to the underlying service (not cached).
 func (c *CachedViewService) BulkMoveTasks(ctx context.Context, projectID, viewID uuid.UUID, items []sprintdom.MoveTaskInput) error {
 	return c.svc.BulkMoveTasks(ctx, projectID, viewID, items)
 }
 
+// ListTaskPositions delegates directly to the underlying service (not cached).
 func (c *CachedViewService) ListTaskPositions(ctx context.Context, projectID, viewID uuid.UUID) ([]*sprintdom.ViewTaskPosition, error) {
 	return c.svc.ListTaskPositions(ctx, projectID, viewID)
 }

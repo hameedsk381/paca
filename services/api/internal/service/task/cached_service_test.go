@@ -147,7 +147,7 @@ func (s *stubTaskSvc) CreateTask(_ context.Context, in taskdom.CreateTaskInput) 
 	return &taskdom.Task{ID: uuid.New(), ProjectID: in.ProjectID, Title: in.Title}, nil
 }
 
-func (s *stubTaskSvc) UpdateTask(_ context.Context, _, id uuid.UUID, in taskdom.UpdateTaskInput) (*taskdom.Task, error) {
+func (s *stubTaskSvc) UpdateTask(_ context.Context, _, id uuid.UUID, _ taskdom.UpdateTaskInput) (*taskdom.Task, error) {
 	return &taskdom.Task{ID: id}, nil
 }
 
