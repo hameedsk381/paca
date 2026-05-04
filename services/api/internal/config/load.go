@@ -52,6 +52,12 @@ func Load() (*Config, error) {
 		errs = append(errs, err)
 	}
 
+	dbDriver := env("DATABASE_DRIVER", "postgres")
+	dbAWSRegion := env("DATABASE_AWS_REGION", "")
+	if dbDriver == "dsql" && dbAWSRegion == "" {
+		errs = append(errs, fmt.Errorf("config: DATABASE_AWS_REGION must be set when DATABASE_DRIVER=dsql"))
+	}
+
 	redisURL, err := requireEnv("REDIS_URL")
 	if err != nil {
 		errs = append(errs, err)
@@ -93,7 +99,9 @@ func Load() (*Config, error) {
 			CookieSecure: cookieSecure,
 		},
 		Database: DatabaseConfig{
-			DSN: dsn,
+			DSN:       dsn,
+			Driver:    dbDriver,
+			AWSRegion: dbAWSRegion,
 		},
 		Redis: RedisConfig{
 			URL: redisURL,

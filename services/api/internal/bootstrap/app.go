@@ -65,7 +65,11 @@ func New(cfg *config.Config) (*App, error) {
 	}
 
 	// --- Platform -----------------------------------------------------------
-	db, err := database.Open(cfg.Database.DSN, log)
+	db, err := database.Open(database.Config{
+		DSN:       cfg.Database.DSN,
+		Driver:    cfg.Database.Driver,
+		AWSRegion: cfg.Database.AWSRegion,
+	}, log)
 	if err != nil {
 		return nil, fmt.Errorf("bootstrap: %w", err)
 	}
