@@ -72,6 +72,9 @@ services:
       ENV: ${ENVIRONMENT:-production}
       PORT: 8080
       DATABASE_URL: ${DATABASE_URL:-postgres://${POSTGRES_USER:-paca}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-paca}?sslmode=disable}
+      # Aurora DSQL — set DATABASE_DRIVER=dsql and DATABASE_AWS_REGION to enable IAM auth.
+      DATABASE_DRIVER: ${DATABASE_DRIVER:-postgres}
+      DATABASE_AWS_REGION: ${DATABASE_AWS_REGION:-}
       REDIS_URL: ${REDIS_URL:-redis://valkey:6379/0}
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET}
       JWT_ACCESS_TTL: ${JWT_ACCESS_TTL:-15m}
