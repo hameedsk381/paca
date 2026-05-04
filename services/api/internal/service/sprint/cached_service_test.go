@@ -476,6 +476,30 @@ func TestCachedView_GetView_CacheHit(t *testing.T) {
 	}
 }
 
+func TestCachedView_GetView_CacheHit_EnforcesProjectOwnership(t *testing.T) {
+	ctx := context.Background()
+	projectA := uuid.New()
+	projectB := uuid.New()
+	viewID := uuid.New()
+	stub := &stubViewSvc{}
+	svc := sprintsvc.NewCachedViewService(stub, newCacheStore(t), 2*time.Minute, discardLogger())
+
+	if _, err := svc.GetView(ctx, projectA, viewID); err != nil {
+		t.Fatalf("GetView (project A miss): %v", err)
+	}
+
+	got, err := svc.GetView(ctx, projectB, viewID)
+	if !errors.Is(err, sprintsvc.ErrViewNotFound) {
+		t.Fatalf("GetView (project B cached lookup): expected ErrViewNotFound, got view=%v err=%v", got, err)
+	}
+	if got != nil {
+		t.Fatalf("expected nil view on project mismatch, got %#v", got)
+	}
+	if stub.getViewCalls != 1 {
+		t.Fatalf("expected project mismatch to be rejected from cache without an additional stub call; got %d calls", stub.getViewCalls)
+	}
+}
+
 func TestCachedView_GetView_ZeroTTLBypassesCache(t *testing.T) {
 	ctx := context.Background()
 	stub := &stubViewSvc{}
