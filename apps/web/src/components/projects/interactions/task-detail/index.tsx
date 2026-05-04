@@ -384,7 +384,7 @@ export function TaskDetailModal({
 						)}
 
 						{/* Checklists */}
-							<ChecklistsSection canEdit={canEdit} />
+						<ChecklistsSection canEdit={canEdit} />
 						{/* Attachments */}
 						<AttachmentsSection
 							projectId={projectId ?? ""}
@@ -419,7 +419,11 @@ export function TaskDetailModal({
 				</div>
 
 				{/* ── Right: Activity pane ── */}
-				<ActivityPane projectId={projectId ?? ""} taskId={task?.id ?? ""} canEdit={canEdit} />
+				<ActivityPane
+					projectId={projectId ?? ""}
+					taskId={task?.id ?? ""}
+					canEdit={canEdit}
+				/>
 			</div>
 		</div>
 	) : (

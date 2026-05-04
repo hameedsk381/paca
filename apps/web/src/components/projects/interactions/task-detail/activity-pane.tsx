@@ -22,7 +22,11 @@ interface TaskActivityPaneProps {
 	canEdit?: boolean;
 }
 
-export function TaskActivityPane({ projectId, taskId, canEdit = true }: TaskActivityPaneProps) {
+export function TaskActivityPane({
+	projectId,
+	taskId,
+	canEdit = true,
+}: TaskActivityPaneProps) {
 	const { data: membersData } = useQuery(projectMembersQueryOptions(projectId));
 	const { data: sprintsData } = useQuery(sprintsQueryOptions(projectId));
 
@@ -101,7 +105,9 @@ export function TaskActivityPane({ projectId, taskId, canEdit = true }: TaskActi
 			entityId={taskId}
 			queryKey={queryKey}
 			queryFn={() => listTaskActivities(projectId, taskId)}
-			addComment={canEdit ? (text) => addComment(projectId, taskId, text) : undefined}
+			addComment={
+				canEdit ? (text) => addComment(projectId, taskId, text) : undefined
+			}
 			describeActivity={describeActivity}
 			getCommentText={(content) => (content as { text?: string }).text ?? ""}
 		/>
