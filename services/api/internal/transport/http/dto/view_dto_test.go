@@ -118,6 +118,30 @@ func TestViewFromEntity_NilFilters(t *testing.T) {
 	}
 }
 
+// TestViewFromEntity_PluginConfigRoundtrip verifies plugin fields are copied
+// from domain config to DTO config.
+func TestViewFromEntity_PluginConfigRoundtrip(t *testing.T) {
+	entity := &sprintdom.SprintView{
+		ID:        uuid.New(),
+		ProjectID: uuid.New(),
+		Name:      "Plugin View",
+		ViewType:  sprintdom.ViewTypePlugin,
+		Config: sprintdom.ViewConfig{
+			PluginID:        uuid.NewString(),
+			PluginComponent: "KanbanByPriority",
+		},
+	}
+
+	resp := dto.ViewFromEntity(entity)
+
+	if resp.Config.PluginID != entity.Config.PluginID {
+		t.Errorf("PluginID: want %q, got %q", entity.Config.PluginID, resp.Config.PluginID)
+	}
+	if resp.Config.PluginComponent != entity.Config.PluginComponent {
+		t.Errorf("PluginComponent: want %q, got %q", entity.Config.PluginComponent, resp.Config.PluginComponent)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // toViewConfig (via CreateViewRequest / UpdateViewRequest) roundtrip
 // ---------------------------------------------------------------------------
@@ -178,6 +202,32 @@ func TestCreateViewRequest_ToCreateInput_FiltersRoundtrip(t *testing.T) {
 	sprintEntry, ok := f.Sprints.Items[sprintID.String()]
 	if !ok || !sprintEntry.Flag() {
 		t.Errorf("expected sprint entry to be included, got %+v", sprintEntry)
+	}
+}
+
+// TestCreateViewRequest_ToCreateInput_PluginConfigRoundtrip verifies plugin
+// fields are copied from DTO config to domain config through toViewConfig.
+func TestCreateViewRequest_ToCreateInput_PluginConfigRoundtrip(t *testing.T) {
+	sprintID := uuid.New()
+	projectID := uuid.New()
+	pluginID := uuid.NewString()
+
+	req := dto.CreateViewRequest{
+		Name:     "Plugin View",
+		ViewType: sprintdom.ViewTypePlugin,
+		Config: &dto.ViewConfigDTO{
+			PluginID:        pluginID,
+			PluginComponent: "KanbanByPriority",
+		},
+	}
+
+	input := req.ToCreateInput(sprintID, projectID)
+
+	if input.Config.PluginID != pluginID {
+		t.Errorf("PluginID: want %q, got %q", pluginID, input.Config.PluginID)
+	}
+	if input.Config.PluginComponent != "KanbanByPriority" {
+		t.Errorf("PluginComponent: want %q, got %q", "KanbanByPriority", input.Config.PluginComponent)
 	}
 }
 
