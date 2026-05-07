@@ -12,6 +12,7 @@ import {
 	List,
 	Map as MapIcon,
 	Plus,
+	Puzzle,
 	Search,
 	X,
 } from "lucide-react";
@@ -52,6 +53,7 @@ import {
 	viewTaskPositionsQueryOptions,
 } from "@/lib/interaction-api";
 import { RemoteComponent } from "@/lib/plugins/loader";
+import type { PluginRegistration } from "@/lib/plugin-api";
 import { usePluginRegistry } from "@/lib/plugins/registry";
 import {
 	customFieldsQueryOptions,
@@ -355,6 +357,7 @@ export function InteractionLayout({
 		if (!viewsQuery.isSuccess || defaultPageTaskTypeIds.length === 0) return;
 		const uninitializedViews = serverViews.filter(
 			(view) =>
+				view.layout !== "Plugin" &&
 				!initializedFiltersRef.current.has(view.id) &&
 				view.config?.filters === undefined,
 		);
@@ -395,17 +398,21 @@ export function InteractionLayout({
 	const activeView = views.find((v) => v.id === preferredViewId) ?? views[0];
 	const activeViewId = activeView?.id ?? "";
 
-	// Plugin views (from the `view` extension point)
+	// Plugin view registrations (for the "Add view" popover layout options)
 	const { getRegistrations } = usePluginRegistry();
-	const pluginViews = getRegistrations("view").filter((r) => !r.hidden);
-	const [activePluginViewId, setActivePluginViewId] = useState<string | null>(
-		null,
+	const pluginViewRegistrations = getRegistrations("view").filter(
+		(r) => !r.hidden,
 	);
-	// Resolve the active plugin view registration using composite key
+
+	// If the active view is a plugin view, resolve its registration from config
 	const activePluginView =
-		pluginViews.find(
-			(r) => `${r.pluginId}:${r.component}` === activePluginViewId,
-		) ?? null;
+		activeView?.layout === "Plugin"
+			? (pluginViewRegistrations.find(
+					(r) =>
+						r.pluginId === activeView.config?.plugin_id &&
+						r.component === activeView.config?.plugin_component,
+				) ?? null)
+			: null;
 
 	useEffect(() => {
 		if (!activeViewId) return;
@@ -788,9 +795,19 @@ export function InteractionLayout({
 	);
 
 	const createViewMutation = useMutation({
-		mutationFn: (payload: { name: string; layout: ViewLayout }) => {
+		mutationFn: (payload: {
+			name: string;
+			layout: ViewLayout;
+			pluginRegistration?: PluginRegistration;
+		}) => {
 			const view_type = layoutToViewType(payload.layout);
-			const config = buildDefaultViewConfig(payload.layout);
+			const config =
+				payload.layout === "Plugin" && payload.pluginRegistration
+					? {
+							plugin_id: payload.pluginRegistration.pluginId,
+							plugin_component: payload.pluginRegistration.component,
+						}
+					: buildDefaultViewConfig(payload.layout);
 			return createViewByContext(
 				projectId,
 				context,
@@ -964,7 +981,6 @@ export function InteractionLayout({
 									type="button"
 									onClick={() => {
 										setPreferredViewId(view.id);
-										setActivePluginViewId(null);
 									}}
 									className={cn(
 										"flex items-center gap-1.5 px-2.5 py-2.5 text-[12px] font-medium transition-all duration-150",
@@ -977,6 +993,8 @@ export function InteractionLayout({
 										<KanbanSquare className="size-3.5" />
 									) : view.layout === "Roadmap" ? (
 										<MapIcon className="size-3.5" />
+									) : view.layout === "Plugin" ? (
+										<Puzzle className="size-3.5" />
 									) : (
 										<List className="size-3.5" />
 									)}
@@ -1021,33 +1039,13 @@ export function InteractionLayout({
 
 					{canManageViews && (
 						<NewViewPopover
-							onSubmit={(name, layout) =>
-								createViewMutation.mutateAsync({ name, layout })
+							onSubmit={(name, layout, pluginRegistration) =>
+								createViewMutation.mutateAsync({ name, layout, pluginRegistration })
 							}
 							isPending={createViewMutation.isPending}
+							pluginRegistrations={pluginViewRegistrations}
 						/>
 					)}
-					{/* Plugin view tabs */}
-					{pluginViews.map((reg) => {
-						const viewKey = `${reg.pluginId}:${reg.component}`;
-						return (
-							<button
-								key={viewKey}
-								type="button"
-								onClick={() => {
-									setActivePluginViewId(viewKey);
-									setPreferredViewId("");
-								}}
-								className={`flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-medium transition-all duration-150 ${
-									activePluginViewId === viewKey
-										? "bg-accent text-foreground"
-										: "text-muted-foreground hover:text-foreground hover:bg-muted/60"
-								}`}
-							>
-								{reg.pluginName}
-							</button>
-						);
-					})}
 				</div>
 
 				<div className="flex shrink-0 items-center gap-1 pl-3 border-l border-border/25 ml-2">
@@ -1088,7 +1086,7 @@ export function InteractionLayout({
 						</button>
 					)}
 
-					{activeView && (
+					{activeView && activeView.layout !== "Plugin" && (
 						<ViewSettingsPanel
 							projectId={projectId}
 							view={activeView}
@@ -1121,6 +1119,10 @@ export function InteractionLayout({
 							onTaskClick: handleTaskClick,
 						}}
 					/>
+				) : activeView?.layout === "Plugin" ? (
+					<div className="flex flex-1 items-center justify-center text-muted-foreground text-sm">
+						Plugin not available
+					</div>
 				) : tasksLoading ? (
 					activeView?.layout === "Board" ? (
 						<BoardViewSkeleton />

@@ -1,4 +1,4 @@
-import { KanbanSquare, List, Map as MapIcon, Plus } from "lucide-react";
+import { KanbanSquare, List, Map as MapIcon, Plus, Puzzle } from "lucide-react";
 import { useState } from "react";
 
 import {
@@ -6,13 +6,25 @@ import {
 	PopoverContent,
 	PopoverTrigger,
 } from "@/components/ui/popover";
+import type { PluginRegistration } from "@/lib/plugin-api";
 import type { ViewLayout } from "@/lib/interaction-api";
 import { cn } from "@/lib/utils";
 
 interface NewViewPopoverProps {
-	onSubmit: (name: string, layout: ViewLayout) => Promise<unknown>;
+	onSubmit: (
+		name: string,
+		layout: ViewLayout,
+		pluginRegistration?: PluginRegistration,
+	) => Promise<unknown>;
 	isPending?: boolean;
+	pluginRegistrations?: PluginRegistration[];
 }
+
+type LayoutOption =
+	| { type: "builtin"; layout: ViewLayout }
+	| { type: "plugin"; registration: PluginRegistration };
+
+const builtinLayouts: ViewLayout[] = ["Board", "Table", "Roadmap"];
 
 const layoutIcon = (l: ViewLayout) => {
 	if (l === "Board") return <KanbanSquare className="size-3.5" />;
@@ -20,13 +32,33 @@ const layoutIcon = (l: ViewLayout) => {
 	return <List className="size-3.5" />;
 };
 
-export function NewViewPopover({ onSubmit, isPending }: NewViewPopoverProps) {
+export function NewViewPopover({
+	onSubmit,
+	isPending,
+	pluginRegistrations = [],
+}: NewViewPopoverProps) {
 	const [open, setOpen] = useState(false);
 	const [name, setName] = useState("");
-	const [layout, setLayout] = useState<ViewLayout>("Board");
+	const [selected, setSelected] = useState<LayoutOption>({
+		type: "builtin",
+		layout: "Board",
+	});
+
+	const activeLabel =
+		selected.type === "builtin"
+			? selected.layout
+			: selected.registration.pluginName;
 
 	const submit = async () => {
-		await onSubmit(name || `New ${layout}`, layout);
+		if (selected.type === "builtin") {
+			await onSubmit(name || `New ${selected.layout}`, selected.layout);
+		} else {
+			await onSubmit(
+				name || `New ${selected.registration.pluginName}`,
+				"Plugin",
+				selected.registration,
+			);
+		}
 		setName("");
 		setOpen(false);
 	};
@@ -48,7 +80,7 @@ export function NewViewPopover({ onSubmit, isPending }: NewViewPopoverProps) {
 			<PopoverContent
 				side="bottom"
 				align="end"
-				className="w-64 p-0 gap-0 rounded-xl border border-border/40 shadow-lg"
+				className="w-72 p-0 gap-0 rounded-xl border border-border/40 shadow-lg"
 				sideOffset={6}
 			>
 				<div className="px-3 py-2.5 border-b border-border/30">
@@ -69,7 +101,7 @@ export function NewViewPopover({ onSubmit, isPending }: NewViewPopoverProps) {
 							value={name}
 							onChange={(e) => setName(e.target.value)}
 							onKeyDown={(e) => e.key === "Enter" && submit()}
-							placeholder={`New ${layout}`}
+							placeholder={`New ${activeLabel}`}
 							className="w-full rounded-lg border border-border/30 bg-muted/15 px-3 py-2 text-[13px] font-medium outline-none focus:border-primary/40 focus:ring-2 focus:ring-primary/15 placeholder:text-muted-foreground/50 transition-all duration-150"
 						/>
 					</div>
@@ -77,23 +109,52 @@ export function NewViewPopover({ onSubmit, isPending }: NewViewPopoverProps) {
 						<p className="text-[12px] font-medium text-muted-foreground">
 							Layout
 						</p>
-						<div className="flex gap-2">
-							{(["Board", "Table", "Roadmap"] as ViewLayout[]).map((l) => (
-								<button
-									key={l}
-									type="button"
-									onClick={() => setLayout(l)}
-									className={cn(
-										"flex flex-1 items-center justify-center gap-1.5 rounded-lg border py-2 text-[12px] font-medium transition-all duration-150",
-										layout === l
-											? "border-primary/40 bg-primary/8 text-primary"
-											: "border-border/25 text-muted-foreground/70 hover:text-foreground hover:border-border/40",
-									)}
-								>
-									{layoutIcon(l)}
-									{l}
-								</button>
-							))}
+						<div className="flex flex-wrap gap-2">
+							{builtinLayouts.map((l) => {
+								const isActive =
+									selected.type === "builtin" && selected.layout === l;
+								return (
+									<button
+										key={l}
+										type="button"
+										onClick={() => setSelected({ type: "builtin", layout: l })}
+										className={cn(
+											"flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-[12px] font-medium transition-all duration-150",
+											isActive
+												? "border-primary/40 bg-primary/8 text-primary"
+												: "border-border/25 text-muted-foreground/70 hover:text-foreground hover:border-border/40",
+										)}
+									>
+										{layoutIcon(l)}
+										{l}
+									</button>
+								);
+							})}
+							{pluginRegistrations.map((reg) => {
+								const key = `${reg.pluginId}:${reg.component}`;
+								const isActive =
+									selected.type === "plugin" &&
+									`${selected.registration.pluginId}:${selected.registration.component}` ===
+										key;
+								return (
+									<button
+										key={key}
+										type="button"
+										onClick={() =>
+											setSelected({ type: "plugin", registration: reg })
+										}
+										className={cn(
+											"flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-[12px] font-medium transition-all duration-150",
+											isActive
+												? "border-primary/40 bg-primary/8 text-primary"
+												: "border-border/25 text-muted-foreground/70 hover:text-foreground hover:border-border/40",
+										)}
+									>
+										<Puzzle className="size-3.5" />
+										{reg.pluginName}
+									</button>
+								);
+							})}
 						</div>
 					</div>
 					<button

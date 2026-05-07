@@ -66,6 +66,7 @@ const (
 	ViewTypeTable   ViewType = "table"
 	ViewTypeBoard   ViewType = "board"
 	ViewTypeRoadmap ViewType = "roadmap"
+	ViewTypePlugin  ViewType = "plugin"
 )
 
 // ValidViewTypes is the set of allowed view_type values.
@@ -73,6 +74,7 @@ var ValidViewTypes = map[ViewType]bool{
 	ViewTypeTable:   true,
 	ViewTypeBoard:   true,
 	ViewTypeRoadmap: true,
+	ViewTypePlugin:  true,
 }
 
 // FilterEntry is a discriminated union stored inside a FilterConfig's Items
@@ -168,6 +170,9 @@ type ViewConfig struct {
 	FieldSum  string       `json:"field_sum,omitempty"`
 	SliceBy   string       `json:"slice_by,omitempty"`
 	Filters   *ViewFilters `json:"filters,omitempty"`
+	// Plugin view fields (only set when view_type = "plugin")
+	PluginID        string `json:"plugin_id,omitempty"`
+	PluginComponent string `json:"plugin_component,omitempty"`
 }
 
 // SprintView is a named, persisted view configuration for a sprint,

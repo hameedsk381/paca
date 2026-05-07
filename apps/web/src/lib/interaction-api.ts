@@ -66,7 +66,7 @@ interface TaskPositionListResult {
 }
 
 // ── View types ─────────────────────────────────────────────────────────────────
-export type ViewType = "table" | "board" | "roadmap";
+export type ViewType = "table" | "board" | "roadmap" | "plugin";
 
 /**
  * A single entry in a FilterConfig's `items` map.
@@ -112,9 +112,12 @@ export interface ViewConfig {
 	field_sum?: string;
 	slice_by?: string;
 	filters?: ViewFilters;
+	/** Populated only for plugin views (view_type = "plugin") */
+	plugin_id?: string;
+	plugin_component?: string;
 }
 
-export type ViewLayout = "Board" | "Table" | "Roadmap";
+export type ViewLayout = "Board" | "Table" | "Roadmap" | "Plugin";
 
 // ── Filter resolver helpers ───────────────────────────────────────────────────
 
@@ -190,12 +193,14 @@ export interface InteractionView {
 function viewTypeToLayout(vt: ViewType): ViewLayout {
 	if (vt === "board") return "Board";
 	if (vt === "roadmap") return "Roadmap";
+	if (vt === "plugin") return "Plugin";
 	return "Table";
 }
 
 export function layoutToViewType(l: ViewLayout): ViewType {
 	if (l === "Board") return "board";
 	if (l === "Roadmap") return "roadmap";
+	if (l === "Plugin") return "plugin";
 	return "table";
 }
 
