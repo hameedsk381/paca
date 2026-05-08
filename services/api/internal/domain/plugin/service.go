@@ -50,4 +50,7 @@ type Service interface {
 
 	// ListExtensionSettings returns all extension settings for the given plugin.
 	ListExtensionSettings(ctx context.Context, pluginID uuid.UUID) ([]*PluginExtensionSetting, error)
+
+	// ListExtensionSettingsForPlugins returns extension settings grouped by plugin ID.
+	ListExtensionSettingsForPlugins(ctx context.Context, pluginIDs []uuid.UUID) (map[uuid.UUID][]*PluginExtensionSetting, error)
 }

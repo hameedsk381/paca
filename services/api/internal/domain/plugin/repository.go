@@ -43,6 +43,9 @@ type PluginExtensionSettingRepository interface {
 	// ListSettings returns all extension settings for the given plugin.
 	ListSettings(ctx context.Context, pluginID uuid.UUID) ([]*PluginExtensionSetting, error)
 
+	// ListSettingsForPlugins returns all extension settings for the given plugin IDs.
+	ListSettingsForPlugins(ctx context.Context, pluginIDs []uuid.UUID) ([]*PluginExtensionSetting, error)
+
 	// UpsertSetting creates or replaces the settings row for the given
 	// (plugin, extension_point) key.
 	UpsertSetting(ctx context.Context, setting *PluginExtensionSetting) error

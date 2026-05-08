@@ -55,7 +55,22 @@ func (h *PluginHandler) ListPlugins(c *gin.Context) {
 		presenter.Error(c, err)
 		return
 	}
-	presenter.OK(c, dto.PluginListResponseFromEntities(plugins))
+	pluginIDs := make([]uuid.UUID, 0, len(plugins))
+	for _, p := range plugins {
+		pluginIDs = append(pluginIDs, p.ID)
+	}
+
+	settingsByPlugin, err := h.svc.ListExtensionSettingsForPlugins(c.Request.Context(), pluginIDs)
+	if err != nil {
+		presenter.Error(c, err)
+		return
+	}
+
+	items := make([]dto.PluginResponse, 0, len(plugins))
+	for _, p := range plugins {
+		items = append(items, dto.PluginResponseFromEntityWithSettings(p, settingsByPlugin[p.ID]))
+	}
+	presenter.OK(c, dto.PluginListResponse{Plugins: items})
 }
 
 // InstallPlugin handles POST /api/v1/admin/plugins.

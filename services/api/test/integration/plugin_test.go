@@ -126,6 +126,30 @@ func (r *fakeIntegPluginRepo) ListSettings(_ context.Context, pluginID uuid.UUID
 	return out, nil
 }
 
+func (r *fakeIntegPluginRepo) ListSettingsForPlugins(_ context.Context, pluginIDs []uuid.UUID) ([]*plugindom.PluginExtensionSetting, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	if len(pluginIDs) == 0 {
+		return []*plugindom.PluginExtensionSetting{}, nil
+	}
+
+	idSet := make(map[uuid.UUID]struct{}, len(pluginIDs))
+	for _, id := range pluginIDs {
+		idSet[id] = struct{}{}
+	}
+
+	out := make([]*plugindom.PluginExtensionSetting, 0)
+	for _, s := range r.settings {
+		if _, ok := idSet[s.PluginID]; ok {
+			cp := *s
+			out = append(out, &cp)
+		}
+	}
+
+	return out, nil
+}
+
 func (r *fakeIntegPluginRepo) UpsertSetting(_ context.Context, setting *plugindom.PluginExtensionSetting) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()

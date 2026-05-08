@@ -1,9 +1,8 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { Puzzle } from "lucide-react";
 import { useState } from "react";
-
-import { PluginPreferencesPanel } from "@/components/plugins/PluginPreferencesPanel";
 import { PluginMarketplacePanel } from "@/components/plugins/PluginMarketplacePanel";
+import { PluginPreferencesPanel } from "@/components/plugins/PluginPreferencesPanel";
 import { Button } from "@/components/ui/button";
 import {
 	Card,

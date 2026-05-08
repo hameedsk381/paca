@@ -234,6 +234,39 @@ func (r *PluginRepository) ListSettings(ctx context.Context, pluginID uuid.UUID)
 	return settings, nil
 }
 
+// ListSettingsForPlugins returns all extension settings for the given plugins.
+func (r *PluginRepository) ListSettingsForPlugins(
+	ctx context.Context,
+	pluginIDs []uuid.UUID,
+) ([]*plugindom.PluginExtensionSetting, error) {
+	if len(pluginIDs) == 0 {
+		return []*plugindom.PluginExtensionSetting{}, nil
+	}
+
+	ids := make([]string, 0, len(pluginIDs))
+	for _, id := range pluginIDs {
+		ids = append(ids, id.String())
+	}
+
+	var models []*pluginExtensionSettingModel
+	if err := r.db.WithContext(ctx).
+		Where("plugin_id IN ?", ids).
+		Find(&models).Error; err != nil {
+		return nil, err
+	}
+
+	settings := make([]*plugindom.PluginExtensionSetting, 0, len(models))
+	for _, m := range models {
+		s, err := settingFromModel(m)
+		if err != nil {
+			return nil, err
+		}
+		settings = append(settings, s)
+	}
+
+	return settings, nil
+}
+
 // UpsertSetting creates or replaces the settings row for (plugin, extension_point).
 func (r *PluginRepository) UpsertSetting(ctx context.Context, setting *plugindom.PluginExtensionSetting) error {
 	settingsBytes, err := json.Marshal(setting.Settings)

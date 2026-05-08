@@ -14,25 +14,41 @@ import (
 
 // PluginResponse is the JSON representation of an installed plugin.
 type PluginResponse struct {
-	ID          uuid.UUID                `json:"id"`
-	Name        string                   `json:"name"`
-	Version     string                   `json:"version"`
-	Manifest    plugindom.PluginManifest `json:"manifest"`
-	Enabled     bool                     `json:"enabled"`
-	InstalledAt time.Time                `json:"installed_at"`
-	UpdatedAt   time.Time                `json:"updated_at"`
+	ID                uuid.UUID                        `json:"id"`
+	Name              string                           `json:"name"`
+	Version           string                           `json:"version"`
+	Manifest          plugindom.PluginManifest         `json:"manifest"`
+	ExtensionSettings []PluginExtensionSettingResponse `json:"extension_settings,omitempty"`
+	Enabled           bool                             `json:"enabled"`
+	InstalledAt       time.Time                        `json:"installed_at"`
+	UpdatedAt         time.Time                        `json:"updated_at"`
 }
 
 // PluginResponseFromEntity maps a domain Plugin to its DTO.
 func PluginResponseFromEntity(p *plugindom.Plugin) PluginResponse {
+	return PluginResponseFromEntityWithSettings(p, nil)
+}
+
+// PluginResponseFromEntityWithSettings maps a domain Plugin and its extension
+// settings to a DTO payload.
+func PluginResponseFromEntityWithSettings(
+	p *plugindom.Plugin,
+	settings []*plugindom.PluginExtensionSetting,
+) PluginResponse {
+	settingDTOs := make([]PluginExtensionSettingResponse, 0, len(settings))
+	for _, s := range settings {
+		settingDTOs = append(settingDTOs, PluginExtensionSettingFromEntity(s))
+	}
+
 	return PluginResponse{
-		ID:          p.ID,
-		Name:        p.Name,
-		Version:     p.Version,
-		Manifest:    p.Manifest,
-		Enabled:     p.Enabled,
-		InstalledAt: p.InstalledAt,
-		UpdatedAt:   p.UpdatedAt,
+		ID:                p.ID,
+		Name:              p.Name,
+		Version:           p.Version,
+		Manifest:          p.Manifest,
+		ExtensionSettings: settingDTOs,
+		Enabled:           p.Enabled,
+		InstalledAt:       p.InstalledAt,
+		UpdatedAt:         p.UpdatedAt,
 	}
 }
 

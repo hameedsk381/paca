@@ -103,3 +103,25 @@ func (s *Service) UpdateExtensionSetting(ctx context.Context, input plugindom.Up
 func (s *Service) ListExtensionSettings(ctx context.Context, pluginID uuid.UUID) ([]*plugindom.PluginExtensionSetting, error) {
 	return s.repo.ListSettings(ctx, pluginID)
 }
+
+// ListExtensionSettingsForPlugins returns extension settings grouped by plugin ID.
+func (s *Service) ListExtensionSettingsForPlugins(
+	ctx context.Context,
+	pluginIDs []uuid.UUID,
+) (map[uuid.UUID][]*plugindom.PluginExtensionSetting, error) {
+	grouped := make(map[uuid.UUID][]*plugindom.PluginExtensionSetting, len(pluginIDs))
+	if len(pluginIDs) == 0 {
+		return grouped, nil
+	}
+
+	settings, err := s.repo.ListSettingsForPlugins(ctx, pluginIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, s := range settings {
+		grouped[s.PluginID] = append(grouped[s.PluginID], s)
+	}
+
+	return grouped, nil
+}

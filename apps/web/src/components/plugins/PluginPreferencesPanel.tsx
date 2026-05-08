@@ -181,11 +181,12 @@ export function PluginPreferencesPanel() {
 			// Persist the new order for each registration that changed position
 			for (let i = 0; i < reordered.length; i++) {
 				const reg = reordered[i];
-				if (reg.order !== i || reg === moved) {
+				const nextOrder = i + 1;
+				if (reg.order !== nextOrder || reg === moved) {
 					mutation.mutate({
 						plugin_id: reg.pluginUUID, // Use UUID for API call
 						extension_point: point,
-						settings: { hidden: reg.hidden ?? false, order: i },
+						settings: { hidden: reg.hidden ?? false, order: nextOrder },
 					});
 				}
 			}

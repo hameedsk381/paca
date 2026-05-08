@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Download, ExternalLink, Package, Search, Trash2 } from "lucide-react";
+import { useMemo, useState } from "react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -8,10 +8,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
 	installMarketplacePlugin,
+	type MarketplacePlugin,
 	marketplacePluginsQueryOptions,
 	pluginsQueryOptions,
 	uninstallPlugin,
-	type MarketplacePlugin,
 } from "@/lib/plugin-api";
 
 function initials(name: string): string {
@@ -58,7 +58,9 @@ function PluginCard({
 				</Avatar>
 				<div className="min-w-0 flex-1">
 					<div className="flex items-center gap-2 flex-wrap">
-						<p className="font-medium text-sm truncate">{plugin.display_name}</p>
+						<p className="font-medium text-sm truncate">
+							{plugin.display_name}
+						</p>
 						<Badge variant="outline" className="text-[11px]">
 							{plugin.version}
 						</Badge>
@@ -66,7 +68,9 @@ function PluginCard({
 							<Badge className="text-[11px]">Installed</Badge>
 						) : null}
 					</div>
-					<p className="text-xs text-muted-foreground truncate">{plugin.name}</p>
+					<p className="text-xs text-muted-foreground truncate">
+						{plugin.name}
+					</p>
 				</div>
 			</div>
 
@@ -79,7 +83,9 @@ function PluginCard({
 			<div className="flex items-center justify-between gap-2">
 				<div className="text-[11px] text-muted-foreground flex items-center gap-1 truncate">
 					<Package className="size-3.5" />
-					<span className="truncate">Backend / Frontend / Migrations / Manifest</span>
+					<span className="truncate">
+						Backend / Frontend / Migrations / Manifest
+					</span>
 				</div>
 				<div className="flex items-center gap-2">
 					{plugin.repository_url ? (
@@ -157,7 +163,11 @@ export function PluginMarketplacePanel() {
 	});
 
 	if (isLoading) {
-		return <div className="text-sm text-muted-foreground py-6">Loading marketplace...</div>;
+		return (
+			<div className="text-sm text-muted-foreground py-6">
+				Loading marketplace...
+			</div>
+		);
 	}
 
 	return (
@@ -173,7 +183,9 @@ export function PluginMarketplacePanel() {
 			</div>
 
 			{filtered.length === 0 ? (
-				<div className="text-sm text-muted-foreground py-6">No marketplace plugins found.</div>
+				<div className="text-sm text-muted-foreground py-6">
+					No marketplace plugins found.
+				</div>
 			) : (
 				<div className="grid grid-cols-1 gap-3">
 					{filtered.map((plugin) => (
@@ -187,9 +199,12 @@ export function PluginMarketplacePanel() {
 							}
 							isUninstalling={
 								uninstallMutation.isPending &&
-								uninstallMutation.variables === installedByName.get(plugin.name)?.id
+								uninstallMutation.variables ===
+									installedByName.get(plugin.name)?.id
 							}
-							onInstall={(name) => installMutation.mutate({ name, enabled: true })}
+							onInstall={(name) =>
+								installMutation.mutate({ name, enabled: true })
+							}
 							onUninstall={(name) => {
 								const pluginId = installedByName.get(name)?.id;
 								if (!pluginId) return;

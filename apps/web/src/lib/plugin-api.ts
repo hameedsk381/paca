@@ -41,6 +41,7 @@ export interface Plugin {
 	name: string;
 	version: string;
 	manifest: PluginManifest;
+	extension_settings?: PluginExtensionSetting[];
 	enabled: boolean;
 	installed_at: string;
 	updated_at: string;
@@ -164,9 +165,18 @@ export function buildRegistryMap(
 		const ext = plugin.manifest.frontend?.extensionPoints;
 		const remoteEntryUrl = plugin.manifest.frontend?.remoteEntryUrl;
 		if (!ext || !remoteEntryUrl) continue;
+		const settingsByPoint = new Map(
+			(plugin.extension_settings ?? []).map((s) => [s.extension_point, s]),
+		);
 
 		for (const reg of ext) {
 			const point = reg.point as ExtensionPointId;
+			const setting = settingsByPoint.get(reg.point);
+			const settingOrder = setting?.settings.order;
+			const order =
+				typeof settingOrder === "number" && settingOrder > 0
+					? settingOrder
+					: (reg.order ?? 0);
 			const regs = map.get(point) ?? [];
 			regs.push({
 				pluginUUID: plugin.id, // UUID for API calls
@@ -175,7 +185,8 @@ export function buildRegistryMap(
 				label: reg.label ?? reg.component,
 				remoteEntryUrl,
 				component: reg.component,
-				order: reg.order ?? 0,
+				order,
+				hidden: setting?.settings.hidden ?? false,
 			});
 			map.set(point, regs);
 		}
