@@ -45,17 +45,43 @@ function matchesQuery(plugin: MarketplacePlugin, query: string): boolean {
 	);
 }
 
-/** Returns >0 if a is newer, 0 if equal, <0 if a is older. */
+/**
+ * Returns >0 if a is newer, 0 if equal, <0 if a is older.
+ * Only strict "X.Y.Z" (or "vX.Y.Z") versions are accepted.
+ * Pre-release identifiers and build metadata cause an error.
+ */
 function compareSemver(a: string, b: string): number {
-	const parse = (v: string) =>
-		v
-			.replace(/^v/, "")
-			.split(".")
-			.map((n) => Number.parseInt(n, 10) || 0);
+	const parse = (v: string): [number, number, number] => {
+		v = v.replace(/^v/, "");
+		// Reject build metadata
+		if (v.includes("+")) {
+			throw new Error(
+				`Version "${v}" must not contain build metadata; only strict X.Y.Z versions are supported`,
+			);
+		}
+		// Reject pre-release identifiers
+		if (v.includes("-")) {
+			throw new Error(
+				`Version "${v}" must not contain pre-release identifiers; only strict X.Y.Z versions are supported`,
+			);
+		}
+		const parts = v.split(".");
+		if (parts.length !== 3) {
+			throw new Error(`Expected major.minor.patch, got "${v}"`);
+		}
+		const nums = parts.map((p) => {
+			const n = Number.parseInt(p, 10);
+			if (Number.isNaN(n) || n < 0) {
+				throw new Error(`Non-numeric version component "${p}" in "${v}"`);
+			}
+			return n;
+		});
+		return [nums[0], nums[1], nums[2]];
+	};
 	const pa = parse(a);
 	const pb = parse(b);
 	for (let i = 0; i < 3; i++) {
-		const diff = (pa[i] ?? 0) - (pb[i] ?? 0);
+		const diff = pa[i] - pb[i];
 		if (diff !== 0) return diff;
 	}
 	return 0;
@@ -101,10 +127,19 @@ function PluginCard({
 	const hasFrontend = !!artifacts.frontend_tar_gz_url;
 	const hasMigrations = !!artifacts.migrations_tar_gz_url;
 	const hasMCP = !!artifacts.mcp_tar_gz_url;
-	const upgradeAvailable =
-		isInstalled &&
-		!!installedVersion &&
-		compareSemver(plugin.version, installedVersion) > 0;
+
+	let upgradeAvailable = false;
+	if (isInstalled && installedVersion) {
+		try {
+			upgradeAvailable = compareSemver(plugin.version, installedVersion) > 0;
+		} catch (err) {
+			// Invalid version format - treat as no upgrade available
+			console.warn(
+				`Invalid version format for plugin ${plugin.name}: marketplace=${plugin.version}, installed=${installedVersion}`,
+				err,
+			);
+		}
+	}
 
 	return (
 		<div className="rounded-lg border border-border/60 bg-card p-4 space-y-3 hover:border-border/80 transition-colors">
