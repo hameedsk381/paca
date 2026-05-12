@@ -117,7 +117,7 @@ This document lists all MCP tools implemented for the Paca API server.
 
 ## Statistics
 
-- **Total Tools**: 76 MCP tools
+- **Total Tools**: 81 MCP tools
 - **Categories**: 16 different categories
 - **API Endpoints Covered**: 80+ endpoints
 
