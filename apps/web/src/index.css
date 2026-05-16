@@ -424,54 +424,50 @@ a {
 }
 
 /* Make BlockNote side menu buttons smaller - Applied to all instances */
-.bn-side-menu {
-	gap: 2px !important;
-	padding: 2px !important;
-	min-width: 20px !important;
+.bn-root .bn-side-menu {
+	gap: 2px;
+	padding: 2px;
+	min-width: 20px;
 }
 
-.bn-side-menu > button {
-	width: 16px !important;
-	height: 16px !important;
-	padding: 3px !important;
-	min-width: 16px !important;
-	min-height: 16px !important;
-	transform: translateY(-4px) !important;
+.bn-root .bn-side-menu > button {
+	width: 16px;
+	height: 16px;
+	padding: 3px;
+	min-width: 16px;
+	min-height: 16px;
+	transform: translateY(-4px);
 }
 
-.bn-side-menu > button svg {
-	width: 10px !important;
-	height: 10px !important;
+.bn-root .bn-side-menu > button svg {
+	width: 10px;
+	height: 10px;
 }
 
 /* Reduce left padding/margin for side menu area */
-.bn-editor {
-	padding-left: 24px !important;
-	padding-right: 24px !important;
+.bn-root .bn-editor {
+	padding-left: 24px;
+	padding-right: 24px;
+	font-size: 75%;
 }
 
 /* Drag handle menu */
-.bn-drag-handle-menu {
-	min-width: 16px !important;
+.bn-root .bn-drag-handle-menu {
+	min-width: 16px;
 }
 
-.bn-drag-handle-menu button {
-	min-width: 16px !important;
-	min-height: 16px !important;
+.bn-root .bn-drag-handle-menu button {
+	min-width: 16px;
+	min-height: 16px;
 }
 
-.bn-drag-handle-menu svg {
-	width: 10px !important;
-	height: 10px !important;
+.bn-root .bn-drag-handle-menu svg {
+	width: 10px;
+	height: 10px;
 }
 
-.bn-side-menu button svg,
-.bn-side-menu .bn-side-menu-button svg {
-	width: 12px !important;
-	height: 12px !important;
-}
-
-/* Reduce BlockNote font size to half */
-.bn-editor {
-	font-size: 75% !important;
+.bn-root .bn-side-menu button svg,
+.bn-root .bn-side-menu .bn-side-menu-button svg {
+	width: 12px;
+	height: 12px;
 }
