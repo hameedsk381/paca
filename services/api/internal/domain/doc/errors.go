@@ -18,8 +18,8 @@ var (
 	ErrSnapshotNotFound = errors.New("doc snapshot: not found")
 
 	// Activity / comment errors.
-	ErrActivityNotFound    = errors.New("doc activity: not found")
-	ErrActivityForbidden   = errors.New("doc activity: only the author can modify this comment")
-	ErrActivityNotAComment = errors.New("doc activity: this entry is not a comment and cannot be edited")
+	ErrActivityNotFound      = errors.New("doc activity: not found")
+	ErrActivityForbidden     = errors.New("doc activity: only the author can modify this comment")
+	ErrActivityNotAComment   = errors.New("doc activity: this entry is not a comment and cannot be edited")
 	ErrCommentContentInvalid = errors.New("doc activity: comment content must not be empty")
 )
