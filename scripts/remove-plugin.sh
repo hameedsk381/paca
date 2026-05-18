@@ -229,7 +229,7 @@ if [[ "$REMOVE_ARTIFACTS_ONLY" = false ]]; then
     if [[ -z "$PLUGIN_UUID" ]] || [[ "$PLUGIN_UUID" == "null" ]]; then
         print_error "Plugin $PLUGIN_ID not found in API database"
         print_info "Available plugins:"
-        echo "$LIST_BODY" | jq -r '.plugins[] | "  - \(.name)"' 2>/dev/null || echo "  (Could not parse plugin list)"
+        echo "$LIST_BODY" | jq -r '.data.plugins[] | "  - \(.name)"' 2>/dev/null || echo "  (Could not parse plugin list)"
         print_info "The plugin may have already been unregistered, or you may not have permission to access it"
         exit 1
     fi
