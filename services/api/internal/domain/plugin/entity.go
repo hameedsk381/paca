@@ -56,7 +56,8 @@ type MCPManifest struct {
 // BackendManifest describes the backend (WASM) side of the plugin.
 type BackendManifest struct {
 	// Routes is the list of HTTP routes the plugin registers.
-	// Each route is mounted at /api/v1/plugins/{pluginId}/projects/:projectId/{path}.
+	// Each route is mounted at /api/v1/plugins/{pluginId}/{path}.
+	// Project-scoped routes should include /projects/:projectId in the path.
 	Routes []PluginRoute `json:"routes,omitempty"`
 	// EventSubscriptions lists the event topics the plugin subscribes to.
 	EventSubscriptions []string `json:"eventSubscriptions,omitempty"`

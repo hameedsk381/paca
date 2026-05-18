@@ -649,9 +649,11 @@ func New(deps Deps) *gin.Engine {
 			pluginList.GET("", deps.Plugin.ListPlugins)
 
 			// Plugin proxy routes — forward requests to plugin WASM handlers.
-			// Route-level authn/authz middleware is enforced by the plugin proxy
-			// handler from plugin manifest policy.
-			v1.Any("/plugins/:pluginId/projects/:projectId/*path", deps.Plugin.ProxyRequest)
+			// The full sub-path (including any /projects/:projectId/ segment) is
+			// captured by the wildcard and matched against the plugin's own route
+			// manifest. Route-level authn/authz is enforced by the plugin proxy
+			// handler based on the per-route middleware declarations in the manifest.
+			v1.Any("/plugins/:pluginId/*path", deps.Plugin.ProxyRequest)
 
 			// Admin plugin management — requires global users.write permission
 			// (no dedicated plugin permission exists yet).
