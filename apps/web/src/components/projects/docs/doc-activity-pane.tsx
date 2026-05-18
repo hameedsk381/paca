@@ -10,7 +10,6 @@ import {
 	type DocActivity,
 	deleteDocComment,
 	docQueryKeys,
-	getCommentText,
 	listActivities,
 	updateDocComment,
 } from "@/lib/doc-api";
@@ -56,21 +55,21 @@ function describeDocActivity(entry: ActivityEntry): string {
 			return "deleted the document";
 		case "doc.moved":
 			return "moved the document";
+		case "comment":
+			return "";
 		default:
-			return getCommentText(activity.content) || activity.activity_type;
+			return activity.activity_type;
 	}
 }
 
 interface DocActivityPaneProps {
 	projectId: string;
 	docId: string;
-	currentUserId?: string;
 }
 
 export function DocActivityPane({
 	projectId,
 	docId,
-	currentUserId,
 }: DocActivityPaneProps) {
 	const queryKey = docQueryKeys.activities(projectId, docId);
 
@@ -91,17 +90,23 @@ export function DocActivityPane({
 			}
 			describeActivity={describeDocActivity}
 			getCommentBlocks={(content) => {
-				const text = getCommentText(content);
-				if (!text) return null;
-				try {
-					const parsed = JSON.parse(text);
-					if (Array.isArray(parsed)) return parsed;
-				} catch {
+			if (Array.isArray(content)) return content;
+			if (
+				content &&
+				typeof content === "object" &&
+				!("length" in content)
+			) {
+				if ("content" in content) {
+					const blockContent = (content as { content?: unknown }).content;
+					if (Array.isArray(blockContent)) return blockContent;
+				}
+				if ("text" in content) {
+					const text = (content as { text?: string }).text ?? "";
 					return textToBlocks(text);
 				}
-				return textToBlocks(text);
-			}}
-			currentUserId={currentUserId}
+			}
+			return [];
+		}}
 			sortAscending
 		/>
 	);

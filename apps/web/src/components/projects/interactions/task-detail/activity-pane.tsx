@@ -2,7 +2,6 @@ import { useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 import { ActivityPane } from "@/components/shared/activity-pane";
 import { textToBlocks } from "@/components/shared/comment-blocknote";
-import { currentUserOptionalQueryOptions } from "@/lib/auth-api";
 import {
 	type Activity,
 	addComment,
@@ -33,7 +32,6 @@ export function TaskActivityPane({
 }: TaskActivityPaneProps) {
 	const { data: membersData } = useQuery(projectMembersQueryOptions(projectId));
 	const { data: sprintsData } = useQuery(sprintsQueryOptions(projectId));
-	const { data: currentUser } = useQuery(currentUserOptionalQueryOptions);
 
 	const nameMaps = useMemo(() => {
 		const members: Record<string, string> = {};
@@ -118,15 +116,19 @@ export function TaskActivityPane({
 				if (
 					content &&
 					typeof content === "object" &&
-					!("length" in content) &&
-					"text" in content
+					!("length" in content)
 				) {
-					const text = (content as { text?: string }).text ?? "";
-					return textToBlocks(text);
+					if ("content" in content) {
+						const blockContent = (content as { content?: unknown }).content;
+						if (Array.isArray(blockContent)) return blockContent;
+					}
+					if ("text" in content) {
+						const text = (content as { text?: string }).text ?? "";
+						return textToBlocks(text);
+					}
 				}
 				return [];
 			}}
-			currentUserId={currentUser?.id}
 		/>
 	);
 }

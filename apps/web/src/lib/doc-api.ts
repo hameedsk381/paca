@@ -336,7 +336,7 @@ export async function addDocComment(
 	if (typeof content === 'string') {
 		payload = { text: content };
 	} else if (Array.isArray(content)) {
-		payload = content;
+		payload = { content };
 	} else {
 		throw new Error("Invalid content type");
 	}
@@ -357,7 +357,7 @@ export async function updateDocComment(
 	if (typeof content === 'string') {
 		payload = { text: content };
 	} else if (Array.isArray(content)) {
-		payload = content;
+		payload = { content };
 	} else {
 		throw new Error("Invalid content type");
 	}

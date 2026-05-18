@@ -20,7 +20,6 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useDebouncedCallback } from "@/hooks/use-debounced-callback";
 import { useProjectPermissions } from "@/hooks/use-project-permissions";
-import { currentUserQueryOptions } from "@/lib/auth-api";
 import {
 	docFoldersQueryOptions,
 	docQueryKeys,
@@ -40,30 +39,13 @@ const TITLE_CLASSES =
 
 type RightPanel = "activity" | "history" | null;
 
-type ProjectMemberMeResponse = {
-	id: string;
-};
+
 
 function DocEditorPage() {
 	const { projectId, docId } = Route.useParams();
 	const { hasProjectPermission } = useProjectPermissions(projectId);
 	const canWrite = hasProjectPermission("docs.write");
 	const qc = useQueryClient();
-
-	const { data: currentUser } = useQuery(currentUserQueryOptions);
-	const currentAuthenticatedUserId = currentUser?.id;
-	const { data: currentProjectMember } = useQuery<ProjectMemberMeResponse>({
-		queryKey: ["projects", projectId, "members", "me"],
-		enabled: !!projectId && !!currentAuthenticatedUserId,
-		queryFn: async () => {
-			const response = await fetch(`/api/projects/${projectId}/members/me`);
-			if (!response.ok) {
-				throw new Error("Failed to load current project member");
-			}
-			return (await response.json()) as ProjectMemberMeResponse;
-		},
-	});
-	const currentUserId = currentProjectMember?.id;
 
 	const { data: doc, isError } = useQuery(docQueryOptions(projectId, docId));
 	const { data: allFolders = [] } = useQuery(docFoldersQueryOptions(projectId));
@@ -372,7 +354,6 @@ function DocEditorPage() {
 						<DocActivityPane
 							projectId={projectId}
 							docId={docId}
-							currentUserId={currentUserId}
 						/>
 					</div>
 				)}

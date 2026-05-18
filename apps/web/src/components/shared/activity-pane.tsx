@@ -49,7 +49,6 @@ export interface ActivityPaneConfig<T extends ActivityEntry> {
 	deleteComment?: (commentId: string) => Promise<void>;
 	describeActivity: (entry: T) => string;
 	getCommentBlocks: (content: T["content"]) => unknown[] | null;
-	currentUserId?: string;
 	sortAscending?: boolean;
 	nameMaps?: Record<string, Record<string, string>>;
 }
@@ -63,7 +62,6 @@ export function ActivityPane<T extends ActivityEntry>({
 	deleteComment,
 	describeActivity,
 	getCommentBlocks,
-	currentUserId,
 	sortAscending = false,
 }: ActivityPaneConfig<T>) {
 	const editorRef = useRef<CommentEditorHandle>(null);
@@ -99,6 +97,8 @@ export function ActivityPane<T extends ActivityEntry>({
 			return addComment(blocks);
 		},
 		onSuccess: () => {
+			editorRef.current?.clear();
+			setEditorFocused(false);
 			qc.invalidateQueries({ queryKey });
 		},
 	});
@@ -109,8 +109,6 @@ export function ActivityPane<T extends ActivityEntry>({
 		const text = blocksToText(blocks).trim();
 		if (!text) return;
 		addMutation.mutate(blocks);
-		editorRef.current = null;
-		setEditorFocused(false);
 	};
 
 	return (
@@ -147,7 +145,6 @@ export function ActivityPane<T extends ActivityEntry>({
 							updateComment={updateComment}
 							deleteComment={deleteComment}
 							queryKey={queryKey}
-							currentUserId={currentUserId}
 							projectId={projectId}
 						/>
 					))}
@@ -212,7 +209,6 @@ interface ActivityItemInnerProps<T extends ActivityEntry> {
 	updateComment?: (commentId: string, blocks: unknown[]) => Promise<unknown>;
 	deleteComment?: (commentId: string) => Promise<void>;
 	queryKey: QueryKey;
-	currentUserId?: string;
 	projectId: string;
 }
 
@@ -223,7 +219,6 @@ function ActivityItemInner<T extends ActivityEntry>({
 	updateComment,
 	deleteComment,
 	queryKey,
-	currentUserId,
 	projectId,
 }: ActivityItemInnerProps<T>) {
 	const qc = useQueryClient();
@@ -231,13 +226,12 @@ function ActivityItemInner<T extends ActivityEntry>({
 	const editEditorRef = useRef<CommentEditorHandle>(null);
 	const commentBlocks = getCommentBlocks(entry.content);
 
-	const isComment = entry.activity_type === "comment";
-	const isOwn = entry.actor_id === currentUserId;
-	const displayName = entry.actor_name || entry.actor_username || "System";
-	const initial = displayName.slice(0, 1).toUpperCase();
+const isComment = entry.activity_type === "comment";
+const displayName = entry.actor_name || entry.actor_username || "System";
+const initial = displayName.slice(0, 1).toUpperCase();
 
-	const canEdit = isComment && isOwn && !!updateComment;
-	const canDelete = isComment && isOwn && !!deleteComment;
+const canEdit = isComment && !!updateComment;
+const canDelete = isComment && !!deleteComment;
 
 	const updateMutation = useMutation({
 		mutationFn: (blocks: unknown[]) => {
