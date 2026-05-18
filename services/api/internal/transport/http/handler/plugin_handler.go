@@ -692,15 +692,15 @@ func scoreRoutePattern(pattern string) routePatternScore {
 	return score
 }
 
-func (s routePatternScore) moreSpecificThan(other routePatternScore) bool {
-	if s.wildcardSegments != other.wildcardSegments {
-		return s.wildcardSegments < other.wildcardSegments
+func (score routePatternScore) moreSpecificThan(other routePatternScore) bool {
+	if score.wildcardSegments != other.wildcardSegments {
+		return score.wildcardSegments < other.wildcardSegments
 	}
-	if s.staticSegments != other.staticSegments {
-		return s.staticSegments > other.staticSegments
+	if score.staticSegments != other.staticSegments {
+		return score.staticSegments > other.staticSegments
 	}
-	if s.paramSegments != other.paramSegments {
-		return s.paramSegments < other.paramSegments
+	if score.paramSegments != other.paramSegments {
+		return score.paramSegments < other.paramSegments
 	}
 	return false
 }

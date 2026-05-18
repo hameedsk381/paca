@@ -157,11 +157,7 @@ func applyAuthn(c *gin.Context, tm *jwttoken.Manager, apiKeyAuthenticator APIKey
 		return false
 	}
 	if claims.Kind != "access" {
-		if optional {
-			presenter.Error(c, apierr.New(apierr.CodeTokenInvalid, "invalid or expired token"))
-		} else {
-			presenter.Error(c, apierr.New(apierr.CodeTokenInvalid, "expected access token"))
-		}
+		presenter.Error(c, apierr.New(apierr.CodeTokenInvalid, "expected access token"))
 		return false
 	}
 
