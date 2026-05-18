@@ -1004,5 +1004,5 @@ func fakeIsContentTypeValid(content json.RawMessage) bool {
 	var legacy struct {
 		Text string `json:"text"`
 	}
-	return json.Unmarshal([]byte(trimmed), &legacy) == nil
+	return json.Unmarshal([]byte(trimmed), &legacy) == nil && legacy.Text != ""
 }

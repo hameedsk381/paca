@@ -286,7 +286,7 @@ func isContentTypeValid(content json.RawMessage) bool {
 	var legacy struct {
 		Text string `json:"text"`
 	}
-	return json.Unmarshal([]byte(trimmed), &legacy) == nil
+	return json.Unmarshal([]byte(trimmed), &legacy) == nil && legacy.Text != ""
 }
 
 // isContentEmpty checks if json.RawMessage content is empty or contains only whitespace.
