@@ -13,6 +13,10 @@ import {
 	listActivities,
 	updateDocComment,
 } from "@/lib/doc-api";
+import { currentUserQueryOptions } from "@/lib/auth-api";
+import { useQuery } from "@tanstack/react-query";
+import { useMemo } from "react";
+import { projectMembersQueryOptions } from "@/lib/project-api";
 
 type DocActivityChange = {
 	field: string;
@@ -71,6 +75,14 @@ export function DocActivityPane({
 	projectId,
 	docId,
 }: DocActivityPaneProps) {
+	const { data: currentUser } = useQuery(currentUserQueryOptions);
+	const { data: membersData } = useQuery(projectMembersQueryOptions(projectId));
+
+	const myMemberId = useMemo(() => {
+		if (!currentUser || !membersData) return undefined;
+		return membersData.find((m) => m.user_id === currentUser.id)?.id;
+	}, [currentUser, membersData]);
+
 	const queryKey = docQueryKeys.activities(projectId, docId);
 
 		return (
@@ -108,6 +120,7 @@ export function DocActivityPane({
 			return [];
 		}}
 			sortAscending
+			currentUserId={myMemberId}
 		/>
 	);
 }

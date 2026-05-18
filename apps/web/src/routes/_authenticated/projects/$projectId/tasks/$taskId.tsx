@@ -4,7 +4,7 @@ import { AlertCircle, ArrowLeft } from "lucide-react";
 
 import { TaskDetailModal } from "@/components/projects/interactions/task-detail-modal";
 import { Skeleton } from "@/components/ui/skeleton";
-import { usePermissions } from "@/hooks/use-permissions";
+import { useProjectPermissions } from "@/hooks/use-project-permissions";
 import { taskQueryOptions } from "@/lib/interaction-api";
 import {
 	projectMembersQueryOptions,
@@ -97,8 +97,8 @@ function TaskDetailSkeleton() {
 function TaskDetailPage() {
 	const { projectId, taskId } = Route.useParams();
 
-	const { hasPermission } = usePermissions();
-	const canEdit = hasPermission("tasks.write");
+	const { hasProjectPermission } = useProjectPermissions(projectId);
+	const canEdit = hasProjectPermission("tasks.write");
 
 	const { data: project } = useQuery(projectQueryOptions(projectId));
 	const { data: taskStatuses = [] } = useQuery(

@@ -4,7 +4,7 @@ import { AlertCircle, CheckCircle2, X } from "lucide-react";
 import { useState } from "react";
 
 import { InteractionLayout } from "@/components/projects/interactions/interaction-layout";
-import { usePermissions } from "@/hooks/use-permissions";
+import { useProjectPermissions } from "@/hooks/use-project-permissions";
 import {
 	completeSprint,
 	sprintQueryOptions,
@@ -35,7 +35,7 @@ export const Route = createFileRoute(
 
 function SprintPage() {
 	const { projectId, sprintId } = Route.useParams();
-	const { hasPermission } = usePermissions();
+	const { hasProjectPermission } = useProjectPermissions(projectId);
 	const qc = useQueryClient();
 	const navigate = useNavigate();
 
@@ -50,10 +50,10 @@ function SprintPage() {
 		taskStatusesQueryOptions(projectId),
 	);
 
-	const canCreate = hasPermission("tasks.write");
-	const canEdit = hasPermission("tasks.write");
-	const canManageViews = hasPermission("projects.write");
-	const canManageSprints = hasPermission("sprints.write");
+	const canCreate = hasProjectPermission("tasks.write");
+	const canEdit = hasProjectPermission("tasks.write");
+	const canManageViews = hasProjectPermission("projects.write");
+	const canManageSprints = hasProjectPermission("sprints.write");
 
 	const [completeOpen, setCompleteOpen] = useState(false);
 	const [moveToSprintId, setMoveToSprintId] = useState<string | null>(null);

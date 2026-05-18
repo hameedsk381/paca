@@ -36,9 +36,10 @@ export const CommentEditor = forwardRef<
 
 	const editor = useCreateBlockNote({
 		schema: customSchema,
-		initialContent: initialBlocks
-			? (initialBlocks as PartialBlock[])
-			: undefined,
+		initialContent:
+			initialBlocks && initialBlocks.length > 0
+				? (initialBlocks as PartialBlock[])
+				: undefined,
 		_tiptapOptions: {
 			editorProps: {
 				handleKeyDown: (_view, event) => {

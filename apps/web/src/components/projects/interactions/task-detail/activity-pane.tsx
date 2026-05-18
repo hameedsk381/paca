@@ -11,6 +11,7 @@ import {
 	updateComment,
 } from "@/lib/interaction-api";
 import { projectMembersQueryOptions } from "@/lib/project-api";
+import { currentUserQueryOptions } from "@/lib/auth-api";
 import { describeTaskChange } from "./activity-item";
 
 type FieldChange = {
@@ -32,6 +33,12 @@ export function TaskActivityPane({
 }: TaskActivityPaneProps) {
 	const { data: membersData } = useQuery(projectMembersQueryOptions(projectId));
 	const { data: sprintsData } = useQuery(sprintsQueryOptions(projectId));
+	const { data: currentUser } = useQuery(currentUserQueryOptions);
+
+	const myMemberId = useMemo(() => {
+		if (!currentUser || !membersData) return undefined;
+		return membersData.find((m) => m.user_id === currentUser.id)?.id;
+	}, [currentUser, membersData]);
 
 	const nameMaps = useMemo(() => {
 		const members: Record<string, string> = {};
@@ -129,6 +136,7 @@ export function TaskActivityPane({
 				}
 				return [];
 			}}
+			currentUserId={myMemberId}
 		/>
 	);
 }

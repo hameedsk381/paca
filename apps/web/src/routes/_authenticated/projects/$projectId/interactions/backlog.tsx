@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 import { InteractionLayout } from "@/components/projects/interactions/interaction-layout";
-import { usePermissions } from "@/hooks/use-permissions";
+import { useProjectPermissions } from "@/hooks/use-project-permissions";
 
 export const Route = createFileRoute(
 	"/_authenticated/projects/$projectId/interactions/backlog",
@@ -11,11 +11,11 @@ export const Route = createFileRoute(
 
 function BacklogPage() {
 	const { projectId } = Route.useParams();
-	const { hasPermission } = usePermissions();
+	const { hasProjectPermission } = useProjectPermissions(projectId);
 
-	const canCreate = hasPermission("tasks.write");
-	const canEdit = hasPermission("tasks.write");
-	const canManageViews = hasPermission("projects.write");
+	const canCreate = hasProjectPermission("tasks.write");
+	const canEdit = hasProjectPermission("tasks.write");
+	const canManageViews = hasProjectPermission("projects.write");
 
 	return (
 		<InteractionLayout
