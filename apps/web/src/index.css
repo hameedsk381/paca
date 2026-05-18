@@ -471,3 +471,19 @@ a {
 	width: 12px;
 	height: 12px;
 }
+
+/* Comment display - remove left and right padding */
+.bn-comment-display .bn-container {
+	padding-left: 0;
+	padding-right: 0;
+}
+
+.bn-comment-display .bn-editor {
+	padding-left: 0;
+	padding-right: 0;
+}
+
+.bn-comment-display .bn-block-content {
+	padding-left: 0;
+	padding-right: 0;
+}

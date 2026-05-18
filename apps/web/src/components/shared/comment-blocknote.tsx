@@ -110,7 +110,7 @@ export function CommentDisplay({ blocks }: CommentDisplayProps) {
 			editor={editor}
 			editable={false}
 			theme={resolvedMode}
-			className="bn-shadcn"
+			className="bn-comment-display"
 			sideMenu={false}
 		/>
 	);

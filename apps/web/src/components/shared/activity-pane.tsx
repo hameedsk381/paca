@@ -86,14 +86,17 @@ export function ActivityPane<T extends ActivityEntry>({
 		);
 	}, [activities, sortAscending]);
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: activities is needed to scroll when new items are added
 	useEffect(() => {
-		const viewport = scrollAreaRef.current?.querySelector(
-			'[data-slot="scroll-area-viewport"]',
-		) as HTMLElement;
-		if (viewport) {
-			viewport.scrollTop = viewport.scrollHeight;
-		}
-	}, []);
+		requestAnimationFrame(() => {
+			const viewport = scrollAreaRef.current?.querySelector(
+				'[data-slot="scroll-area-viewport"]',
+			) as HTMLElement;
+			if (viewport) {
+				viewport.scrollTop = viewport.scrollHeight;
+			}
+		});
+	}, [sorted]);
 
 	const addMutation = useMutation({
 		mutationFn: (blocks: unknown[]) => {
