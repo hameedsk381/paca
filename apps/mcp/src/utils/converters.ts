@@ -84,6 +84,10 @@ function convertMentionsToText(content: any): any {
 			result.content = convertMentionsToText(result.content);
 		}
 
+		if (result.children) {
+			result.children = convertMentionsToText(result.children);
+		}
+
 		return result;
 	}
 
