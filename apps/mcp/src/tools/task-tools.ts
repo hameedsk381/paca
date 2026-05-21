@@ -449,20 +449,20 @@ async function getTaskDetail(
 		customFields,
 	] = await Promise.all([
 		client.getProject(projectId).catch(() => undefined),
-		extendedClient?.listTaskStatuses(projectId).catch(() => []) ||
+		extendedClient?.listTaskStatuses(projectId)?.catch(() => []) ||
 			Promise.resolve([]),
-		extendedClient?.listTaskTypes(projectId).catch(() => []) ||
+		extendedClient?.listTaskTypes(projectId)?.catch(() => []) ||
 			Promise.resolve([]),
 		client.listSprints(projectId).catch(() => []),
-		extendedClient?.listProjectMembers(projectId).catch(() => []) ||
+		extendedClient?.listProjectMembers(projectId)?.catch(() => []) ||
 			Promise.resolve([]),
-		extendedClient?.listSubtasks(projectId, taskId).catch(() => []) ||
+		extendedClient?.listSubtasks(projectId, taskId)?.catch(() => []) ||
 			Promise.resolve([]),
-		viewsClient?.listTaskAttachments(projectId, taskId).catch(() => []) ||
+		viewsClient?.listTaskAttachments(projectId, taskId)?.catch(() => []) ||
 			Promise.resolve([]),
-		extendedClient?.listTaskActivities(projectId, taskId).catch(() => []) ||
+		extendedClient?.listTaskActivities(projectId, taskId)?.catch(() => []) ||
 			Promise.resolve([]),
-		viewsClient?.listCustomFieldDefinitions(projectId).catch(() => []) ||
+		viewsClient?.listCustomFieldDefinitions(projectId)?.catch(() => []) ||
 			Promise.resolve([]),
 	]);
 
