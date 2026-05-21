@@ -40,17 +40,12 @@
 #   docker compose \
 #     --env-file deploy/.env.production \
 #     -f deploy/docker-compose.prod.yml up -d
-# Self-hosted with PostgreSQL:
-#   # Set POSTGRES_PASSWORD or use the default
-#   docker compose \
-#     --env-file deploy/.env.production \
-#     -f deploy/docker-compose.prod.yml up -d
 #
-# Self-hosted with PostgreSQL (default):
-#   # Set POSTGRES_PASSWORD or use the default
+# With managed/external PostgreSQL (postgres container suppressed):
+#   # Set DATABASE_URL to your managed PostgreSQL connection string in .env.production
 #   docker compose \
 #     --env-file deploy/.env.production \
-#     -f deploy/docker-compose.prod.yml up -d
+#     -f deploy/docker-compose.prod.yml up -d --scale postgres=0
 
 name: paca-prod
 
