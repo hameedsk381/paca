@@ -232,18 +232,10 @@ func (c *S3Client) DeleteObject(ctx context.Context, bucket, key string) error {
 }
 
 // EnsureBucket creates the bucket if it does not already exist.
-// For AWS S3 (when Endpoint is empty), this only checks if the bucket exists
-// and assumes it has been manually created. For MinIO, it creates the bucket.
 func (c *S3Client) EnsureBucket(ctx context.Context, bucket string) error {
 	_, err := c.s3.HeadBucket(ctx, &s3.HeadBucketInput{Bucket: aws.String(bucket)})
 	if err == nil {
 		return nil // already exists
-	}
-
-	// For AWS S3 (Endpoint is empty), don't attempt to create the bucket.
-	// The bucket should already exist and have been manually created.
-	if c.cfg.Endpoint == "" {
-		return nil // assume bucket exists or will be created manually
 	}
 
 	input := &s3.CreateBucketInput{Bucket: aws.String(bucket)}

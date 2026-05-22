@@ -151,8 +151,10 @@ func New(cfg *config.Config) (*App, error) {
 	if err != nil {
 		return nil, fmt.Errorf("bootstrap: storage client: %w", err)
 	}
-	if err := storageClient.EnsureBucket(context.Background(), cfg.Storage.Bucket); err != nil {
-		return nil, fmt.Errorf("bootstrap: ensure storage bucket: %w", err)
+	if cfg.Storage.Provider != "s3" {
+		if err := storageClient.EnsureBucket(context.Background(), cfg.Storage.Bucket); err != nil {
+			return nil, fmt.Errorf("bootstrap: ensure storage bucket: %w", err)
+		}
 	}
 
 	attachmentService := attachmentsvc.New(attachmentRepo, attachmentsvc.NewTaskOwnerChecker(taskRepo), storageClient, cfg.Storage.Bucket)
