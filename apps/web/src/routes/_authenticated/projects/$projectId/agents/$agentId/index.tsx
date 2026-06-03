@@ -107,9 +107,6 @@ function OverviewTab({
 	const [llmBaseUrl, setLlmBaseUrl] = useState(agent.llm_base_url ?? "");
 	const [systemPrompt, setSystemPrompt] = useState(agent.system_prompt);
 	const [canClone, setCanClone] = useState(agent.can_clone_repos);
-	const [canPrs, setCanPrs] = useState(agent.can_create_prs);
-	const [maxIter, setMaxIter] = useState(String(agent.max_iterations));
-	const [timeout, setTimeout] = useState(String(agent.timeout_minutes));
 	const [committerName, setCommitterName] = useState(agent.git_committer_name);
 	const [committerEmail, setCommitterEmail] = useState(agent.git_committer_email);
 
@@ -121,9 +118,6 @@ function OverviewTab({
 		llmBaseUrl !== (agent.llm_base_url ?? "") ||
 		systemPrompt !== agent.system_prompt ||
 		canClone !== agent.can_clone_repos ||
-		canPrs !== agent.can_create_prs ||
-		maxIter !== String(agent.max_iterations) ||
-		timeout !== String(agent.timeout_minutes) ||
 		committerName !== agent.git_committer_name ||
 		committerEmail !== agent.git_committer_email;
 
@@ -137,9 +131,6 @@ function OverviewTab({
 				llm_base_url: llmBaseUrl || null,
 				system_prompt: systemPrompt,
 				can_clone_repos: canClone,
-				can_create_prs: canPrs,
-				max_iterations: Number(maxIter) || 30,
-				timeout_minutes: Number(timeout) || 60,
 				git_committer_name: committerName.trim(),
 				git_committer_email: committerEmail.trim(),
 			}),
@@ -276,44 +267,6 @@ function OverviewTab({
 							disabled={!canWrite}
 						/>
 					</div>
-					<div className="flex items-center justify-between">
-						<div>
-							<p className="text-sm">Create pull requests</p>
-							<p className="text-xs text-muted-foreground">
-								Allow agent to open PRs on GitHub
-							</p>
-						</div>
-						<Switch
-							checked={canPrs}
-							onCheckedChange={setCanPrs}
-							disabled={!canWrite}
-						/>
-					</div>
-				</div>
-			</div>
-
-			<div className="grid grid-cols-2 gap-3">
-				<div className="space-y-1.5">
-					<Label>Max iterations</Label>
-					<Input
-						type="number"
-						min={1}
-						max={200}
-						value={maxIter}
-						onChange={(e) => setMaxIter(e.target.value)}
-						disabled={!canWrite}
-					/>
-				</div>
-				<div className="space-y-1.5">
-					<Label>Timeout (minutes)</Label>
-					<Input
-						type="number"
-						min={1}
-						max={480}
-						value={timeout}
-						onChange={(e) => setTimeout(e.target.value)}
-						disabled={!canWrite}
-					/>
 				</div>
 			</div>
 

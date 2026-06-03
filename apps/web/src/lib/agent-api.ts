@@ -88,9 +88,6 @@ export interface Agent {
 	llm_base_url?: string | null;
 	system_prompt: string;
 	can_clone_repos: boolean;
-	can_create_prs: boolean;
-	max_iterations: number;
-	timeout_minutes: number;
 	git_committer_name: string;
 	git_committer_email: string;
 	member_id?: string | null;
@@ -179,9 +176,6 @@ export async function createAgent(
 		llm_base_url?: string | null;
 		system_prompt?: string;
 		can_clone_repos?: boolean;
-		can_create_prs?: boolean;
-		max_iterations?: number;
-		timeout_minutes?: number;
 		git_committer_name?: string;
 		git_committer_email?: string;
 		project_role_id: string;
@@ -206,9 +200,6 @@ export async function updateAgent(
 		llm_base_url?: string | null;
 		system_prompt?: string;
 		can_clone_repos?: boolean;
-		can_create_prs?: boolean;
-		max_iterations?: number;
-		timeout_minutes?: number;
 		git_committer_name?: string;
 		git_committer_email?: string;
 	},
