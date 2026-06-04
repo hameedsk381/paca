@@ -387,6 +387,8 @@ func TestE2EProjectMembers_FullLifecycle(t *testing.T) {
 
 	membersURL := fmt.Sprintf("%s/api/v1/projects/%s/members", env.base, projID)
 
+	var memberID string // project_member record UUID returned by the add_member endpoint
+
 	t.Run("add_member", func(t *testing.T) {
 		req := mustRequest(env.ctx, t, http.MethodPost, membersURL,
 			jsonBody(t, map[string]any{"user_id": memberUserID, "project_role_id": roleID}))
@@ -400,6 +402,10 @@ func TestE2EProjectMembers_FullLifecycle(t *testing.T) {
 		data := assertDataMap(t, env2)
 		if uid, _ := data["user_id"].(string); uid != memberUserID {
 			t.Errorf("expected user_id %q, got %q", memberUserID, uid)
+		}
+		memberID, _ = data["id"].(string)
+		if memberID == "" {
+			t.Fatal("expected non-empty member id in response")
 		}
 	})
 
@@ -432,7 +438,7 @@ func TestE2EProjectMembers_FullLifecycle(t *testing.T) {
 	})
 
 	t.Run("update_member_role", func(t *testing.T) {
-		url := membersURL + "/" + memberUserID
+		url := membersURL + "/" + memberID
 		req := mustRequest(env.ctx, t, http.MethodPatch, url,
 			jsonBody(t, map[string]any{"project_role_id": updatedRoleID}))
 		req.Header.Set("Content-Type", "application/json")
@@ -461,7 +467,7 @@ func TestE2EProjectMembers_FullLifecycle(t *testing.T) {
 	})
 
 	t.Run("remove_member", func(t *testing.T) {
-		url := membersURL + "/" + memberUserID
+		url := membersURL + "/" + memberID
 		req := mustRequest(env.ctx, t, http.MethodDelete, url, nil)
 		req.Header.Set("Authorization", "Bearer "+token)
 		resp := mustDo(t, client, req)
@@ -470,7 +476,7 @@ func TestE2EProjectMembers_FullLifecycle(t *testing.T) {
 	})
 
 	t.Run("remove_nonexistent_member_not_found", func(t *testing.T) {
-		url := membersURL + "/" + memberUserID
+		url := membersURL + "/" + memberID
 		req := mustRequest(env.ctx, t, http.MethodDelete, url, nil)
 		req.Header.Set("Authorization", "Bearer "+token)
 		resp := mustDo(t, client, req)
@@ -769,6 +775,8 @@ func TestE2EProject_MemberRolePermissionsEnforced(t *testing.T) {
 	membersURL := fmt.Sprintf("%s/api/v1/projects/%s/members", env.base, projID)
 	rolesURL := fmt.Sprintf("%s/api/v1/projects/%s/roles", env.base, projID)
 
+	var extraMemberID string // project_member record UUID for extraUser
+
 	t.Run("manager_can_update_project", func(t *testing.T) {
 		body := jsonBody(t, map[string]any{"name": "updated-by-manager", "description": "mgr update"})
 		req := mustRequest(env.ctx, t, http.MethodPatch,
@@ -800,6 +808,13 @@ func TestE2EProject_MemberRolePermissionsEnforced(t *testing.T) {
 		resp := mustDo(t, mgrClient, req)
 		defer func() { _ = resp.Body.Close() }()
 		assertStatus(t, resp, http.StatusCreated)
+		var env2 envelope
+		decodeJSON(t, resp, &env2)
+		data := assertDataMap(t, env2)
+		extraMemberID, _ = data["id"].(string)
+		if extraMemberID == "" {
+			t.Fatal("expected non-empty member id in response")
+		}
 	})
 
 	t.Run("viewer_cannot_add_member", func(t *testing.T) {
@@ -815,7 +830,7 @@ func TestE2EProject_MemberRolePermissionsEnforced(t *testing.T) {
 	})
 
 	t.Run("manager_can_remove_member", func(t *testing.T) {
-		url := membersURL + "/" + extraUser.ID.String()
+		url := membersURL + "/" + extraMemberID
 		req := mustRequest(env.ctx, t, http.MethodDelete, url, nil)
 		req.Header.Set("Authorization", "Bearer "+mgrToken)
 		resp := mustDo(t, mgrClient, req)
@@ -824,8 +839,8 @@ func TestE2EProject_MemberRolePermissionsEnforced(t *testing.T) {
 	})
 
 	t.Run("viewer_cannot_remove_member", func(t *testing.T) {
-		// Target the manager user — authz check happens before existence check.
-		url := membersURL + "/" + mgrUser.ID.String()
+		// Target a random member UUID — authz check happens before existence check.
+		url := membersURL + "/" + uuid.NewString()
 		req := mustRequest(env.ctx, t, http.MethodDelete, url, nil)
 		req.Header.Set("Authorization", "Bearer "+viewerToken)
 		resp := mustDo(t, viewerClient, req)
