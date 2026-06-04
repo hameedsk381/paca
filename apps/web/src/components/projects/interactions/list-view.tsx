@@ -1,6 +1,11 @@
 import { useMemo } from "react";
 
-import { resolveFilterConfig, type Sprint, type Task, type ViewConfig } from "@/lib/interaction-api";
+import {
+	resolveFilterConfig,
+	type Sprint,
+	type Task,
+	type ViewConfig,
+} from "@/lib/interaction-api";
 import type {
 	CustomFieldDefinition,
 	ProjectMember,
@@ -183,7 +188,10 @@ export function ListView({
 
 	const savedCollapsedColumns = viewConfig?.collapsed_columns;
 
-	const handleGroupCollapseChange = (groupKey: string, isCollapsed: boolean) => {
+	const handleGroupCollapseChange = (
+		groupKey: string,
+		isCollapsed: boolean,
+	) => {
 		// When no saved preference exists yet, seed from the current visual state
 		// (done-category groups are auto-collapsed by isDone). This ensures the
 		// first save captures the full actual state rather than an empty baseline.

@@ -3,11 +3,11 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import {
+	resolveFilterConfig,
 	type Sprint,
 	type Task,
 	updateTask,
 	type ViewConfig,
-	resolveFilterConfig,
 } from "@/lib/interaction-api";
 import type {
 	CustomFieldDefinition,
@@ -100,7 +100,6 @@ export function BoardView({
 		() => new Set(viewConfig?.collapsed_columns ?? []),
 	);
 
-	// biome-ignore lint/correctness/useExhaustiveDependencies: sync collapsed columns when saved config changes
 	useEffect(() => {
 		setCollapsedColumns(new Set(viewConfig?.collapsed_columns ?? []));
 	}, [viewConfig?.collapsed_columns]);
@@ -690,7 +689,11 @@ export function BoardView({
 						{effectiveColumnDefs.map((colDef) => {
 							const isCollapsed = collapsedColumns.has(colDef.key);
 							const colTasks = getColumnTasks(colDef.key);
-							const sumValue = computeFieldSum(colTasks, fieldSum, customFields);
+							const sumValue = computeFieldSum(
+								colTasks,
+								fieldSum,
+								customFields,
+							);
 							const displayCount =
 								fieldSum && fieldSum !== "count" ? sumValue : colTasks.length;
 
@@ -769,10 +772,7 @@ export function BoardView({
 									return (
 										<div
 											key={colDef.key}
-											className={cn(
-												"shrink-0",
-												isCollapsed ? "w-10" : "w-72",
-											)}
+											className={cn("shrink-0", isCollapsed ? "w-10" : "w-72")}
 										>
 											{!isCollapsed && renderCellCards(colDef, swimDef)}
 										</div>
