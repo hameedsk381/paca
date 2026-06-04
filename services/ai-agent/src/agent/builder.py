@@ -1,4 +1,5 @@
 """Builders for LLM, skill, and MCP configuration objects."""
+
 from __future__ import annotations
 
 import logging
@@ -31,10 +32,16 @@ def build_llm(agent_config: AgentConfig) -> LLM:
 
     # When a base_url is present the endpoint is OpenAI-compatible;
     # LiteLLM requires the "openai/" prefix in that case.
-    model_str = f"openai/{agent_config.llm_model}" if llm_base_url else f"{provider}/{agent_config.llm_model}"
+    model_str = (
+        f"openai/{agent_config.llm_model}"
+        if llm_base_url
+        else f"{provider}/{agent_config.llm_model}"
+    )
 
     key_val = agent_config.llm_api_key_secret_ref or ""
-    key_preview = (key_val[:8] + "...") if len(key_val) > 8 else ("<empty>" if not key_val else key_val)
+    key_preview = (
+        (key_val[:8] + "...") if len(key_val) > 8 else ("<empty>" if not key_val else key_val)
+    )
     logger.info(
         "LLM config — model=%s base_url=%s api_key_prefix=%s",
         model_str,
@@ -42,7 +49,11 @@ def build_llm(agent_config: AgentConfig) -> LLM:
         key_preview,
     )
 
-    llm_kwargs: dict = {"model": model_str, "api_key": SecretStr(key_val), "stream": True}
+    llm_kwargs: dict = {
+        "model": model_str,
+        "api_key": SecretStr(key_val),
+        "stream": True,
+    }
     if llm_base_url:
         llm_kwargs["base_url"] = llm_base_url
 

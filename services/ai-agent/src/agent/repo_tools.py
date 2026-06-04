@@ -1,16 +1,19 @@
 """Repository management tools for the agent (list and clone repositories)."""
+
 from __future__ import annotations
 
 import re
 import shlex
 from collections.abc import Sequence
-from urllib.parse import urlparse, quote as urlquote
+from urllib.parse import quote as urlquote
+from urllib.parse import urlparse
 
 import httpx
 from openhands.sdk import Action, Observation, TextContent, ToolDefinition
 from openhands.sdk.tool import Tool, ToolExecutor, register_tool
 from openhands.tools.terminal import TerminalAction, TerminalExecutor
 from pydantic import Field
+
 
 def _scrub_token(text: str, token: str) -> str:
     """Remove an auth token from git command output to prevent accidental logging."""
@@ -52,7 +55,11 @@ class ListRepositoriesObservation(Observation):
         if self.error:
             return [TextContent(text=f"Failed to list repositories: {self.error}")]
         if not self.count:
-            return [TextContent(text="No repositories found. Make sure a repository is linked to this project.")]
+            return [
+                TextContent(
+                    text="No repositories found. Make sure a repository is linked to this project."
+                )
+            ]
 
         lines = [f"Found {self.count} available repository(ies):", ""]
         for i, repo in enumerate(self.repositories, 1):
@@ -68,18 +75,26 @@ class ListRepositoriesObservation(Observation):
         lines.append("To clone a repository, use the clone_repository tool with:")
         lines.append(f"  - plugin_id: The plugin ID (e.g., '{self.repositories[0]['plugin_id']}')")
         lines.append(f"  - repo_id: The repository ID (e.g., '{self.repositories[0]['repo_id']}')")
-        lines.append(f"  - target_dir: Target directory (default: /workspace/repo)")
+        lines.append("  - target_dir: Target directory (default: /workspace/repo)")
         return [TextContent(text="\n".join(lines))]
 
 
 class ListRepositoriesExecutor(ToolExecutor[ListRepositoriesAction, ListRepositoriesObservation]):
-    def __init__(self, project_id: str, repo_plugin_ids: list[str], api_base_url: str, api_key: str) -> None:
+    def __init__(
+        self,
+        project_id: str,
+        repo_plugin_ids: list[str],
+        api_base_url: str,
+        api_key: str,
+    ) -> None:
         self.project_id = project_id
         self.repo_plugin_ids = repo_plugin_ids
         self.api_base_url = api_base_url
         self.api_key = api_key
 
-    def __call__(self, action: ListRepositoriesAction, conversation=None) -> ListRepositoriesObservation:
+    def __call__(
+        self, action: ListRepositoriesAction, conversation=None
+    ) -> ListRepositoriesObservation:
         all_repos: list[dict] = []
         errors: list[str] = []
         for plugin_id in self.repo_plugin_ids:
@@ -150,13 +165,21 @@ class CloneRepositoryObservation(Observation):
 
 
 class CloneRepositoryExecutor(ToolExecutor[CloneRepositoryAction, CloneRepositoryObservation]):
-    def __init__(self, project_id: str, terminal: TerminalExecutor, api_base_url: str, api_key: str) -> None:
+    def __init__(
+        self,
+        project_id: str,
+        terminal: TerminalExecutor,
+        api_base_url: str,
+        api_key: str,
+    ) -> None:
         self.project_id = project_id
         self.terminal = terminal
         self.api_base_url = api_base_url
         self.api_key = api_key
 
-    def __call__(self, action: CloneRepositoryAction, conversation=None) -> CloneRepositoryObservation:
+    def __call__(
+        self, action: CloneRepositoryAction, conversation=None
+    ) -> CloneRepositoryObservation:
         try:
             url = (
                 f"{self.api_base_url}/api/v1/plugins/{action.plugin_id}"
@@ -187,9 +210,13 @@ class CloneRepositoryExecutor(ToolExecutor[CloneRepositoryAction, CloneRepositor
             result = self.terminal(TerminalAction(command=clone_cmd))
             if result.exit_code is not None and result.exit_code != 0:
                 safe_msg = _scrub_token(result.text, token)
-                return CloneRepositoryObservation(success=False, message=f"git clone failed: {safe_msg}")
+                return CloneRepositoryObservation(
+                    success=False, message=f"git clone failed: {safe_msg}"
+                )
 
-            branch_result = self.terminal(TerminalAction(command=f"cd {target} && git branch --show-current 2>&1"))
+            branch_result = self.terminal(
+                TerminalAction(command=f"cd {target} && git branch --show-current 2>&1")
+            )
             branch = branch_result.text.strip()
             return CloneRepositoryObservation(
                 success=True,
@@ -237,7 +264,13 @@ class PushBranchObservation(Observation):
 
 
 class PushBranchExecutor(ToolExecutor[PushBranchAction, PushBranchObservation]):
-    def __init__(self, project_id: str, terminal: TerminalExecutor, api_base_url: str, api_key: str) -> None:
+    def __init__(
+        self,
+        project_id: str,
+        terminal: TerminalExecutor,
+        api_base_url: str,
+        api_key: str,
+    ) -> None:
         self.project_id = project_id
         self.terminal = terminal
         self.api_base_url = api_base_url
@@ -256,13 +289,18 @@ class PushBranchExecutor(ToolExecutor[PushBranchAction, PushBranchObservation]):
             token = ci.get("token", "")
             clone_url_str = ci.get("clone_url", "")
             if not clone_url_str:
-                return PushBranchObservation(success=False, message="Could not determine clone URL for repository.")
+                return PushBranchObservation(
+                    success=False,
+                    message="Could not determine clone URL for repository.",
+                )
 
             # Resolve branch name.
             branch = action.branch_name.strip()
             if not branch:
                 br = self.terminal(
-                    TerminalAction(command=f"git -C {shlex.quote(action.repo_dir)} branch --show-current 2>&1")
+                    TerminalAction(
+                        command=f"git -C {shlex.quote(action.repo_dir)} branch --show-current 2>&1"
+                    )
                 )
                 branch = br.text.strip()
             if not branch:
@@ -330,14 +368,20 @@ class CreatePullRequestObservation(Observation):
         return [TextContent(text=f"Failed to create pull request: {self.message}")]
 
 
-class CreatePullRequestExecutor(ToolExecutor[CreatePullRequestAction, CreatePullRequestObservation]):
-    def __init__(self, project_id: str, task_id: str | None, api_base_url: str, api_key: str) -> None:
+class CreatePullRequestExecutor(
+    ToolExecutor[CreatePullRequestAction, CreatePullRequestObservation]
+):
+    def __init__(
+        self, project_id: str, task_id: str | None, api_base_url: str, api_key: str
+    ) -> None:
         self.project_id = project_id
         self.task_id = task_id
         self.api_base_url = api_base_url
         self.api_key = api_key
 
-    def __call__(self, action: CreatePullRequestAction, conversation=None) -> CreatePullRequestObservation:
+    def __call__(
+        self, action: CreatePullRequestAction, conversation=None
+    ) -> CreatePullRequestObservation:
         if not self.task_id:
             return CreatePullRequestObservation(
                 success=False,
@@ -442,11 +486,15 @@ class ListRepositoriesTool(ToolDefinition[ListRepositoriesAction, ListRepositori
         api_base_url: str,
         api_key: str,
     ) -> Sequence[ToolDefinition]:
-        return [cls(
-            description=_LIST_DESC,
-            action_type=ListRepositoriesAction,
-            executor=ListRepositoriesExecutor(project_id, repo_plugin_ids, api_base_url, api_key),
-        )]
+        return [
+            cls(
+                description=_LIST_DESC,
+                action_type=ListRepositoriesAction,
+                executor=ListRepositoriesExecutor(
+                    project_id, repo_plugin_ids, api_base_url, api_key
+                ),
+            )
+        ]
 
 
 class CloneRepositoryTool(ToolDefinition[CloneRepositoryAction, CloneRepositoryObservation]):
@@ -461,12 +509,14 @@ class CloneRepositoryTool(ToolDefinition[CloneRepositoryAction, CloneRepositoryO
     ) -> Sequence[ToolDefinition]:
         working_dir = conv_state.workspace.working_dir if conv_state else "/tmp"
         terminal = TerminalExecutor(working_dir=working_dir)
-        return [cls(
-            description=_CLONE_DESC,
-            action_type=CloneRepositoryAction,
-            observation_type=CloneRepositoryObservation,
-            executor=CloneRepositoryExecutor(project_id, terminal, api_base_url, api_key),
-        )]
+        return [
+            cls(
+                description=_CLONE_DESC,
+                action_type=CloneRepositoryAction,
+                observation_type=CloneRepositoryObservation,
+                executor=CloneRepositoryExecutor(project_id, terminal, api_base_url, api_key),
+            )
+        ]
 
 
 class PushBranchTool(ToolDefinition[PushBranchAction, PushBranchObservation]):
@@ -481,12 +531,14 @@ class PushBranchTool(ToolDefinition[PushBranchAction, PushBranchObservation]):
     ) -> Sequence[ToolDefinition]:
         working_dir = conv_state.workspace.working_dir if conv_state else "/tmp"
         terminal = TerminalExecutor(working_dir=working_dir)
-        return [cls(
-            description=_PUSH_BRANCH_DESC,
-            action_type=PushBranchAction,
-            observation_type=PushBranchObservation,
-            executor=PushBranchExecutor(project_id, terminal, api_base_url, api_key),
-        )]
+        return [
+            cls(
+                description=_PUSH_BRANCH_DESC,
+                action_type=PushBranchAction,
+                observation_type=PushBranchObservation,
+                executor=PushBranchExecutor(project_id, terminal, api_base_url, api_key),
+            )
+        ]
 
 
 class CreatePullRequestTool(ToolDefinition[CreatePullRequestAction, CreatePullRequestObservation]):
@@ -500,12 +552,14 @@ class CreatePullRequestTool(ToolDefinition[CreatePullRequestAction, CreatePullRe
         api_base_url: str,
         api_key: str,
     ) -> Sequence[ToolDefinition]:
-        return [cls(
-            description=_CREATE_PR_DESC,
-            action_type=CreatePullRequestAction,
-            observation_type=CreatePullRequestObservation,
-            executor=CreatePullRequestExecutor(project_id, task_id, api_base_url, api_key),
-        )]
+        return [
+            cls(
+                description=_CREATE_PR_DESC,
+                action_type=CreatePullRequestAction,
+                observation_type=CreatePullRequestObservation,
+                executor=CreatePullRequestExecutor(project_id, task_id, api_base_url, api_key),
+            )
+        ]
 
 
 # Register tool classes so Agent can resolve them via Tool(name=..., params={...})
@@ -531,8 +585,18 @@ def make_repository_tool_specs(
     """
     common = {"api_base_url": api_base_url, "api_key": api_key}
     return [
-        Tool(name="list_repositories", params={"project_id": project_id, "repo_plugin_ids": repo_plugin_ids, **common}),
+        Tool(
+            name="list_repositories",
+            params={
+                "project_id": project_id,
+                "repo_plugin_ids": repo_plugin_ids,
+                **common,
+            },
+        ),
         Tool(name="clone_repository", params={"project_id": project_id, **common}),
         Tool(name="push_branch", params={"project_id": project_id, **common}),
-        Tool(name="create_pull_request", params={"project_id": project_id, "task_id": task_id, **common}),
+        Tool(
+            name="create_pull_request",
+            params={"project_id": project_id, "task_id": task_id, **common},
+        ),
     ]

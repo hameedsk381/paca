@@ -1,11 +1,12 @@
 """Valkey stream consumer worker loop."""
+
 from __future__ import annotations
 
 import asyncio
 import logging
 
-from .config import settings
 from .agent.executor import run_conversation
+from .config import settings
 from .core.streams import ack_trigger, ensure_consumer_group, read_triggers
 from .repositories.agent_repository import load_agent_config
 

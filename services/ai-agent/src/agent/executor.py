@@ -1,8 +1,8 @@
 """Agent conversation executor — orchestrates LLM, skills, MCP, and repo tools."""
+
 from __future__ import annotations
 
 import asyncio
-import itertools
 import json
 import logging
 import threading
@@ -87,6 +87,7 @@ def _gather_repo_sources(trigger: TriggerMessage) -> list[RepoInfoSource]:
 
 # ─── Shared event index ───────────────────────────────────────────────────────
 
+
 class _AtomicCounter:
     """Thread-safe monotonic counter shared across event and token callbacks."""
 
@@ -124,10 +125,10 @@ def _make_event_callback(
         # Events the frontend never renders — skip to avoid wasting event_index
         # slots and polluting the paginated events list.
         if event_type in {
-            "StreamingDeltaEvent",          # streaming chunks (handled by token_callbacks)
-            "ConversationStateUpdateEvent", # internal iteration bookkeeping
-            "SystemPromptEvent",            # system prompt echo — not shown to user
-            "ConversationErrorEvent",       # SDK error signal — surfaced via conversation status
+            "StreamingDeltaEvent",  # streaming chunks (handled by token_callbacks)
+            "ConversationStateUpdateEvent",  # internal iteration bookkeeping
+            "SystemPromptEvent",  # system prompt echo — not shown to user
+            "ConversationErrorEvent",  # SDK error signal — surfaced via conversation status
         }:
             return
         # Agent text responses are captured by token_callbacks with richer
@@ -167,7 +168,11 @@ def _make_event_callback(
         try:
             future.result(timeout=10)
         except Exception as exc:
-            logger.warning("Event persist failed for conversation %s: %s", trigger.conversation_id, exc)
+            logger.warning(
+                "Event persist failed for conversation %s: %s",
+                trigger.conversation_id,
+                exc,
+            )
 
     return callback
 
@@ -271,21 +276,28 @@ async def run_conversation(trigger: TriggerMessage, agent_config: AgentConfig) -
     try:
         llm = build_llm(agent_config)
         skills = build_skills(agent_config.skills)
-        mcp_config = build_mcp_config(agent_config.mcp_servers, agent_config.agent_id, trigger.project_id)
+        mcp_config = build_mcp_config(
+            agent_config.mcp_servers, agent_config.agent_id, trigger.project_id
+        )
 
         system_suffix = agent_config.system_prompt or ""
 
         # Documentation workflow — always read project docs first, always write to Paca.
         system_suffix += (
             "\n\n## IMPORTANT: Documentation Workflow\n"
-            f"This project's documentation is managed in Paca (project ID: `{trigger.project_id}`).\n\n"
+            f"This project's documentation is managed in Paca"
+            f" (project ID: `{trigger.project_id}`).\n\n"
             "**Before starting any task**, read the project documentation:\n"
-            f"1. Call `list_docs` with `projectId='{trigger.project_id}'` to see the full documentation tree.\n"
-            "2. Call `read_doc` on relevant documents to understand the project context before proceeding.\n\n"
-            "**When writing documentation**, always use the Paca MCP tools — never create local markdown files:\n"
+            f"1. Call `list_docs` with `projectId='{trigger.project_id}'`"
+            " to see the full documentation tree.\n"
+            "2. Call `read_doc` on relevant documents to understand"
+            " the project context before proceeding.\n\n"
+            "**When writing documentation**, always use the Paca MCP tools"
+            " — never create local markdown files:\n"
             "- Call `list_docs` to check whether a document already exists at the intended path.\n"
             "- If it exists: `write_doc` will update it automatically.\n"
-            "- If it does not exist: `write_doc` will create it and any missing folders automatically.\n"
+            "- If it does not exist: `write_doc` will create it"
+            " and any missing folders automatically.\n"
             "- Use paths like `'Architecture/API Design'` — folder structure is handled for you.\n"
         )
 
@@ -308,7 +320,8 @@ async def run_conversation(trigger: TriggerMessage, agent_config: AgentConfig) -
                 "   git -C /workspace/repo checkout -b <branch-name>\n"
                 "4. Make your code changes, then commit them:\n"
                 "   git -C /workspace/repo add -A && git -C /workspace/repo commit -m '<message>'\n"
-                "5. Call push_branch with the plugin_id, repo_id, and the branch name to publish the branch.\n"
+                "5. Call push_branch with the plugin_id, repo_id,"
+                " and the branch name to publish the branch.\n"
                 "6. Call create_pull_request with the plugin_id, repo_id, a descriptive title, "
                 "the feature branch as head_branch, and the default branch as base_branch.\n\n"
                 "Do NOT skip steps 5 and 6 — always push your branch and open a PR when finished."
@@ -322,7 +335,6 @@ async def run_conversation(trigger: TriggerMessage, agent_config: AgentConfig) -
                 git_committer_name=agent_config.git_committer_name,
                 git_committer_email=agent_config.git_committer_email,
             ) as workspace:
-
                 agent_kwargs: dict = {"llm": llm, "agent_context": agent_context}
                 if mcp_config.get("mcpServers"):
                     agent_kwargs["mcp_config"] = mcp_config
@@ -375,7 +387,9 @@ async def run_conversation(trigger: TriggerMessage, agent_config: AgentConfig) -
                 conversation.run()
 
         await asyncio.get_event_loop().run_in_executor(None, _run_sync)
-        await conversation_repository.update_conversation_status(trigger.conversation_id, "finished")
+        await conversation_repository.update_conversation_status(
+            trigger.conversation_id, "finished"
+        )
         await stream_store.publish_realtime(
             project_id=trigger.project_id,
             conversation_id=trigger.conversation_id,

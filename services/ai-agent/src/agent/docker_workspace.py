@@ -1,4 +1,5 @@
 """Docker container sandbox for isolated OpenHands agent execution."""
+
 from __future__ import annotations
 
 import logging
@@ -8,14 +9,13 @@ import secrets
 import socket
 import threading
 import time
+from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Iterator
 
 import docker
 import httpx
 from docker.models.containers import Container
-
 from openhands.sdk import RemoteWorkspace
 
 from ..config import settings
@@ -30,7 +30,9 @@ _ports_in_use: set[int] = set()
 
 def _acquire_port() -> int:
     with _port_lock:
-        for p in range(settings.port_pool_start, settings.port_pool_start + settings.port_pool_size):
+        for p in range(
+            settings.port_pool_start, settings.port_pool_start + settings.port_pool_size
+        ):
             if p not in _ports_in_use:
                 _ports_in_use.add(p)
                 return p
@@ -229,16 +231,12 @@ def docker_sandbox(
             )
             container = client.containers.run(**run_kwargs)
             container.reload()
-            container_ip = (
-                container.attrs["NetworkSettings"]["Networks"][network]["IPAddress"]
-            )
+            container_ip = container.attrs["NetworkSettings"]["Networks"][network]["IPAddress"]
             host = f"http://{container_ip}:{settings.agent_server_container_port}"
         else:
             # Local dev: map to a pooled host port and access via localhost.
             host_port = _acquire_port()
-            run_kwargs["ports"] = {
-                f"{settings.agent_server_container_port}/tcp": host_port
-            }
+            run_kwargs["ports"] = {f"{settings.agent_server_container_port}/tcp": host_port}
 
             logger.info(
                 "Starting agent sandbox: conversation=%s host_port=%d image=%s",

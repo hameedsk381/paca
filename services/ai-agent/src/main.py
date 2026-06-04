@@ -1,4 +1,5 @@
 """FastAPI application factory."""
+
 from __future__ import annotations
 
 import asyncio
@@ -50,4 +51,9 @@ app.include_router(conversations_router)
 
 
 if __name__ == "__main__":
-    uvicorn.run("src.main:app", host="0.0.0.0", port=settings.port, log_level=settings.log_level.lower())
+    uvicorn.run(
+        "src.main:app",
+        host="0.0.0.0",
+        port=settings.port,
+        log_level=settings.log_level.lower(),
+    )

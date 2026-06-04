@@ -1,4 +1,5 @@
 """LLM models endpoint — returns the verified model list from the OpenHands SDK."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter

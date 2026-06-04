@@ -1,4 +1,5 @@
 """Domain model dataclasses for the AI agent service."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field

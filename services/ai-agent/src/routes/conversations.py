@@ -1,4 +1,5 @@
 """Internal REST endpoints for conversation control (proxied by services/api)."""
+
 from __future__ import annotations
 
 import asyncio
@@ -40,7 +41,11 @@ class MessageRequest(BaseModel):
 async def get_conversation(id: UUID):
     pool = await get_pool()
     row = await pool.fetchrow(
-        "SELECT id, agent_id, project_id, status, trigger_type, created_at, updated_at FROM agent_conversations WHERE id = $1",
+        (
+            "SELECT id, agent_id, project_id, status,"
+            " trigger_type, created_at, updated_at"
+            " FROM agent_conversations WHERE id = $1"
+        ),
         str(id),
     )
     if row is None:
@@ -81,7 +86,9 @@ async def pause_conversation(id: UUID):
 async def resume_conversation(id: UUID):
     conv = active_conversations.get(str(id))
     if conv is None:
-        raise HTTPException(status_code=404, detail="No active or paused conversation on this replica")
+        raise HTTPException(
+            status_code=404, detail="No active or paused conversation on this replica"
+        )
     if hasattr(conv, "run"):
         asyncio.create_task(asyncio.to_thread(conv.run))  # type: ignore[union-attr]
     await update_conversation_status(str(id), "running")

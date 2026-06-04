@@ -1,4 +1,5 @@
 """Initial prompt builder for agent conversations."""
+
 from __future__ import annotations
 
 from ..core.streams import TriggerMessage
@@ -15,10 +16,11 @@ def build_initial_prompt(trigger: TriggerMessage, all_repos: list[dict] | None =
         lines.append(f"\nChat Session ID: {trigger.chat_session_id}")
 
     if all_repos:
-        lines.append(f"\n## Repository Setup Required")
+        lines.append("\n## Repository Setup Required")
         lines.append(
-            f"This project has {len(all_repos)} linked repositor{'y' if len(all_repos) == 1 else 'ies'}. "
-            "You MUST clone it before working on any code."
+            f"This project has {len(all_repos)} linked"
+            f" repositor{'y' if len(all_repos) == 1 else 'ies'}."
+            " You MUST clone it before working on any code."
         )
         if len(all_repos) == 1:
             repo = all_repos[0]
@@ -30,8 +32,9 @@ def build_initial_prompt(trigger: TriggerMessage, all_repos: list[dict] | None =
             )
             lines.append(f"\nRepository: {repo['full_name']}")
         else:
-            lines.append("\nCall list_repositories to get the available repositories, then clone the one you need.")
+            lines.append(
+                "\nCall list_repositories to get the available"
+                " repositories, then clone the one you need."
+            )
 
     return "\n".join(lines)
-
-

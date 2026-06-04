@@ -1,4 +1,5 @@
 """Database access layer for agent configuration."""
+
 from __future__ import annotations
 
 import base64
@@ -111,7 +112,8 @@ async def load_agent_config(agent_id: str) -> AgentConfig | None:
         max_iterations=row["max_iterations"],
         can_clone_repos=row["can_clone_repos"],
         git_committer_name=row["git_committer_name"] or "paca-agent",
-        git_committer_email=row["git_committer_email"] or "280579135+paca-agent@users.noreply.github.com",
+        git_committer_email=row["git_committer_email"]
+        or "280579135+paca-agent@users.noreply.github.com",
         mcp_servers=mcp_servers,
         skills=skills,
     )

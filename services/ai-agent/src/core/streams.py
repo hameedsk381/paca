@@ -1,4 +1,5 @@
 """Valkey / Redis stream client and message types."""
+
 from __future__ import annotations
 
 import json
@@ -95,7 +96,7 @@ class TriggerMessage:
     repo_plugin_ids: list[str]
 
     @classmethod
-    def from_stream_entry(cls, stream_id: str, fields: dict[str, str]) -> "TriggerMessage":
+    def from_stream_entry(cls, stream_id: str, fields: dict[str, str]) -> TriggerMessage:
         repo_plugin_ids_str = fields.get("repo_plugin_ids", "")
         repo_plugin_ids = repo_plugin_ids_str.split(",") if repo_plugin_ids_str else []
         return cls(

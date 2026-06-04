@@ -1,4 +1,5 @@
 """Database access layer for agent conversations and events."""
+
 from __future__ import annotations
 
 from ..core.db import get_pool
@@ -12,7 +13,11 @@ async def update_conversation_status(
     pool = await get_pool()
     if error_message is not None:
         await pool.execute(
-            "UPDATE agent_conversations SET status = $1, error_message = $2, updated_at = now() WHERE id = $3",
+            (
+                "UPDATE agent_conversations"
+                " SET status = $1, error_message = $2,"
+                " updated_at = now() WHERE id = $3"
+            ),
             status,
             error_message,
             conversation_id,
