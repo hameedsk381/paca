@@ -616,9 +616,11 @@ function HomePage() {
 							</CardHeader>
 							<CardContent className="pt-3">
 								<ol className="space-y-1">
-									{GETTING_STARTED.map(({ step, title, description }) => (
-										<li key={step}>
-											<div className="flex items-start gap-3.5 rounded-xl border border-border/40 bg-muted/20 px-4 py-3.5 transition-all hover:bg-muted/50 hover:border-primary/20 group">
+									{GETTING_STARTED.map(({ step, title, description }) => {
+										const isActionable = step === 1 && canCreate;
+										const isLocked = step > 1;
+										const inner = (
+											<>
 												<div className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-primary/10 border border-primary/20 font-mono text-[11px] font-bold text-primary tabular-nums">
 													{step}
 												</div>
@@ -628,13 +630,41 @@ function HomePage() {
 														{description}
 													</p>
 												</div>
-												<ArrowRight className="mt-1 size-3.5 shrink-0 text-muted-foreground/30 transition-all group-hover:translate-x-0.5 group-hover:text-primary/50" />
-											</div>
-											{step < 4 && (
-												<div className="my-0.5 ml-7 h-1.5 w-px bg-linear-to-b from-border/60 to-transparent" />
-											)}
-										</li>
-									))}
+												<ArrowRight
+													className={cn(
+														"mt-1 size-3.5 shrink-0 text-muted-foreground/30 transition-all",
+														isActionable &&
+															"group-hover:translate-x-0.5 group-hover:text-primary/50",
+													)}
+												/>
+											</>
+										);
+										return (
+											<li key={step}>
+												{isActionable ? (
+													<button
+														type="button"
+														onClick={() => setCreateOpen(true)}
+														className="group flex w-full items-start gap-3.5 rounded-xl border border-border/40 bg-muted/20 px-4 py-3.5 text-left transition-all hover:bg-muted/50 hover:border-primary/20"
+													>
+														{inner}
+													</button>
+												) : (
+													<div
+														className={cn(
+															"flex items-start gap-3.5 rounded-xl border border-border/40 bg-muted/20 px-4 py-3.5",
+															isLocked && "opacity-50",
+														)}
+													>
+														{inner}
+													</div>
+												)}
+												{step < 4 && (
+													<div className="my-0.5 ml-7 h-1.5 w-px bg-linear-to-b from-border/60 to-transparent" />
+												)}
+											</li>
+										);
+									})}
 								</ol>
 							</CardContent>
 						</Card>
@@ -677,9 +707,20 @@ function HomePage() {
 												key={label}
 												type="button"
 												onClick={onClick}
-												className="group flex w-full cursor-pointer items-center gap-3 rounded-xl border border-border/50 bg-background/50 px-3.5 py-3 text-left transition-all hover:border-primary/30 hover:bg-primary/5 hover:shadow-sm hover:shadow-primary/5"
+												disabled={!onClick}
+												className={cn(
+													"group flex w-full items-center gap-3 rounded-xl border border-border/50 bg-background/50 px-3.5 py-3 text-left transition-all",
+													onClick
+														? "cursor-pointer hover:border-primary/30 hover:bg-primary/5 hover:shadow-sm hover:shadow-primary/5"
+														: "cursor-default opacity-50",
+												)}
 											>
-												<div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary transition-colors group-hover:bg-primary/20">
+												<div
+													className={cn(
+														"flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary transition-colors",
+														onClick && "group-hover:bg-primary/20",
+													)}
+												>
 													<Icon className="size-4" />
 												</div>
 												<div className="min-w-0 flex-1">
@@ -690,7 +731,13 @@ function HomePage() {
 														{description}
 													</p>
 												</div>
-												<ArrowRight className="size-3.5 shrink-0 text-muted-foreground/30 transition-all group-hover:translate-x-0.5 group-hover:text-primary/60" />
+												<ArrowRight
+													className={cn(
+														"size-3.5 shrink-0 text-muted-foreground/30 transition-all",
+														onClick &&
+															"group-hover:translate-x-0.5 group-hover:text-primary/60",
+													)}
+												/>
 											</button>
 										))}
 									</div>
