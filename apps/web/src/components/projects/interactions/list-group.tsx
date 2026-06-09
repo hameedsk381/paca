@@ -594,6 +594,8 @@ export function ListGroup({
 							);
 						})}
 
+						{viewMoreButton}
+
 						{/* Add task button after all swimlane bands */}
 						{showAddTask && (
 							<AddTaskRow
@@ -602,8 +604,6 @@ export function ListGroup({
 								onAdd={handleAdd}
 							/>
 						)}
-
-						{viewMoreButton}
 					</>
 				) : (
 					<>
@@ -617,6 +617,8 @@ export function ListGroup({
 								renderTaskRow(task, index, groupDef.key),
 							)
 						)}
+						{viewMoreButton}
+
 						{showAddTask && (
 							<AddTaskRow
 								variant="list"
@@ -624,8 +626,6 @@ export function ListGroup({
 								onAdd={handleAdd}
 							/>
 						)}
-
-						{viewMoreButton}
 					</>
 				))}
 		</div>

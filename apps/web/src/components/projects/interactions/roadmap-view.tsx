@@ -408,6 +408,20 @@ export function RoadmapView({
 						</>
 					)}
 
+					{/* ── Pagination button ─────────────────────────────────── */}
+					{pagination?.hasMore && (
+						<div className="flex justify-center py-4 border-t border-border/20">
+							<button
+								type="button"
+								onClick={pagination.onLoadMore}
+								disabled={pagination.isLoadingMore}
+								className="rounded-lg border border-border/40 px-4 py-1.5 text-[12px] font-medium text-muted-foreground hover:border-primary/50 hover:text-primary transition-all duration-150 disabled:opacity-50"
+							>
+								{pagination.isLoadingMore ? "Loading…" : "View more"}
+							</button>
+						</div>
+					)}
+
 					{/* ── Add task ─────────────────────────────────────────── */}
 					{canCreate &&
 						defaultStatusId &&
@@ -423,20 +437,6 @@ export function RoadmapView({
 								/>
 							</div>
 						)}
-
-					{/* ── Pagination button ─────────────────────────────────── */}
-					{pagination?.hasMore && (
-						<div className="flex justify-center py-4 border-t border-border/20">
-							<button
-								type="button"
-								onClick={pagination.onLoadMore}
-								disabled={pagination.isLoadingMore}
-								className="rounded-lg border border-border/40 px-4 py-1.5 text-[12px] font-medium text-muted-foreground hover:border-primary/50 hover:text-primary transition-all duration-150 disabled:opacity-50"
-							>
-								{pagination.isLoadingMore ? "Loading…" : "View more"}
-							</button>
-						</div>
-					)}
 				</div>
 			</div>
 		</div>
