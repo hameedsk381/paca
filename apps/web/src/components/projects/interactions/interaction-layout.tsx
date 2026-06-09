@@ -619,10 +619,20 @@ export function InteractionLayout({
 		],
 	);
 
+	// Tracks per-column total visible count so WS refetches restore the same depth.
+	const [colExpandedPageSizes, setColExpandedPageSizes] = useState<
+		Record<string, number>
+	>({});
+
 	const columnQueries = useQueries({
 		queries: colQueriesEnabled
 			? fetchColumnDefs.map((col) => {
-					const colOpts = buildColumnFilter(col.key, columnBy, colBaseOpts);
+					const effectivePageSize =
+						colExpandedPageSizes[col.key] ?? initialColPageSize;
+					const colOpts = buildColumnFilter(col.key, columnBy, {
+						...colBaseOpts,
+						pageSize: effectivePageSize,
+					});
 					if (!colOpts) {
 						return {
 							queryKey: ["noop", col.key] as const,
@@ -652,14 +662,31 @@ export function InteractionLayout({
 	});
 
 	// Fallback single query for non-supported column_by (importance, custom fields) or roadmap
+	// Tracks total items to show so WS-triggered refetches restore the same depth.
+	const [globalExpandedPageSize, setGlobalExpandedPageSize] = useState<
+		number | null
+	>(null);
+
+	// Filter-only opts (no pageSize) — reference changes only when filters change,
+	// not when the expanded page size grows via "view more".
+	const fallbackBaseOpts = useMemo(
+		() => ({
+			sprintId:
+				context !== "timeline" && !hasExplicitFilterConfig
+					? sprintId
+					: undefined,
+			sprintIds: apiFilters.sprint_ids,
+			statusIds: apiFilters.status_ids,
+			assigneeIds: apiFilters.assignee_ids,
+			taskTypeIds: apiFilters.task_type_ids,
+		}),
+		[context, hasExplicitFilterConfig, sprintId, apiFilters],
+	);
+
+	const initialGlobalPageSize = activeView?.layout === "Roadmap" ? 5 : undefined;
 	const fallbackQueryOpts = allTasksQueryOptions(projectId, {
-		sprintId:
-			context !== "timeline" && !hasExplicitFilterConfig ? sprintId : undefined,
-		sprintIds: apiFilters.sprint_ids,
-		statusIds: apiFilters.status_ids,
-		assigneeIds: apiFilters.assignee_ids,
-		taskTypeIds: apiFilters.task_type_ids,
-		pageSize: activeView?.layout === "Roadmap" ? 5 : undefined,
+		...fallbackBaseOpts,
+		pageSize: globalExpandedPageSize ?? initialGlobalPageSize,
 	});
 	const fallbackQuery = useQuery({
 		...fallbackQueryOpts,
@@ -691,6 +718,11 @@ export function InteractionLayout({
 		setColExtraTasks({});
 	}, [colDataUpdatedKey, colQueriesEnabled]);
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: reset only when base opts change
+	useEffect(() => {
+		setColExpandedPageSizes({});
+	}, [colBaseOpts]);
+
 	const handleLoadMoreColumn = useCallback(
 		async (colKey: string) => {
 			if (colLoadingMore[colKey]) return;
@@ -713,11 +745,18 @@ export function InteractionLayout({
 					...prev,
 					[colKey]: result.next_cursor ?? null,
 				}));
+				// Grow the effective page size so the next WS-triggered refetch
+				// returns the same number of items currently visible.
+				setColExpandedPageSizes((prev) => ({
+					...prev,
+					[colKey]:
+						(prev[colKey] ?? initialColPageSize) + result.items.length,
+				}));
 			} finally {
 				setColLoadingMore((prev) => ({ ...prev, [colKey]: false }));
 			}
 		},
-		[colNextCursors, columnBy, colBaseOpts, projectId, colLoadingMore],
+		[colNextCursors, columnBy, colBaseOpts, projectId, colLoadingMore, initialColPageSize],
 	);
 
 	// Global load-more (roadmap / non-column views)
@@ -731,36 +770,39 @@ export function InteractionLayout({
 		setGlobalExtraTasks([]);
 	}, [colQueriesEnabled, fallbackQuery.data?.next_cursor]);
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: reset only when filters/layout change
+	useEffect(() => {
+		setGlobalExpandedPageSize(null);
+	}, [fallbackBaseOpts, initialGlobalPageSize]);
+
 	const handleLoadMoreGlobal = useCallback(async () => {
 		if (globalLoadingMore) return;
 		if (!globalNextCursor) return;
 		setGlobalLoadingMore(true);
 		try {
 			const result = await listAllTasks(projectId, {
-				sprintId:
-					context !== "timeline" && !hasExplicitFilterConfig
-						? sprintId
-						: undefined,
-				sprintIds: apiFilters.sprint_ids,
-				statusIds: apiFilters.status_ids,
-				assigneeIds: apiFilters.assignee_ids,
-				taskTypeIds: apiFilters.task_type_ids,
+				...fallbackBaseOpts,
 				pageSize: 20,
 				cursor: globalNextCursor,
 			});
 			setGlobalExtraTasks((prev) => [...prev, ...result.items]);
 			setGlobalNextCursor(result.next_cursor ?? null);
+			// Grow the effective page size so the next WS-triggered refetch
+			// returns the same number of items currently visible.
+			setGlobalExpandedPageSize(
+				(globalExpandedPageSize ?? initialGlobalPageSize ?? 20) +
+					result.items.length,
+			);
 		} finally {
 			setGlobalLoadingMore(false);
 		}
 	}, [
 		globalNextCursor,
 		projectId,
-		context,
-		hasExplicitFilterConfig,
-		sprintId,
-		apiFilters,
+		fallbackBaseOpts,
 		globalLoadingMore,
+		globalExpandedPageSize,
+		initialGlobalPageSize,
 	]);
 
 	const taskPositionsQuery = useQuery({
