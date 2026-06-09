@@ -1,3 +1,9 @@
+---
+name: paca-setup
+description: Configure the Paca MCP server for use with Claude Code or Claude Desktop. Use when setting up Paca for the first time, adding or editing the MCP server config, troubleshooting connectivity, or installing the Paca skills globally. Walks the user through prerequisites, config file generation, verification, and optional global skill install.
+compatibility: Requires Node.js 18+ and a running Paca instance.
+---
+
 You are helping the user configure the Paca MCP server for their Claude Code environment.
 
 Walk the user through the setup interactively, step by step. Do not dump all instructions at once — confirm each step before proceeding.
@@ -72,11 +78,13 @@ If Paca tools appear and return results, setup is complete. If not, check:
 
 ### Step 6 — Install the Paca skill globally (optional)
 
-Offer to run the global skill installer so `/paca` and `/paca-setup` are always available:
+Offer to run the global skill installer so `/paca` and related skills are always available:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Paca-AI/paca/master/scripts/install-claude-skill.sh | bash
 ```
+
+Review the script before running it — `curl | bash` executes remote code directly.
 
 ---
 

@@ -288,13 +288,15 @@ For a complete reference and advanced configuration (agent-mode, plugin tools, p
 
 ---
 
-## Claude Code — `/paca` skill
+## Claude Code — `/paca` skills
 
-If you use [Claude Code](https://claude.ai/code), you can install the `/paca` slash command and manage your entire Paca workspace through natural-language requests inside Claude Code — without leaving your editor and without creating local files for tasks or docs.
+If you use [Claude Code](https://claude.ai/code), install the Paca skill set and manage your entire Paca workspace through natural-language slash commands — without leaving your editor and without creating local files. Every command reads your Paca documentation first to understand the project before acting.
+
+Skills are defined in the [`skills/`](skills/) directory using the [Agent Skills](https://agentskills.io/specification) format — one subdirectory per skill, each with a `SKILL.md` containing YAML frontmatter and instructions. The install script strips the frontmatter and writes the body to `~/.claude/commands/` for use as Claude Code slash commands.
 
 ### Install
 
-Run this once in your terminal to install the skill globally:
+Run this once in your terminal to install all skills globally:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Paca-AI/paca/master/scripts/install-claude-skill.sh | bash
@@ -311,22 +313,23 @@ claude mcp add paca \
 
 Run `/paca-setup` inside a Claude Code session for a guided interactive walkthrough instead.
 
-### Usage
+### Available commands
 
-Type `/paca` followed by your request in plain English inside a Claude Code session. You can reference tasks by their number, prefixed ID, or URL — anywhere in the message:
-
-| In Claude Code, type... | What happens |
+| Command | What it does |
 |:--|:--|
-| `/paca fix the login redirect bug` | Creates a task on the board |
-| `/paca write the API authentication design doc` | Creates a document in Paca Docs |
-| `/paca do this task ABC-123` | Looks up task ABC-123 and acts on it |
-| `/paca please close #42` | Marks task #42 as done |
-| `/paca I finished PAC-99, mark it done` | Updates task PAC-99 status to done |
-| `/paca http://…/tasks/uuid — add comment: blocked` | Adds a comment to the linked task |
-| `/paca what's in the current sprint?` | Shows active sprint and its tasks |
-| `/paca review PR, update staging, write release notes` | Creates three tasks, one per item |
+| `/paca <request>` | General task, doc, and sprint operations in plain English |
+| `/paca-epic <requirements>` | Turn requirements into an epic with child stories and a spec doc |
+| `/paca-clarify <task-or-doc>` | Identify ambiguities, ask questions, and update the spec in Paca |
+| `/paca-breakdown <task>` | Decompose a task into independent, estimable sub-tasks |
+| `/paca-sprint` | Plan a sprint from the backlog against capacity and goals |
+| `/paca-estimate <task(s)>` | Estimate story points and write them back to tasks |
+| `/paca-prioritize` | Score and set priorities across the backlog |
+| `/paca-do <task>` | Execute a task, update its status, and keep docs current |
+| `/paca-test <task>` | Derive test cases, run them, and record results as a comment |
+| `/paca-doc <task-or-topic>` | Write or update documentation in Paca Docs |
+| `/paca-setup` | Interactive MCP connection wizard |
 
-For full setup options (project-scoped config, team setup, CLAUDE.md integration), see [docs/guides/claude-code-skill.md](docs/guides/claude-code-skill.md).
+For full setup options and command reference, see [docs/guides/claude-code-skill.md](docs/guides/claude-code-skill.md).
 
 ---
 
@@ -339,6 +342,8 @@ services/api      Go + Gin — core business logic and REST API
 services/realtime Node.js + Socket.IO — real-time event fan-out
 services/ai-agent Python + FastAPI + OpenHands SDK — AI agent orchestration
 apps/e2e          Playwright — end-to-end test suite
+
+skills/           Agent Skills — /paca slash commands for Claude Code
 
 PostgreSQL        Persistent store
 Valkey            Cache + async event streams between services

@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 # Paca Claude Code Skill Installer
-# Installs /paca and /paca-setup slash commands into ~/.claude/commands/
+# Installs /paca and related slash commands into ~/.claude/commands/
 # so they are available in every Claude Code session.
+#
+# Skills are stored in skills/<name>/SKILL.md (Agent Skills format).
+# This script strips the YAML frontmatter and writes the body to
+# ~/.claude/commands/<name>.md for use as Claude Code slash commands.
 #
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/Paca-AI/paca/master/scripts/install-claude-skill.sh | bash
@@ -12,7 +16,7 @@ set -euo pipefail
 
 REPO="Paca-AI/paca"
 BRANCH="master"
-BASE_URL="https://raw.githubusercontent.com/${REPO}/${BRANCH}/.claude/commands"
+BASE_URL="https://raw.githubusercontent.com/${REPO}/${BRANCH}/skills"
 DEST_DIR="${HOME}/.claude/commands"
 
 GREEN='\033[0;32m'
@@ -31,10 +35,10 @@ echo ""
 
 # Detect if running from a local clone (the script lives in scripts/)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || echo "")"
-LOCAL_COMMANDS=""
-if [[ -n "${SCRIPT_DIR}" && -d "${SCRIPT_DIR}/../.claude/commands" ]]; then
-  LOCAL_COMMANDS="${SCRIPT_DIR}/../.claude/commands"
-  info "Local clone detected — installing from ${LOCAL_COMMANDS}"
+LOCAL_SKILLS=""
+if [[ -n "${SCRIPT_DIR}" && -d "${SCRIPT_DIR}/../skills" ]]; then
+  LOCAL_SKILLS="${SCRIPT_DIR}/../skills"
+  info "Local clone detected — installing from ${LOCAL_SKILLS}"
 else
   info "Installing from GitHub (${REPO}@${BRANCH})"
   # Check for curl or wget
@@ -49,16 +53,27 @@ mkdir -p "${DEST_DIR}"
 info "Installing skills to: ${DEST_DIR}"
 echo ""
 
+# Strip YAML frontmatter (---...---) from a SKILL.md file
+strip_frontmatter() {
+  awk 'NR==1 && /^---$/{skip=1; next} skip && /^---$/{skip=0; next} !skip' "$1"
+}
+
 install_skill() {
   local name="$1"
   local dest="${DEST_DIR}/${name}.md"
 
-  if [[ -n "${LOCAL_COMMANDS}" ]]; then
-    cp "${LOCAL_COMMANDS}/${name}.md" "${dest}"
-  elif command -v curl &>/dev/null; then
-    curl -fsSL "${BASE_URL}/${name}.md" -o "${dest}"
+  if [[ -n "${LOCAL_SKILLS}" ]]; then
+    strip_frontmatter "${LOCAL_SKILLS}/${name}/SKILL.md" > "${dest}"
   else
-    wget -qO "${dest}" "${BASE_URL}/${name}.md"
+    local tmp
+    tmp=$(mktemp)
+    if command -v curl &>/dev/null; then
+      curl -fsSL "${BASE_URL}/${name}/SKILL.md" -o "${tmp}"
+    else
+      wget -qO "${tmp}" "${BASE_URL}/${name}/SKILL.md"
+    fi
+    strip_frontmatter "${tmp}" > "${dest}"
+    rm -f "${tmp}"
   fi
 
   success "Installed: ~/.claude/commands/${name}.md"
@@ -66,14 +81,32 @@ install_skill() {
 
 install_skill "paca"
 install_skill "paca-setup"
+install_skill "paca-epic"
+install_skill "paca-clarify"
+install_skill "paca-breakdown"
+install_skill "paca-sprint"
+install_skill "paca-estimate"
+install_skill "paca-prioritize"
+install_skill "paca-do"
+install_skill "paca-test"
+install_skill "paca-doc"
 
 echo ""
 success "Installation complete!"
 echo ""
 echo "  Available commands in Claude Code:"
 echo "  ┌─────────────────────────────────────────────────────────────────────┐"
-echo "  │  /paca <request>   — Manage tasks, docs, sprints via Paca           │"
-echo "  │  /paca-setup       — Configure the Paca MCP server connection        │"
+echo "  │  /paca <request>    — General Paca task/doc/sprint operations        │"
+echo "  │  /paca-setup        — Configure the Paca MCP server connection       │"
+echo "  │  /paca-epic         — Create an epic from requirements               │"
+echo "  │  /paca-clarify      — Clarify and improve a task or spec             │"
+echo "  │  /paca-breakdown    — Break a task into sub-tasks                    │"
+echo "  │  /paca-sprint       — Plan a sprint from the backlog                 │"
+echo "  │  /paca-estimate     — Estimate story points for tasks                │"
+echo "  │  /paca-prioritize   — Set priorities across the backlog              │"
+echo "  │  /paca-do           — Execute a task and update its status           │"
+echo "  │  /paca-test         — Test a task and record results                 │"
+echo "  │  /paca-doc          — Write or update documentation in Paca Docs     │"
 echo "  └─────────────────────────────────────────────────────────────────────┘"
 echo ""
 echo "  Next step: configure the Paca MCP server."

@@ -82,42 +82,107 @@ Restart Claude Desktop after saving.
 
 ## Commands
 
+All commands read your Paca documentation first — before taking any action, Claude calls `list_documents` and reads the relevant docs so it understands the project context. Documentation updates are always written back to Paca Docs via `update_document` or `create_document`, never as local files.
+
 ### `/paca <request>`
 
-Interact with your Paca workspace in natural language. Claude will route your request to the right Paca MCP tools.
-
-No special syntax or prefixes — just describe what you want in plain English:
+General-purpose Paca operations in plain English. Routes to the right tool based on intent.
 
 ```
 /paca Fix the login redirect bug, assign to sprint 3
-/paca Write the API authentication guide
-/paca I need to review the PR, update staging, and write release notes
 /paca What's in the current sprint?
 /paca Mark task #42 as done
-```
-
-You can also reference an existing task by ID, prefixed ID, or URL and Claude will look it up automatically:
-
-```
-/paca #42 is done
 /paca ABC-17 is blocked — add a comment: needs design review
-/paca http://localhost/projects/abc-uuid/tasks/def-uuid move to next sprint
 ```
 
-Claude reads your intent and picks the right Paca tool automatically:
+### `/paca-epic <requirements>`
 
-| You say... | Claude uses... |
-|---|---|
-| Describe a bug / feature / chore | `create_task` → Paca Board |
-| Ask to write a guide / spec / design | `create_document` → Paca Docs |
-| Reference `#42`, `ABC-42`, or a task URL | `get_task_by_number` or `get_task` → then act on it |
-| List multiple to-dos in one message | `create_task` per item → Paca Board |
-| Ask about sprint / board / status | `list_tasks` + `list_sprints` |
-| Say "mark X as done" / "close X" | `update_task` → sets status |
+Converts requirements into a structured epic: creates the parent task, breaks it into child stories, and writes a spec document — all in Paca.
+
+```
+/paca-epic As a user I want to reset my password via email
+/paca-epic #12   ← turn an existing requirement task into a full epic
+```
+
+### `/paca-clarify <task-or-doc>`
+
+Reads a task or document, identifies ambiguities (scope gaps, missing edge cases, undefined terms), asks targeted questions, then updates the spec in Paca with the resolved content.
+
+```
+/paca-clarify #42
+/paca-clarify ABC-17
+/paca-clarify "OAuth Integration Spec"
+```
+
+### `/paca-breakdown <task>`
+
+Decomposes a task or epic into smaller, independent, estimable sub-tasks and creates them in Paca.
+
+```
+/paca-breakdown #42
+/paca-breakdown ABC-17
+```
+
+### `/paca-sprint`
+
+Plans a sprint: reads the backlog and project roadmap, recommends a task set that fits stated capacity, then assigns tasks to the sprint and sets the sprint goal.
+
+```
+/paca-sprint
+/paca-sprint next sprint, 30 points capacity
+/paca-sprint sprint 4, goal: ship the auth flow
+```
+
+### `/paca-estimate <task(s)>`
+
+Estimates story points for one or more tasks using the Fibonacci scale, with reasoning, then writes the estimates back to the tasks.
+
+```
+/paca-estimate #42
+/paca-estimate #42 #43 #44
+/paca-estimate          ← estimates all unestimated tasks in the current sprint
+```
+
+### `/paca-prioritize`
+
+Scores tasks by business value, urgency, effort, and dependencies against the project roadmap, then updates their priority fields.
+
+```
+/paca-prioritize
+/paca-prioritize #42 #43 #44
+```
+
+### `/paca-do <task>`
+
+Executes a task end-to-end: marks it in progress, reads all relevant docs, does the work (code, writing, research), then marks it done and updates any affected Paca documentation.
+
+```
+/paca-do #42
+/paca-do ABC-17
+```
+
+### `/paca-test <task>`
+
+Derives test cases from acceptance criteria, runs them, and posts results as a task comment. Advances the task status on pass, reverts to in-progress on fail.
+
+```
+/paca-test #42
+/paca-test ABC-17
+```
+
+### `/paca-doc <task-or-topic>`
+
+Writes or updates a document in Paca Docs. Reads existing docs first to match tone and avoid duplication.
+
+```
+/paca-doc #42                          ← document the feature in task #42
+/paca-doc "API Authentication Guide"   ← create a new guide
+/paca-doc ABC-17 update                ← update an existing doc
+```
 
 ### `/paca-setup`
 
-Interactive setup wizard. Walks you through connecting Claude Code to your Paca instance, verifying the connection, and installing the global skill.
+Interactive setup wizard. Walks you through connecting Claude Code to your Paca instance and verifying the connection.
 
 ```
 /paca-setup
