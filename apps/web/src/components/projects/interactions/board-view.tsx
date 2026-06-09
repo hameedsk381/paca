@@ -60,6 +60,10 @@ interface BoardViewProps {
 	manualSort?: boolean;
 	onReorderTask?: (groupKey: string, taskId: string, newIndex: number) => void;
 	onCollapseChange?: (collapsedColumns: string[]) => void;
+	columnPagination?: Record<
+		string,
+		{ hasMore: boolean; isLoadingMore: boolean; onLoadMore: () => void }
+	>;
 }
 
 // ── Board view ────────────────────────────────────────────────────────────────
@@ -86,6 +90,7 @@ export function BoardView({
 	manualSort,
 	onReorderTask,
 	onCollapseChange,
+	columnPagination,
 }: BoardViewProps) {
 	const qc = useQueryClient();
 	const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -624,6 +629,20 @@ export function BoardView({
 							}}
 						/>
 					)}
+				{(() => {
+					const pg = columnPagination?.[colDef.key];
+					if (!pg?.hasMore) return null;
+					return (
+						<button
+							type="button"
+							onClick={pg.onLoadMore}
+							disabled={pg.isLoadingMore}
+							className="mt-1 w-full rounded-lg border border-dashed border-border/40 py-1.5 text-[11px] font-medium text-muted-foreground/70 hover:border-primary/40 hover:text-primary transition-all duration-150 disabled:opacity-50"
+						>
+							{pg.isLoadingMore ? "Loading…" : "View more"}
+						</button>
+					);
+				})()}
 			</div>
 		);
 	};
