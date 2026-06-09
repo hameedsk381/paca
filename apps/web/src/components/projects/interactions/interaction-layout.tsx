@@ -594,14 +594,16 @@ export function InteractionLayout({
 	const isBoard = activeView?.layout === "Board";
 	const initialColPageSize = isBoard ? 20 : 5;
 
-	// Base options for column queries (shared filters, no status/sprint/assignee/type per-column filter yet)
-	const colBaseOpts: ListTasksOptions = {
+	// Base options for column queries (shared filters, excluding the dimension used for column grouping)
+	const colBaseOpts = useMemo((): ListTasksOptions => ({
 		sprintId:
 			context !== "timeline" && !hasExplicitFilterConfig ? sprintId : undefined,
 		sprintIds: apiFilters.sprint_ids,
-		taskTypeIds: apiFilters.task_type_ids,
+		statusIds: columnBy !== "status" ? apiFilters.status_ids : undefined,
+		assigneeIds: columnBy !== "assignee" ? apiFilters.assignee_ids : undefined,
+		taskTypeIds: columnBy !== "type" ? apiFilters.task_type_ids : undefined,
 		pageSize: initialColPageSize,
-	};
+	}), [context, hasExplicitFilterConfig, sprintId, apiFilters, columnBy, initialColPageSize]);
 
 	const columnQueries = useQueries({
 		queries: colQueriesEnabled
@@ -805,11 +807,14 @@ export function InteractionLayout({
 		handleLoadMoreColumn,
 	]);
 
-	const globalPagination = {
-		hasMore: Boolean(globalNextCursor),
-		isLoadingMore: globalLoadingMore,
-		onLoadMore: handleLoadMoreGlobal,
-	};
+	const globalPagination = useMemo(
+		() => ({
+			hasMore: Boolean(globalNextCursor),
+			isLoadingMore: globalLoadingMore,
+			onLoadMore: handleLoadMoreGlobal,
+		}),
+		[globalNextCursor, globalLoadingMore, handleLoadMoreGlobal],
+	);
 
 	const tasksWithViewPositions = useMemo(() => {
 		if (!effectiveViewId || !taskPositionsQuery.data?.length) return tasks;
