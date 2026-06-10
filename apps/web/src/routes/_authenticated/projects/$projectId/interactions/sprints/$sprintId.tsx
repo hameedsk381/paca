@@ -21,13 +21,18 @@ export const Route = createFileRoute(
 		context: { queryClient },
 		params: { projectId, sprintId },
 	}) => {
+		const user = queryClient.getQueryData(["auth", "me-optional"]);
 		await queryClient
 			.ensureQueryData(sprintQueryOptions(projectId, sprintId))
 			.catch(() => {
-				throw redirect({
-					to: "/projects/$projectId/interactions/backlog",
-					params: { projectId },
-				});
+				throw redirect(
+					user
+						? {
+								to: "/projects/$projectId/interactions/backlog",
+								params: { projectId },
+							}
+						: { to: "/" },
+				);
 			});
 	},
 	component: SprintPage,

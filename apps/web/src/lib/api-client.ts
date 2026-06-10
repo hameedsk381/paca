@@ -24,7 +24,10 @@ export class ApiClient {
 	readonly instance: AxiosInstance;
 
 	private isRefreshing = false;
-	private refreshSubscribers: Array<() => void> = [];
+	private refreshSubscribers: Array<{
+		retry: () => void;
+		reject: (err: unknown) => void;
+	}> = [];
 
 	constructor() {
 		this.instance = axios.create({
@@ -86,12 +89,15 @@ export class ApiClient {
 				if (this.isRefreshing) {
 					// Queue the request until refresh completes
 					return new Promise((resolve, reject) => {
-						this.refreshSubscribers.push(() => {
-							originalRequest._retry = true;
-							this.instance
-								.request(originalRequest)
-								.then(resolve)
-								.catch(reject);
+						this.refreshSubscribers.push({
+							retry: () => {
+								originalRequest._retry = true;
+								this.instance
+									.request(originalRequest)
+									.then(resolve)
+									.catch(reject);
+							},
+							reject,
 						});
 					});
 				}
@@ -103,13 +109,17 @@ export class ApiClient {
 					await this.instance.post("/auth/refresh");
 
 					// Flush queued requests
-					this.refreshSubscribers.forEach((cb) => {
-						cb();
+					this.refreshSubscribers.forEach(({ retry }) => {
+						retry();
 					});
 					this.refreshSubscribers = [];
 
 					return this.instance.request(originalRequest);
 				} catch (refreshError) {
+					// Reject all queued requests so their promises settle instead of hanging
+					this.refreshSubscribers.forEach(({ reject }) => {
+						reject(refreshError);
+					});
 					this.refreshSubscribers = [];
 					return Promise.reject(refreshError);
 				} finally {
