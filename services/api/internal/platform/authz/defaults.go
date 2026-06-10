@@ -79,6 +79,8 @@ func DefaultProjectRoles() []RoleDefinition {
 			Name: "PROJECT_VIEWER",
 			Permissions: []Permission{
 				PermissionProjectsRead,
+				PermissionProjectMembersRead,
+				PermissionProjectRolesRead,
 				PermissionTasksRead,
 				PermissionSprintsRead,
 				PermissionDocsRead,
