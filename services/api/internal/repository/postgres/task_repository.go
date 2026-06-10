@@ -342,12 +342,13 @@ func (r *TaskRepository) ListTasks(ctx context.Context, projectID uuid.UUID, fil
 		q = q.Where("status_id = ?", filter.StatusID.String())
 	}
 
-	switch {
-	case filter.AssigneeNull:
+	if filter.AssigneeNull && len(filter.AssigneeIDs) > 0 {
+		q = q.Where("assignee_id IS NULL OR assignee_id IN ?", uuidSliceToStrSlice(filter.AssigneeIDs))
+	} else if filter.AssigneeNull {
 		q = q.Where("assignee_id IS NULL")
-	case len(filter.AssigneeIDs) > 0:
+	} else if len(filter.AssigneeIDs) > 0 {
 		q = q.Where("assignee_id IN ?", uuidSliceToStrSlice(filter.AssigneeIDs))
-	case filter.AssigneeID != nil:
+	} else if filter.AssigneeID != nil {
 		q = q.Where("assignee_id = ?", filter.AssigneeID.String())
 	}
 

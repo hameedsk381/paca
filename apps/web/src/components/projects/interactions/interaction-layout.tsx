@@ -545,12 +545,19 @@ export function InteractionLayout({
 						statuses.map((s) => s.id),
 					)
 				: undefined,
-			assignee_ids: activeViewConfig?.filters?.assignees
-				? resolveFilterConfig(
-						activeViewConfig.filters.assignees,
-						members.map((m) => m.id),
-					)
-				: undefined,
+			...(() => {
+				if (!activeViewConfig?.filters?.assignees) return {};
+				const resolved = resolveFilterConfig(
+					activeViewConfig.filters.assignees,
+					members.map((m) => m.id),
+				);
+				const hasUnassigned = resolved.includes("__unassigned");
+				const memberIds = resolved.filter((id) => id !== "__unassigned");
+				return {
+					assignee_ids: memberIds.length > 0 ? memberIds : undefined,
+					assignee_null: hasUnassigned || undefined,
+				};
+			})(),
 			task_type_ids: (() => {
 				if (!activeViewConfig?.filters) return defaultPageTaskTypeIds;
 				if (!activeViewConfig.filters.task_types) return undefined;
@@ -606,6 +613,8 @@ export function InteractionLayout({
 			statusIds: columnBy !== "status" ? apiFilters.status_ids : undefined,
 			assigneeIds:
 				columnBy !== "assignee" ? apiFilters.assignee_ids : undefined,
+			assigneeNull:
+				columnBy !== "assignee" ? apiFilters.assignee_null : undefined,
 			taskTypeIds: columnBy !== "type" ? apiFilters.task_type_ids : undefined,
 			pageSize: initialColPageSize,
 		}),
@@ -678,6 +687,7 @@ export function InteractionLayout({
 			sprintIds: apiFilters.sprint_ids,
 			statusIds: apiFilters.status_ids,
 			assigneeIds: apiFilters.assignee_ids,
+			assigneeNull: apiFilters.assignee_null,
 			taskTypeIds: apiFilters.task_type_ids,
 		}),
 		[context, hasExplicitFilterConfig, sprintId, apiFilters],

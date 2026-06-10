@@ -457,6 +457,8 @@ function StatusFilterSection({
 
 // ── Assignee filter ───────────────────────────────────────────────────────────
 
+const UNASSIGNED_FILTER_ID = "__unassigned";
+
 function AssigneeFilterSection({
 	members,
 	selectedIds,
@@ -466,18 +468,18 @@ function AssigneeFilterSection({
 	selectedIds: string[];
 	onChange: (ids: string[]) => void;
 }) {
-	const allIds = members.map((m) => m.id);
+	const allFilterIds = [...members.map((m) => m.id), UNASSIGNED_FILTER_ID];
 	const isAll = selectedIds.length === 0;
 
 	const toggle = (id: string) => {
 		if (isAll) {
-			onChange(allIds.filter((x) => x !== id));
+			onChange([id]);
 		} else if (selectedIds.includes(id)) {
 			const next = selectedIds.filter((x) => x !== id);
-			onChange(next.length === allIds.length ? [] : next);
+			onChange(next.length === allFilterIds.length ? [] : next);
 		} else {
 			const next = [...selectedIds, id];
-			onChange(next.length === allIds.length ? [] : next);
+			onChange(next.length === allFilterIds.length ? [] : next);
 		}
 	};
 
@@ -513,6 +515,17 @@ function AssigneeFilterSection({
 					);
 				})
 			)}
+			<CheckRow
+				id="assignee-unassigned"
+				label="Unassigned"
+				checked={isAll || selectedIds.includes(UNASSIGNED_FILTER_ID)}
+				onChange={() => toggle(UNASSIGNED_FILTER_ID)}
+				icon={
+					<div className="flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground text-[10px] ring-1 ring-border">
+						–
+					</div>
+				}
+			/>
 		</div>
 	);
 }

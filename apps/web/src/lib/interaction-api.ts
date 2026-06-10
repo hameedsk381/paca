@@ -422,10 +422,15 @@ function buildTaskQueryParams(opts: ListTasksOptions = {}) {
 	if (opts.statusId) params.status_id = opts.statusId;
 	if (opts.statusIds && opts.statusIds.length > 0)
 		params.status_ids = opts.statusIds.join(",");
-	if (opts.assigneeNull) params.assignee_id = "null";
-	else if (opts.assigneeId) params.assignee_id = opts.assigneeId;
-	else if (opts.assigneeIds && opts.assigneeIds.length > 0)
+	if (opts.assigneeNull) {
+		params.assignee_id = "null";
+		if (opts.assigneeIds && opts.assigneeIds.length > 0)
+			params.assignee_ids = opts.assigneeIds.join(",");
+	} else if (opts.assigneeId) {
+		params.assignee_id = opts.assigneeId;
+	} else if (opts.assigneeIds && opts.assigneeIds.length > 0) {
 		params.assignee_ids = opts.assigneeIds.join(",");
+	}
 	if (opts.taskTypeNull) params.task_type_id = "null";
 	else if (opts.taskTypeIds && opts.taskTypeIds.length > 0)
 		params.task_type_ids = opts.taskTypeIds.join(",");
