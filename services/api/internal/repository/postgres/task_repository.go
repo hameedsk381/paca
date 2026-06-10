@@ -317,8 +317,11 @@ func (r *TaskRepository) FindDefaultTaskStatus(ctx context.Context, projectID uu
 
 // --- Tasks ------------------------------------------------------------------
 
-// ListTasks returns a page of tasks for a project with optional filters.
-func (r *TaskRepository) ListTasks(ctx context.Context, projectID uuid.UUID, filter taskdom.TaskFilter, offset, limit int) ([]*taskdom.Task, int64, error) {
+// ListTasks returns a page of tasks with optional filter.
+// When filter.CursorAfter is nil, returns from the beginning.
+// When set, returns tasks strictly after the cursor position.
+// hasMore is true when a next page exists beyond the returned slice.
+func (r *TaskRepository) ListTasks(ctx context.Context, projectID uuid.UUID, filter taskdom.TaskFilter, limit int) ([]*taskdom.Task, bool, error) {
 	q := r.db.WithContext(ctx).Model(&taskRecord{}).
 		Where("project_id = ?", projectID.String())
 
@@ -332,41 +335,58 @@ func (r *TaskRepository) ListTasks(ctx context.Context, projectID uuid.UUID, fil
 	case filter.SprintID != nil:
 		q = q.Where("sprint_id = ?", filter.SprintID.String())
 	}
+
 	if len(filter.StatusIDs) > 0 {
 		q = q.Where("status_id IN ?", uuidSliceToStrSlice(filter.StatusIDs))
 	} else if filter.StatusID != nil {
 		q = q.Where("status_id = ?", filter.StatusID.String())
 	}
-	if len(filter.AssigneeIDs) > 0 {
+
+	switch {
+	case filter.AssigneeNull:
+		q = q.Where("assignee_id IS NULL")
+	case len(filter.AssigneeIDs) > 0:
 		q = q.Where("assignee_id IN ?", uuidSliceToStrSlice(filter.AssigneeIDs))
-	} else if filter.AssigneeID != nil {
+	case filter.AssigneeID != nil:
 		q = q.Where("assignee_id = ?", filter.AssigneeID.String())
 	}
-	if len(filter.TaskTypeIDs) > 0 {
+
+	switch {
+	case filter.TaskTypeNull:
+		q = q.Where("task_type_id IS NULL")
+	case len(filter.TaskTypeIDs) > 0:
 		q = q.Where("task_type_id IN ?", uuidSliceToStrSlice(filter.TaskTypeIDs))
 	}
 
-	var total int64
-	if err := q.Count(&total).Error; err != nil {
-		return nil, 0, fmt.Errorf("task repo: list count: %w", err)
+	if filter.CursorAfter != nil {
+		cur, err := taskdom.DecodeTaskCursor(*filter.CursorAfter)
+		if err != nil {
+			return nil, false, fmt.Errorf("task repo: invalid cursor: %w", err)
+		}
+		q = q.Where("(created_at, id) > (?, ?)", cur.CreatedAt.UTC(), cur.ID)
 	}
 
 	var records []taskRecord
-	if err := q.Order("created_at ASC").
-		Offset(offset).Limit(limit).
+	if err := q.Order("created_at ASC, id ASC").
+		Limit(limit + 1).
 		Find(&records).Error; err != nil {
-		return nil, 0, fmt.Errorf("task repo: list: %w", err)
+		return nil, false, fmt.Errorf("task repo: list: %w", err)
+	}
+
+	hasMore := len(records) > limit
+	if hasMore {
+		records = records[:limit]
 	}
 
 	tasks := make([]*taskdom.Task, 0, len(records))
 	for i := range records {
 		t, err := toTaskEntity(&records[i])
 		if err != nil {
-			return nil, 0, err
+			return nil, false, err
 		}
 		tasks = append(tasks, t)
 	}
-	return tasks, total, nil
+	return tasks, hasMore, nil
 }
 
 // FindTaskByID returns the task with the given ID (non-deleted).

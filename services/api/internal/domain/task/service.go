@@ -85,7 +85,7 @@ type UpdateTaskStatusInput struct {
 
 // TaskService defines task use cases.
 type TaskService interface {
-	ListTasks(ctx context.Context, projectID uuid.UUID, filter TaskFilter, page, pageSize int) ([]*Task, int64, error)
+	ListTasks(ctx context.Context, projectID uuid.UUID, filter TaskFilter, pageSize int) ([]*Task, bool, error)
 	// GetTask returns the task identified by id, verifying it belongs to projectID.
 	GetTask(ctx context.Context, projectID, id uuid.UUID) (*Task, error)
 	GetTaskByNumber(ctx context.Context, projectID uuid.UUID, taskNumber int64) (*Task, error)

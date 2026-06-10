@@ -102,12 +102,12 @@ func (f *fakeTaskSvc) SetDefaultTaskStatus(_ context.Context, _, _ uuid.UUID) (*
 
 // -- TaskService --
 
-func (f *fakeTaskSvc) ListTasks(_ context.Context, projectID uuid.UUID, filter taskdom.TaskFilter, _, _ int) ([]*taskdom.Task, int64, error) {
+func (f *fakeTaskSvc) ListTasks(_ context.Context, projectID uuid.UUID, filter taskdom.TaskFilter, _ int) ([]*taskdom.Task, bool, error) {
 	f.mu.Lock()
 	f.lastProjectID = projectID
 	f.lastFilter = filter
 	f.mu.Unlock()
-	return nil, 0, nil
+	return nil, false, nil
 }
 
 func (f *fakeTaskSvc) GetTask(_ context.Context, _, id uuid.UUID) (*taskdom.Task, error) {

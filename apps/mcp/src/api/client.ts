@@ -146,14 +146,14 @@ export class PacaAPIClient {
 			assigneeId?: string;
 			taskTypeIds?: string[];
 			parentTaskId?: string;
-			page?: number;
 			pageSize?: number;
+			cursor?: string;
 		} = {},
-	): Promise<Task[]> {
+	): Promise<{ items: Task[]; nextCursor?: string | null }> {
 		const params: string[] = [];
-		if (options.page !== undefined) params.push(`page=${options.page}`);
 		if (options.pageSize !== undefined)
 			params.push(`page_size=${options.pageSize}`);
+		if (options.cursor) params.push(`cursor=${options.cursor}`);
 		if (options.sprintId !== undefined)
 			params.push(`sprint_id=${options.sprintId}`);
 		if (options.statusId !== undefined)
@@ -170,9 +170,12 @@ export class PacaAPIClient {
 			`/api/v1/projects/${projectId}/tasks${queryString}`,
 		);
 		if (Array.isArray(response)) {
-			return response;
+			return { items: response, nextCursor: null };
 		}
-		return response.items || response.tasks || response.data || [];
+		return {
+			items: response.items || response.tasks || response.data || [],
+			nextCursor: response.next_cursor ?? null,
+		};
 	}
 
 	async getTask(projectId: string, taskId: string): Promise<Task> {

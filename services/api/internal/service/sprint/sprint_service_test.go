@@ -94,7 +94,7 @@ func newFakeTaskRepo() *fakeTaskRepo {
 	}
 }
 
-func (r *fakeTaskRepo) ListTasks(_ context.Context, projectID uuid.UUID, filter taskdom.TaskFilter, _, _ int) ([]*taskdom.Task, int64, error) {
+func (r *fakeTaskRepo) ListTasks(_ context.Context, projectID uuid.UUID, filter taskdom.TaskFilter, _ int) ([]*taskdom.Task, bool, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	var out []*taskdom.Task
@@ -105,7 +105,7 @@ func (r *fakeTaskRepo) ListTasks(_ context.Context, projectID uuid.UUID, filter 
 		}
 	}
 	_ = filter
-	return out, int64(len(out)), nil
+	return out, false, nil
 }
 func (r *fakeTaskRepo) FindTaskByID(_ context.Context, id uuid.UUID) (*taskdom.Task, error) {
 	r.mu.RLock()
@@ -425,7 +425,7 @@ func TestCompleteSprint_MovesToBacklog(t *testing.T) {
 	}
 
 	// All tasks should now have no sprint (backlog).
-	tasks, _, _ := taskRepo.ListTasks(ctx, projectID, taskdom.TaskFilter{}, 0, 100)
+	tasks, _, _ := taskRepo.ListTasks(ctx, projectID, taskdom.TaskFilter{}, 100)
 	for _, task := range tasks {
 		if task.SprintID != nil {
 			t.Errorf("expected task %s to be in backlog, still has sprint %s", task.ID, *task.SprintID)

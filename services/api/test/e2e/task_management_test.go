@@ -211,9 +211,9 @@ func TestE2ETaskManagement_CRUD(t *testing.T) {
 		var env2 envelope
 		decodeJSON(t, resp, &env2)
 		data := assertDataMap(t, env2)
-		total, _ := data["total"].(float64)
-		if total < 1 {
-			t.Errorf("expected total >= 1, got %v", total)
+		items, _ := data["items"].([]any)
+		if len(items) < 1 {
+			t.Errorf("expected at least 1 task, got %d", len(items))
 		}
 	})
 
@@ -429,9 +429,9 @@ func TestE2ESprintView_SprintTasks(t *testing.T) {
 		var env2 envelope
 		decodeJSON(t, resp, &env2)
 		data := assertDataMap(t, env2)
-		total, _ := data["total"].(float64)
-		if total != 1 {
-			t.Errorf("expected 1 sprint task, got %v", total)
+		items, _ := data["items"].([]any)
+		if len(items) != 1 {
+			t.Errorf("expected 1 sprint task, got %d", len(items))
 		}
 	})
 }
@@ -474,9 +474,9 @@ func TestE2ESprintView_Backlog(t *testing.T) {
 		var env2 envelope
 		decodeJSON(t, resp, &env2)
 		data := assertDataMap(t, env2)
-		total, _ := data["total"].(float64)
-		if total != 2 {
-			t.Errorf("expected 2 backlog tasks, got %v", total)
+		items, _ := data["items"].([]any)
+		if len(items) != 2 {
+			t.Errorf("expected 2 backlog tasks, got %d", len(items))
 		}
 	})
 }
@@ -1271,8 +1271,8 @@ func TestE2ECompleteSprint_MovesToBacklog(t *testing.T) {
 	var env3 envelope
 	decodeJSON(t, resp, &env3)
 	d := assertDataMap(t, env3)
-	if total, _ := d["total"].(float64); total < 1 {
-		t.Errorf("expected at least 1 backlog task after sprint completion, got %v", total)
+	if items, _ := d["items"].([]any); len(items) < 1 {
+		t.Errorf("expected at least 1 backlog task after sprint completion, got 0")
 	}
 }
 

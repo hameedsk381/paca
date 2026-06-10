@@ -6,6 +6,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"sort"
 	"sync"
 	"testing"
 	"time"
@@ -220,7 +222,7 @@ func (r *fakeTaskRepo) FindDefaultTaskStatus(_ context.Context, projectID uuid.U
 
 // -- Task methods --
 
-func (r *fakeTaskRepo) ListTasks(_ context.Context, projectID uuid.UUID, filter taskdom.TaskFilter, offset, limit int) ([]*taskdom.Task, int64, error) {
+func (r *fakeTaskRepo) ListTasks(_ context.Context, projectID uuid.UUID, filter taskdom.TaskFilter, limit int) ([]*taskdom.Task, bool, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	all := make([]*taskdom.Task, 0)
@@ -240,15 +242,35 @@ func (r *fakeTaskRepo) ListTasks(_ context.Context, projectID uuid.UUID, filter 
 		cp := *t
 		all = append(all, &cp)
 	}
-	total := int64(len(all))
-	if offset >= len(all) {
-		return nil, total, nil
+	// Stable sort matching the real ORDER BY created_at ASC, id ASC.
+	sort.Slice(all, func(i, j int) bool {
+		if all[i].CreatedAt.Equal(all[j].CreatedAt) {
+			return all[i].ID.String() < all[j].ID.String()
+		}
+		return all[i].CreatedAt.Before(all[j].CreatedAt)
+	})
+	// Apply cursor filter when provided.
+	if filter.CursorAfter != nil {
+		cur, err := taskdom.DecodeTaskCursor(*filter.CursorAfter)
+		if err != nil {
+			return nil, false, err
+		}
+		pos := -1
+		for i, t := range all {
+			if t.CreatedAt.UTC().Equal(cur.CreatedAt) && t.ID.String() == cur.ID {
+				pos = i
+				break
+			}
+		}
+		if pos >= 0 {
+			all = all[pos+1:]
+		}
 	}
-	end := offset + limit
-	if end > len(all) {
-		end = len(all)
+	hasMore := len(all) > limit
+	if hasMore {
+		all = all[:limit]
 	}
-	return all[offset:end], total, nil
+	return all, hasMore, nil
 }
 
 func (r *fakeTaskRepo) FindTaskByID(_ context.Context, id uuid.UUID) (*taskdom.Task, error) {
@@ -792,15 +814,12 @@ func TestListTasks_FilterBySprint(t *testing.T) {
 		Title:     "No Sprint",
 	})
 
-	tasks, total, err := svc.ListTasks(ctx, projectID, taskdom.TaskFilter{SprintID: &sprintID}, 1, 20)
+	tasks, _, err := svc.ListTasks(ctx, projectID, taskdom.TaskFilter{SprintID: &sprintID}, 20)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if total != 1 {
-		t.Errorf("expected total=1, got %d", total)
-	}
 	if len(tasks) != 1 || tasks[0].Title != "In Sprint" {
-		t.Errorf("expected filtered task In Sprint, got %v", tasks)
+		t.Errorf("expected 1 filtered task In Sprint, got %v", tasks)
 	}
 }
 
@@ -817,12 +836,67 @@ func TestListTasks_Pagination(t *testing.T) {
 		})
 	}
 
-	_, total, err := svc.ListTasks(ctx, projectID, taskdom.TaskFilter{}, 1, 3)
+	tasks, hasMore, err := svc.ListTasks(ctx, projectID, taskdom.TaskFilter{}, 3)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if total != 5 {
-		t.Errorf("expected total=5, got %d", total)
+	if len(tasks) != 3 {
+		t.Errorf("expected 3 tasks in first page, got %d", len(tasks))
+	}
+	if !hasMore {
+		t.Errorf("expected hasMore=true for page of 3 from 5")
+	}
+}
+
+func TestListTasks_CursorPagination(t *testing.T) {
+	ctx := context.Background()
+	repo := newFakeTaskRepo()
+	svc := tasksvc.New(repo)
+	projectID := uuid.New()
+
+	for i := 0; i < 5; i++ {
+		_, _ = svc.CreateTask(ctx, taskdom.CreateTaskInput{
+			ProjectID: projectID,
+			Title:     fmt.Sprintf("Task %d", i),
+		})
+	}
+
+	// Page 1: first 3 tasks
+	page1, hasMore, err := svc.ListTasks(ctx, projectID, taskdom.TaskFilter{}, 3)
+	if err != nil {
+		t.Fatalf("page 1 error: %v", err)
+	}
+	if len(page1) != 3 {
+		t.Fatalf("expected 3 tasks on page 1, got %d", len(page1))
+	}
+	if !hasMore {
+		t.Fatal("expected hasMore=true after page 1")
+	}
+
+	// Encode cursor from the last item on page 1.
+	last := page1[len(page1)-1]
+	cursor := taskdom.EncodeTaskCursor(last.CreatedAt, last.ID.String())
+
+	// Page 2: tasks after the cursor.
+	page2, hasMore2, err := svc.ListTasks(ctx, projectID, taskdom.TaskFilter{CursorAfter: &cursor}, 3)
+	if err != nil {
+		t.Fatalf("page 2 error: %v", err)
+	}
+	if len(page2) != 2 {
+		t.Errorf("expected 2 tasks on page 2, got %d", len(page2))
+	}
+	if hasMore2 {
+		t.Error("expected hasMore=false after page 2")
+	}
+	// Verify no overlap between pages.
+	p1IDs := make(map[uuid.UUID]bool, len(page1))
+	for _, task := range page1 {
+		p1IDs[task.ID] = true
+	}
+	for _, task := range page2 {
+		if p1IDs[task.ID] {
+			t.Errorf("task %v appeared in both page 1 and page 2", task.ID)
+		}
 	}
 }
 

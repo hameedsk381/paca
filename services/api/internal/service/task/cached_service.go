@@ -214,8 +214,8 @@ func (c *CachedService) SetDefaultTaskStatus(ctx context.Context, projectID, sta
 // in many different ways, making cache key cardinality prohibitively large.
 
 // ListTasks delegates directly to the underlying service (not cached).
-func (c *CachedService) ListTasks(ctx context.Context, projectID uuid.UUID, filter taskdom.TaskFilter, page, pageSize int) ([]*taskdom.Task, int64, error) {
-	return c.svc.ListTasks(ctx, projectID, filter, page, pageSize)
+func (c *CachedService) ListTasks(ctx context.Context, projectID uuid.UUID, filter taskdom.TaskFilter, pageSize int) ([]*taskdom.Task, bool, error) {
+	return c.svc.ListTasks(ctx, projectID, filter, pageSize)
 }
 
 // GetTask delegates directly to the underlying service (not cached).

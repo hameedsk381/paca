@@ -510,15 +510,14 @@ func TestAgentAPIKey_ListTasks_Success(t *testing.T) {
 	var env struct {
 		Data struct {
 			Items []map[string]any `json:"items"`
-			Total int64            `json:"total"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(w.Body.Bytes(), &env); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
 
-	if env.Data.Total != 3 {
-		t.Errorf("expected 3 tasks, got %d", env.Data.Total)
+	if len(env.Data.Items) != 3 {
+		t.Errorf("expected 3 tasks, got %d", len(env.Data.Items))
 	}
 }
 
@@ -950,15 +949,14 @@ func TestAgentAPIKey_BulkTaskOperations(t *testing.T) {
 	var listEnv struct {
 		Data struct {
 			Items []map[string]any `json:"items"`
-			Total int64            `json:"total"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(listW.Body.Bytes(), &listEnv); err != nil {
 		t.Fatalf("decode list response: %v", err)
 	}
 
-	if listEnv.Data.Total != 5 {
-		t.Errorf("expected 5 tasks, got %d", listEnv.Data.Total)
+	if len(listEnv.Data.Items) != 5 {
+		t.Errorf("expected 5 tasks, got %d", len(listEnv.Data.Items))
 	}
 
 	// Update all tasks with a status

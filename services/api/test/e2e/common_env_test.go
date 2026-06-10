@@ -3,7 +3,7 @@
 // apply migrations, wire the full service stack, and exercise the complete
 // HTTP request flow against an in-process httptest.Server.
 //
-// Run with: PACA_E2E=1 go test ./test/e2e/... -v -timeout 120s
+// Run with: PACA_E2E=1 go test ./test/e2e/... -v -timeout 300s
 package e2e_test
 
 import (
@@ -41,6 +41,7 @@ import (
 	usersvc "github.com/Paca-AI/api/internal/service/user"
 	"github.com/Paca-AI/api/internal/transport/http/handler"
 	"github.com/Paca-AI/api/internal/transport/http/router"
+	"github.com/gin-gonic/gin"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 	"gorm.io/gorm"
@@ -270,6 +271,8 @@ func newE2EEnv(t *testing.T) *e2eEnv {
 // E2E suite rather than once per test function. This keeps total container
 // startup time proportional to O(1) instead of O(N tests).
 func TestMain(m *testing.M) {
+	gin.SetMode(gin.TestMode) // suppress per-route debug output across the full suite
+
 	if os.Getenv("PACA_E2E") != "1" {
 		// Guard not set – individual tests will self-skip; just run them.
 		os.Exit(m.Run())

@@ -131,8 +131,8 @@ func (s *stubTaskSvc) SetDefaultTaskStatus(_ context.Context, projectID, statusI
 
 // TaskService methods (pass-through in CachedService)
 
-func (s *stubTaskSvc) ListTasks(_ context.Context, _ uuid.UUID, _ taskdom.TaskFilter, _, _ int) ([]*taskdom.Task, int64, error) {
-	return nil, 0, nil
+func (s *stubTaskSvc) ListTasks(_ context.Context, _ uuid.UUID, _ taskdom.TaskFilter, _ int) ([]*taskdom.Task, bool, error) {
+	return nil, false, nil
 }
 
 func (s *stubTaskSvc) GetTask(_ context.Context, _, id uuid.UUID) (*taskdom.Task, error) {

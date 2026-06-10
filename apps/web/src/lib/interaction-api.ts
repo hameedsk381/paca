@@ -49,9 +49,8 @@ export interface Task {
 
 export interface TaskListResult {
 	items: Task[];
-	total: number;
-	page: number;
 	page_size: number;
+	next_cursor?: string | null;
 }
 
 export interface TaskPosition {
@@ -404,17 +403,18 @@ export interface ListTasksOptions {
 	statusIds?: string[];
 	assigneeId?: string;
 	assigneeIds?: string[];
+	assigneeNull?: boolean;
 	taskTypeIds?: string[];
+	taskTypeNull?: boolean;
 	parentTaskId?: string;
-	page?: number;
 	pageSize?: number;
+	cursor?: string;
 }
 
 function buildTaskQueryParams(opts: ListTasksOptions = {}) {
-	const params: Record<string, string | number | boolean> = {
-		page: opts.page ?? 1,
-		page_size: opts.pageSize ?? 200,
-	};
+	const params: Record<string, string | number | boolean> = {};
+	params.page_size = opts.pageSize ?? 20;
+	if (opts.cursor) params.cursor = opts.cursor;
 	if (opts.sprintId === null) params.sprint_id = "null";
 	else if (opts.sprintId) params.sprint_id = opts.sprintId;
 	if (opts.sprintIds && opts.sprintIds.length > 0)
@@ -422,10 +422,12 @@ function buildTaskQueryParams(opts: ListTasksOptions = {}) {
 	if (opts.statusId) params.status_id = opts.statusId;
 	if (opts.statusIds && opts.statusIds.length > 0)
 		params.status_ids = opts.statusIds.join(",");
-	if (opts.assigneeId) params.assignee_id = opts.assigneeId;
-	if (opts.assigneeIds && opts.assigneeIds.length > 0)
+	if (opts.assigneeNull) params.assignee_id = "null";
+	else if (opts.assigneeId) params.assignee_id = opts.assigneeId;
+	else if (opts.assigneeIds && opts.assigneeIds.length > 0)
 		params.assignee_ids = opts.assigneeIds.join(",");
-	if (opts.taskTypeIds && opts.taskTypeIds.length > 0)
+	if (opts.taskTypeNull) params.task_type_id = "null";
+	else if (opts.taskTypeIds && opts.taskTypeIds.length > 0)
 		params.task_type_ids = opts.taskTypeIds.join(",");
 	if (opts.parentTaskId) params.parent_task_id = opts.parentTaskId;
 	return params;

@@ -210,16 +210,14 @@ func (s *Service) SetDefaultTaskStatus(ctx context.Context, projectID, statusID 
 
 // --- Tasks ------------------------------------------------------------------
 
-// ListTasks returns a page of tasks for a project with optional filters.
-func (s *Service) ListTasks(ctx context.Context, projectID uuid.UUID, filter taskdom.TaskFilter, page, pageSize int) ([]*taskdom.Task, int64, error) {
-	if page < 1 {
-		page = 1
-	}
+// ListTasks returns a page of tasks. When filter.CursorAfter is nil, returns from
+// the beginning. When set, returns tasks after the cursor position.
+// Returns hasMore=true when a next page exists.
+func (s *Service) ListTasks(ctx context.Context, projectID uuid.UUID, filter taskdom.TaskFilter, pageSize int) ([]*taskdom.Task, bool, error) {
 	if pageSize < 1 {
 		pageSize = 20
 	}
-	offset := (page - 1) * pageSize
-	return s.repo.ListTasks(ctx, projectID, filter, offset, pageSize)
+	return s.repo.ListTasks(ctx, projectID, filter, pageSize)
 }
 
 // GetTask returns the task with the given ID, verifying it belongs to projectID.

@@ -10,6 +10,8 @@ import { formatList, formatTask, formatTaskDetail } from "../utils/index.js";
 
 const ListTasksSchema = z.object({
 	projectId: z.string(),
+	cursor: z.string().optional(),
+	pageSize: z.number().int().positive().max(200).optional(),
 });
 
 const GetTaskSchema = z.object({
@@ -76,6 +78,16 @@ export function getTaskTools(): Tool[] {
 						type: "string",
 						description:
 							"The technical UUID of the project (e.g., '550e8400-e29b-41d4-a716-446655440000'). Use list_projects to get the project ID. Do NOT use the project name.",
+					},
+					cursor: {
+						type: "string",
+						description:
+							"Opaque pagination cursor returned as next_cursor from a previous call. Pass this to fetch the next page of tasks.",
+					},
+					pageSize: {
+						type: "number",
+						description:
+							"Number of tasks to return per page (1–200, default 20). Use smaller values for faster responses when you only need a few tasks.",
 					},
 				},
 				required: ["projectId"],
@@ -308,14 +320,18 @@ export async function handleTaskTool(
 ): Promise<any> {
 	switch (toolName) {
 		case "list_tasks": {
-			const { projectId } = ListTasksSchema.parse(args);
-			const tasks = await client.listTasks(projectId);
-			const formatted = formatList(tasks, formatTask);
+			const { projectId, cursor, pageSize } = ListTasksSchema.parse(args);
+			const result = await client.listTasks(projectId, { cursor, pageSize });
+			const formatted = formatList(result.items, formatTask);
+			const hasMore = Boolean(result.nextCursor);
+			const nextCursorNote = hasMore
+				? `\n\n_There are more tasks. Call list_tasks again with cursor="${result.nextCursor}" to fetch the next page._`
+				: "";
 			return {
 				content: [
 					{
 						type: "text",
-						text: `Tasks:\n\n${formatted}`,
+						text: `Tasks (${result.items.length} returned${hasMore ? ", more available" : ""}):\n\n${formatted}${nextCursorNote}`,
 					},
 				],
 			};

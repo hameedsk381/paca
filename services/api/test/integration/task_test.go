@@ -216,7 +216,7 @@ func (r *fakeTaskRepo) FindDefaultTaskStatus(_ context.Context, projectID uuid.U
 	return nil, nil
 }
 
-func (r *fakeTaskRepo) ListTasks(_ context.Context, projectID uuid.UUID, filter taskdom.TaskFilter, offset, limit int) ([]*taskdom.Task, int64, error) {
+func (r *fakeTaskRepo) ListTasks(_ context.Context, projectID uuid.UUID, filter taskdom.TaskFilter, limit int) ([]*taskdom.Task, bool, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	var all []*taskdom.Task
@@ -240,15 +240,11 @@ func (r *fakeTaskRepo) ListTasks(_ context.Context, projectID uuid.UUID, filter 
 		cp := *t
 		all = append(all, &cp)
 	}
-	total := int64(len(all))
-	if offset >= len(all) {
-		return nil, total, nil
+	hasMore := len(all) > limit
+	if hasMore {
+		all = all[:limit]
 	}
-	end := offset + limit
-	if end > len(all) {
-		end = len(all)
-	}
-	return all[offset:end], total, nil
+	return all, hasMore, nil
 }
 
 func (r *fakeTaskRepo) FindTaskByID(_ context.Context, id uuid.UUID) (*taskdom.Task, error) {

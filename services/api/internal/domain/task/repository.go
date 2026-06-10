@@ -42,7 +42,7 @@ type TaskStatusRepository interface {
 
 // TaskRepository defines persistence operations for tasks.
 type TaskRepository interface {
-	ListTasks(ctx context.Context, projectID uuid.UUID, filter TaskFilter, offset, limit int) ([]*Task, int64, error)
+	ListTasks(ctx context.Context, projectID uuid.UUID, filter TaskFilter, limit int) ([]*Task, bool, error)
 	FindTaskByID(ctx context.Context, id uuid.UUID) (*Task, error)
 	FindTaskByNumber(ctx context.Context, projectID uuid.UUID, taskNumber int64) (*Task, error)
 	CreateTask(ctx context.Context, t *Task) error
@@ -62,9 +62,12 @@ type TaskFilter struct {
 	StatusIDs    []uuid.UUID // multi-value; takes priority over StatusID
 	AssigneeID   *uuid.UUID  // single-value compat; ignored when AssigneeIDs is non-empty
 	AssigneeIDs  []uuid.UUID // multi-value; takes priority over AssigneeID
+	AssigneeNull bool        // true → only tasks where assignee_id IS NULL
 	ParentTaskID *uuid.UUID  // non-nil → only subtasks of this parent
 	TaskTypeIDs  []uuid.UUID // multi-value; when non-empty, only tasks of these types
+	TaskTypeNull bool        // true → only tasks where task_type_id IS NULL
 	BacklogOnly  bool        // true → only tasks where sprint_id IS NULL
+	CursorAfter  *string     // opaque base64 cursor; when set, replaces offset-based paging
 }
 
 // CustomFieldDefinitionRepository defines persistence operations for custom
