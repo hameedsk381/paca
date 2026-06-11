@@ -143,7 +143,9 @@ export function DocActivityPane({
 			queryKey={queryKey}
 			queryFn={() => listActivities(projectId, docId)}
 			addComment={
-				canEdit ? (blocks) => addDocComment(projectId, docId, blocks) : undefined
+				canEdit
+					? (blocks) => addDocComment(projectId, docId, blocks)
+					: undefined
 			}
 			updateComment={
 				canEdit

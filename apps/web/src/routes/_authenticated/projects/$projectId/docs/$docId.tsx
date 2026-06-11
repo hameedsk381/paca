@@ -1,11 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import {
-	AlertCircle,
-	Check,
-	ChevronRight,
-	MessageSquare,
-} from "lucide-react";
+import { AlertCircle, Check, ChevronRight, MessageSquare } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { DocActivityPane } from "@/components/projects/docs/doc-activity-pane";

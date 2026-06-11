@@ -16,13 +16,13 @@ import {
 	Trash2,
 } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import { ContentDiffDialog } from "@/components/shared/content-diff";
 import {
 	blocksToText,
 	CommentDisplay,
 	CommentEditor,
 	type CommentEditorHandle,
 } from "@/components/shared/comment-blocknote";
+import { ContentDiffDialog } from "@/components/shared/content-diff";
 import { Button } from "@/components/ui/button";
 import {
 	DropdownMenu,

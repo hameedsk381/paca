@@ -6,7 +6,7 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@/components/ui/dialog";
-import { diffBlockNoteContent, type DiffLine } from "@/lib/diff-utils";
+import { type DiffLine, diffBlockNoteContent } from "@/lib/diff-utils";
 import { cn } from "@/lib/utils";
 
 interface ContentDiffProps {
