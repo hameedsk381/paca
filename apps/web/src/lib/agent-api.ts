@@ -13,6 +13,22 @@ export interface AgentPreset {
 	defaultSystemPrompt: string;
 }
 
+// ── Trigger prompts ───────────────────────────────────────────────────────────
+// Role-agnostic. The runner appends the matching prompt to the agent's base
+// system prompt at invocation time.
+
+export const TRIGGER_PROMPTS = {
+	task: "## Current invocation: task assignment or task comment\n\nYou were triggered by a task assignment or a task comment @mention. Wrap your work with these steps:\n\n1. **Read the task**: Use the Paca MCP tool to fetch the full task details including description, acceptance criteria, and current status.\n2. **Read the documentation**: Use the Paca MCP tool to list and read the project's documents. Focus on architecture guides, technical conventions, onboarding docs, or any document relevant to your task. This gives you the full project context before you begin.\n3. **Check readiness**: If anything is unclear after reading the task and docs, add a comment on the task asking for clarification and wait for a response before proceeding.\n4. **Update status**: Use the Paca MCP tool to update the task status to the appropriate in-progress status.\n5. **Do your work** as described in your role above.\n6. **Update status**: Use the Paca MCP tool to update the task status to the appropriate done/completed status.\n7. **Reply**: Add a comment on the task summarising what was done, key decisions made, and any follow-up items.",
+
+	docComment:
+		"## Current invocation: documentation comment\n\nYou were triggered by a documentation comment @mention. Wrap your work with these steps:\n\n1. **Read the documentation**: Use the Paca MCP tool to list and read the project's documents. Prioritise the document that triggered this mention as well as any related architecture or convention docs to build full context.\n2. **Check readiness**: If anything is unclear, add a comment asking for clarification and wait for a response before proceeding.\n3. **Do your work** as described in your role above.\n4. **Reply**: Add a comment with your response and any relevant follow-up items.",
+
+	chat: "## Current invocation: direct chat\n\nYou were triggered by direct chat. The user cannot reply in the same session, so:\n\n1. **Read the documentation**: Use the Paca MCP tool to list and read the project's documents to understand the project context, architecture, and conventions before responding.\n2. **If anything is unclear and you must ask**, send your question as a message in the conversation and stop. The user will read it and may continue in a new conversation.\n3. **If you have enough information**, proceed with your work without asking.\n4. **Do your work** as described in your role above.\n5. **Reply**: Respond directly in the conversation.",
+
+	descriptionWrite:
+		"## Current invocation: write task description\n\nYou were triggered to write a description for a specific task. Follow these steps:\n\n1. **Read the task**: Use the Paca MCP tool to fetch the full task details including its title, type, and any existing description.\n2. **Read the documentation**: Use the Paca MCP tool to list and read the project's documents. Focus on architecture guides, domain context, or any docs that help you write an accurate and well-informed description.\n3. **Write the description**: Based on the task title, project context, and documentation, write a clear, concise, and actionable task description. Include:\n   - A brief summary of what needs to be done\n   - Acceptance criteria (what done looks like)\n   - Any relevant technical notes or constraints\n4. **Update the task**: Use the Paca MCP tool to update the task's description with the content you wrote.\n5. **Reply**: Add a comment on the task confirming the description has been written and noting any assumptions made.",
+} as const;
+
 export const AGENT_PRESETS: AgentPreset[] = [
 	{
 		id: "software-engineer",
@@ -20,9 +36,9 @@ export const AGENT_PRESETS: AgentPreset[] = [
 		description:
 			"An AI agent focused on implementing features and fixing bugs.",
 		defaultLLMProvider: "anthropic",
-		defaultLLMModel: "claude-sonnet-4-5-20250929",
+		defaultLLMModel: "claude-sonnet-4-6",
 		defaultSystemPrompt:
-			"You are an expert software engineer. When assigned a task, follow this workflow:\n\n1. **Read the task**: Use the Paca MCP tool to fetch the full task details including description, acceptance criteria, and current status.\n2. **Assess readiness**: Based on the task details and status, determine whether you have enough information to begin implementation.\n   - If anything is unclear or you need input from the human (e.g. ambiguous requirements, missing context, architectural decisions), use the Paca MCP tool to add a comment on the task explaining what needs clarification. Then stop and wait for a response.\n   - If the task is clear and actionable, proceed to step 3.\n3. **Start the task**: Use the Paca MCP tool to update the task status to the appropriate in-progress status, then implement the feature or fix according to the requirements. Write clean, maintainable code and follow best practices.\n4. **Finish the task**: Once implementation is complete, use the Paca MCP tool to update the task status to the appropriate done/completed status, then add a comment summarising what was done, key decisions made, and any follow-up items the team should be aware of.",
+			"You are an expert software engineer. You implement features and fix bugs by writing clean, maintainable code and following best practices.",
 	},
 	{
 		id: "code-reviewer",
@@ -30,18 +46,38 @@ export const AGENT_PRESETS: AgentPreset[] = [
 		description:
 			"An AI agent that reviews code for quality, bugs, and best practices.",
 		defaultLLMProvider: "anthropic",
-		defaultLLMModel: "claude-sonnet-4-5-20250929",
+		defaultLLMModel: "claude-sonnet-4-6",
 		defaultSystemPrompt:
-			"You are a meticulous code reviewer. When assigned a task, follow this workflow:\n\n1. **Read the task**: Use the Paca MCP tool to fetch the full task details including the code or pull request to review and the current status.\n2. **Assess readiness**: Based on the task details and status, determine whether you have enough context to begin the review.\n   - If the scope is unclear, the target branch/PR is not specified, or you need additional information from the human, use the Paca MCP tool to add a comment on the task asking for clarification. Then stop and wait for a response.\n   - If the task is clear, proceed to step 3.\n3. **Start the review**: Use the Paca MCP tool to update the task status to the appropriate in-progress status, then review the code for correctness, security vulnerabilities, performance issues, and adherence to best practices. Provide constructive and actionable feedback.\n4. **Finish the review**: Once the review is complete, use the Paca MCP tool to update the task status to the appropriate done/completed status, then add a comment summarising the findings, severity of issues found, and recommended next steps.",
+			"You are a meticulous code reviewer. You examine code for correctness, security vulnerabilities, performance issues, and adherence to best practices, providing constructive and actionable feedback.",
 	},
 	{
 		id: "qa-engineer",
 		label: "QA Engineer",
 		description: "An AI agent specialized in writing and running tests.",
 		defaultLLMProvider: "anthropic",
-		defaultLLMModel: "claude-sonnet-4-5-20250929",
+		defaultLLMModel: "claude-sonnet-4-6",
 		defaultSystemPrompt:
-			"You are a quality assurance engineer. When assigned a task, follow this workflow:\n\n1. **Read the task**: Use the Paca MCP tool to fetch the full task details including the feature or component to test and the current status.\n2. **Assess readiness**: Based on the task details and status, determine whether you have enough information to begin writing or executing tests.\n   - If requirements are ambiguous, the acceptance criteria are missing, or you need clarification from the human, use the Paca MCP tool to add a comment on the task describing what is needed. Then stop and wait for a response.\n   - If the task is clear and actionable, proceed to step 3.\n3. **Start the task**: Use the Paca MCP tool to update the task status to the appropriate in-progress status, then write comprehensive test suites, identify edge cases, create test plans, and ensure software reliability through thorough testing strategies.\n4. **Finish the task**: Once testing is complete, use the Paca MCP tool to update the task status to the appropriate done/completed status, then add a comment summarising the tests written or executed, coverage achieved, any bugs discovered, and recommendations for the team.",
+			"You are a quality assurance engineer. You write comprehensive test suites, identify edge cases, create test plans, and ensure software reliability through thorough testing strategies.",
+	},
+	{
+		id: "planner",
+		label: "Planner",
+		description:
+			"An AI agent that breaks down goals into tasks and organises sprint work.",
+		defaultLLMProvider: "anthropic",
+		defaultLLMModel: "claude-sonnet-4-6",
+		defaultSystemPrompt:
+			"You are an expert project planner. You break down goals into well-defined tasks using `create_task`. For each task, set an appropriate task type (use `list_task_types` to see available types), a clear title, description, and acceptance criteria. Group related tasks under Epics or parent tasks where appropriate. Use `list_task_statuses` to understand the project's workflow.",
+	},
+	{
+		id: "business-analyst",
+		label: "Business Analyst",
+		description:
+			"An AI agent that writes requirements, user stories, and acceptance criteria.",
+		defaultLLMProvider: "anthropic",
+		defaultLLMModel: "claude-sonnet-4-6",
+		defaultSystemPrompt:
+			'You are an expert business analyst. You produce requirements by:\n- Writing detailed user stories (`create_task` with type Story) in the format "As a [persona], I want [goal] so that [benefit]".\n- Adding clear, testable acceptance criteria to each story.\n- Creating Epics (`create_task` with type Epic) to group related stories.\n- Documenting business rules, edge cases, and non-functional requirements as comments or task description updates.\n\nUse `list_task_types` and `list_tasks` to understand the project context and avoid duplicating requirements.',
 	},
 	{
 		id: "custom",
@@ -89,6 +125,10 @@ export interface Agent {
 	llm_model: string;
 	llm_base_url?: string | null;
 	system_prompt: string;
+	task_trigger_prompt: string;
+	doc_comment_trigger_prompt: string;
+	chat_trigger_prompt: string;
+	description_write_trigger_prompt: string;
 	can_clone_repos: boolean;
 	git_committer_name: string;
 	git_committer_email: string;
@@ -110,7 +150,11 @@ export interface AgentConversation {
 	id: string;
 	agent_id: string;
 	project_id: string;
-	trigger_type: "task_assigned" | "comment_mention" | "chat_message";
+	trigger_type:
+		| "task_assigned"
+		| "comment_mention"
+		| "chat_message"
+		| "description_write";
 	task_id?: string | null;
 	comment_id?: string | null;
 	chat_session_id?: string | null;
@@ -176,6 +220,10 @@ export async function createAgent(
 		llm_api_key: string;
 		llm_base_url?: string | null;
 		system_prompt?: string;
+		task_trigger_prompt?: string;
+		doc_comment_trigger_prompt?: string;
+		chat_trigger_prompt?: string;
+		description_write_trigger_prompt?: string;
 		can_clone_repos?: boolean;
 		git_committer_name?: string;
 		git_committer_email?: string;
@@ -200,6 +248,10 @@ export async function updateAgent(
 		llm_api_key?: string;
 		llm_base_url?: string | null;
 		system_prompt?: string;
+		task_trigger_prompt?: string;
+		doc_comment_trigger_prompt?: string;
+		chat_trigger_prompt?: string;
+		description_write_trigger_prompt?: string;
 		can_clone_repos?: boolean;
 		git_committer_name?: string;
 		git_committer_email?: string;
@@ -210,6 +262,19 @@ export async function updateAgent(
 		payload,
 	);
 	return data.data;
+}
+
+export async function writeTaskDescriptionWithAI(
+	projectId: string,
+	taskId: string,
+	agentId: string,
+): Promise<AgentConversation> {
+	const { data } = await apiClient.instance.post<
+		SuccessEnvelope<{ conversation: AgentConversation }>
+	>(`/projects/${projectId}/tasks/${taskId}/write-with-ai`, {
+		agent_id: agentId,
+	});
+	return data.data.conversation;
 }
 
 export async function deleteAgent(
@@ -393,13 +458,18 @@ export async function listChatSessions(
 	return data.data.items;
 }
 
+export interface StartChatSessionResponse {
+	session: AgentChatSession;
+	conversation: AgentConversation;
+}
+
 export async function startChatSession(
 	projectId: string,
 	agentId: string,
 	payload: { message: string; title?: string },
-): Promise<AgentChatSession> {
+): Promise<StartChatSessionResponse> {
 	const { data } = await apiClient.instance.post<
-		SuccessEnvelope<AgentChatSession>
+		SuccessEnvelope<StartChatSessionResponse>
 	>(`/projects/${projectId}/agents/${agentId}/chat-sessions`, payload);
 	return data.data;
 }
@@ -411,12 +481,12 @@ export async function sendChatMessage(
 	payload: { message: string },
 ): Promise<AgentConversation> {
 	const { data } = await apiClient.instance.post<
-		SuccessEnvelope<AgentConversation>
+		SuccessEnvelope<{ conversation: AgentConversation }>
 	>(
 		`/projects/${projectId}/agents/${agentId}/chat-sessions/${sessionId}/messages`,
 		payload,
 	);
-	return data.data;
+	return data.data.conversation;
 }
 
 // ── Query Options ─────────────────────────────────────────────────────────────

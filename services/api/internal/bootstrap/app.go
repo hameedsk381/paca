@@ -249,7 +249,8 @@ func New(cfg *config.Config) (*App, error) {
 		WithRouteAuth(tokenManager, apiKeyService, authorizer).
 		WithMarketplace(marketplaceClient, pluginInstaller, pluginMigrationRunner)
 
-	agentHandler := handler.NewAgentHandler(agentService, cfg.AIAgentURL)
+	agentHandler := handler.NewAgentHandler(agentService, cfg.AIAgentURL).
+		WithActivityRecorder(activityService)
 	convHandler := handler.NewConversationHandler(agentService)
 
 	// --- Handlers -----------------------------------------------------------

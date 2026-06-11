@@ -3,18 +3,32 @@ import "@blocknote/shadcn/style.css";
 
 import { SideMenuController, useCreateBlockNote } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/shadcn";
-import { Sparkles } from "lucide-react";
-import { useCallback, useEffect, useRef } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { Bot, Sparkles } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { CustomSideMenu } from "@/components/shared/blocknote-custom-side-menu";
 import { customSchema } from "@/components/shared/blocknote-schema";
 import { MentionSuggestionMenus } from "@/components/shared/mention-suggestion-menus";
+import { Button } from "@/components/ui/button";
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from "@/components/ui/dialog";
 import { useThemeMode } from "@/hooks/use-theme-mode";
+import {
+	agentsQueryOptions,
+	writeTaskDescriptionWithAI,
+} from "@/lib/agent-api";
 import {
 	getAttachmentDownloadURL,
 	uploadAttachment,
 } from "@/lib/attachment-api";
 import { useMentionData } from "@/lib/mention-api";
-import { cleanBlocks } from "@/lib/utils";
+import { cleanBlocks, cn } from "@/lib/utils";
 
 type UpdateFn = (payload: { description?: unknown[] | null }) => void;
 
@@ -38,6 +52,25 @@ export function DescriptionSection({
 }: DescriptionSectionProps) {
 	const { resolvedMode } = useThemeMode();
 	const { teamMembers, tasks, documents } = useMentionData(projectId);
+	const [writeWithAIOpen, setWriteWithAIOpen] = useState(false);
+	const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
+
+	const { data: agents = [] } = useQuery({
+		...agentsQueryOptions(projectId ?? ""),
+		enabled: !!projectId && writeWithAIOpen,
+	});
+
+	const writeWithAIMutation = useMutation({
+		mutationFn: () => {
+			if (!projectId || !taskId || !selectedAgentId)
+				throw new Error("missing context");
+			return writeTaskDescriptionWithAI(projectId, taskId, selectedAgentId);
+		},
+		onSuccess: () => {
+			setWriteWithAIOpen(false);
+			setSelectedAgentId(null);
+		},
+	});
 
 	// Tracks the last value we wrote to the API, to avoid redundant saves and
 	// to skip external refetch updates that match what we already have.
@@ -162,6 +195,7 @@ export function DescriptionSection({
 					<button
 						type="button"
 						className="flex items-center gap-1.5 text-[11px] text-muted-foreground/60 hover:text-muted-foreground transition-colors duration-150 font-medium"
+						onClick={() => setWriteWithAIOpen(true)}
 					>
 						<Sparkles className="size-3" />
 						Write with AI
@@ -193,6 +227,96 @@ export function DescriptionSection({
 					)}
 				</BlockNoteView>
 			</div>
+
+			<Dialog
+				open={writeWithAIOpen}
+				onOpenChange={(open) => {
+					setWriteWithAIOpen(open);
+					if (!open) setSelectedAgentId(null);
+				}}
+			>
+				<DialogContent className="sm:max-w-md">
+					<DialogHeader>
+						<DialogTitle className="flex items-center gap-2">
+							<Sparkles className="size-4 text-muted-foreground" />
+							Write with AI
+						</DialogTitle>
+						<DialogDescription>
+							Select an agent to write the task description.
+						</DialogDescription>
+					</DialogHeader>
+
+					<div className="space-y-2 py-2">
+						{agents.length === 0 ? (
+							<p className="text-sm text-muted-foreground text-center py-4">
+								No agents configured for this project.
+							</p>
+						) : (
+							agents.map((agent) => (
+								<button
+									key={agent.id}
+									type="button"
+									onClick={() => setSelectedAgentId(agent.id)}
+									className={cn(
+										"w-full flex items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition-all duration-150",
+										selectedAgentId === agent.id
+											? "border-primary/60 bg-primary/5 text-foreground"
+											: "border-border/40 bg-card/50 hover:border-border/70 hover:bg-muted/30 text-muted-foreground hover:text-foreground",
+									)}
+								>
+									<div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-muted">
+										<Bot className="size-3.5" />
+									</div>
+									<div className="min-w-0">
+										<p className="text-sm font-medium leading-tight truncate">
+											{agent.name}
+										</p>
+										<p className="text-[11px] text-muted-foreground/70 mt-0.5 truncate">
+											@{agent.handle}
+										</p>
+									</div>
+								</button>
+							))
+						)}
+					</div>
+
+					{writeWithAIMutation.error && (
+						<p className="text-xs text-destructive">
+							{writeWithAIMutation.error.message}
+						</p>
+					)}
+
+					<DialogFooter>
+						<Button
+							variant="outline"
+							size="sm"
+							onClick={() => {
+								setWriteWithAIOpen(false);
+								setSelectedAgentId(null);
+							}}
+						>
+							Cancel
+						</Button>
+						<Button
+							size="sm"
+							disabled={!selectedAgentId || writeWithAIMutation.isPending}
+							onClick={() => writeWithAIMutation.mutate()}
+						>
+							{writeWithAIMutation.isPending ? (
+								<>
+									<Sparkles className="size-3 mr-1.5 animate-pulse" />
+									Starting...
+								</>
+							) : (
+								<>
+									<Sparkles className="size-3 mr-1.5" />
+									Write description
+								</>
+							)}
+						</Button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
 		</div>
 	);
 }

@@ -72,10 +72,11 @@ const (
 
 	// --- Agent trigger events -----------------------------------------------
 	// These are appended to StreamAgentTriggers and consumed by services/ai-agent.
-	TopicAgentTaskAssigned   = "agent.task_assigned"
-	TopicAgentCommentMention = "agent.comment_mention"
-	TopicAgentChatMessage    = "agent.chat_message"
-	TopicAgentStop           = "agent.stop"
+	TopicAgentTaskAssigned     = "agent.task_assigned"
+	TopicAgentCommentMention   = "agent.comment_mention"
+	TopicAgentChatMessage      = "agent.chat_message"
+	TopicAgentDescriptionWrite = "agent.description_write"
+	TopicAgentStop             = "agent.stop"
 
 	// --- Agent event topics (emitted by ai-agent, consumed by realtime) ------
 	TopicAgentConversationStarted  = "agent.conversation.started"

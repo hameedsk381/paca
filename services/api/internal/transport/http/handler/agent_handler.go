@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -8,6 +10,7 @@ import (
 
 	"github.com/Paca-AI/api/internal/apierr"
 	agentdom "github.com/Paca-AI/api/internal/domain/agent"
+	taskdom "github.com/Paca-AI/api/internal/domain/task"
 	agentsvc "github.com/Paca-AI/api/internal/service/agent"
 	"github.com/Paca-AI/api/internal/transport/http/dto"
 	"github.com/Paca-AI/api/internal/transport/http/middleware"
@@ -16,11 +19,16 @@ import (
 	"github.com/google/uuid"
 )
 
+type agentActivityRecorder interface {
+	RecordActivity(ctx context.Context, in taskdom.RecordActivityInput) error
+}
+
 // AgentHandler handles AI agent management endpoints.
 type AgentHandler struct {
-	svc        agentdom.Service
-	aiAgentURL string
-	httpClient *http.Client
+	svc         agentdom.Service
+	aiAgentURL  string
+	httpClient  *http.Client
+	activityRec agentActivityRecorder
 }
 
 // NewAgentHandler returns an AgentHandler wired to the agent service.
@@ -30,6 +38,13 @@ func NewAgentHandler(svc agentdom.Service, aiAgentURL string) *AgentHandler {
 		aiAgentURL: aiAgentURL,
 		httpClient: &http.Client{},
 	}
+}
+
+// WithActivityRecorder attaches an activity recorder so that an
+// "agent.session.started" activity is recorded when a description-write is triggered.
+func (h *AgentHandler) WithActivityRecorder(r agentActivityRecorder) *AgentHandler {
+	h.activityRec = r
+	return h
 }
 
 // --- Agents -----------------------------------------------------------------
@@ -89,21 +104,25 @@ func (h *AgentHandler) CreateAgent(c *gin.Context) {
 	callerID, _ := uuid.Parse(claims.Subject)
 
 	a, err := h.svc.CreateAgent(c.Request.Context(), projectID, agentdom.CreateAgentInput{
-		Name:              req.Name,
-		Handle:            req.Handle,
-		LLMProvider:       req.LLMProvider,
-		LLMModel:          req.LLMModel,
-		LLMAPIKey:         req.LLMAPIKey,
-		LLMBaseURL:        req.LLMBaseURL,
-		SystemPrompt:      req.SystemPrompt,
-		CanCloneRepos:     req.CanCloneRepos,
-		CanCreatePRs:      req.CanCreatePRs,
-		MaxIterations:     req.MaxIterations,
-		TimeoutMinutes:    req.TimeoutMinutes,
-		GitCommitterName:  req.GitCommitterName,
-		GitCommitterEmail: req.GitCommitterEmail,
-		ProjectRoleID:     req.ProjectRoleID,
-		CreatedBy:         &callerID,
+		Name:                          req.Name,
+		Handle:                        req.Handle,
+		LLMProvider:                   req.LLMProvider,
+		LLMModel:                      req.LLMModel,
+		LLMAPIKey:                     req.LLMAPIKey,
+		LLMBaseURL:                    req.LLMBaseURL,
+		SystemPrompt:                  req.SystemPrompt,
+		TaskTriggerPrompt:             req.TaskTriggerPrompt,
+		DocCommentTriggerPrompt:       req.DocCommentTriggerPrompt,
+		ChatTriggerPrompt:             req.ChatTriggerPrompt,
+		DescriptionWriteTriggerPrompt: req.DescriptionWriteTriggerPrompt,
+		CanCloneRepos:                 req.CanCloneRepos,
+		CanCreatePRs:                  req.CanCreatePRs,
+		MaxIterations:                 req.MaxIterations,
+		TimeoutMinutes:                req.TimeoutMinutes,
+		GitCommitterName:              req.GitCommitterName,
+		GitCommitterEmail:             req.GitCommitterEmail,
+		ProjectRoleID:                 req.ProjectRoleID,
+		CreatedBy:                     &callerID,
 	})
 	if err != nil {
 		presenter.Error(c, err)
@@ -130,19 +149,23 @@ func (h *AgentHandler) UpdateAgent(c *gin.Context) {
 		return
 	}
 	a, err := h.svc.UpdateAgent(c.Request.Context(), projectID, agentID, agentdom.UpdateAgentInput{
-		Name:              req.Name,
-		Handle:            req.Handle,
-		LLMProvider:       req.LLMProvider,
-		LLMModel:          req.LLMModel,
-		LLMAPIKey:         req.LLMAPIKey,
-		LLMBaseURL:        req.LLMBaseURL,
-		SystemPrompt:      req.SystemPrompt,
-		CanCloneRepos:     req.CanCloneRepos,
-		CanCreatePRs:      req.CanCreatePRs,
-		MaxIterations:     req.MaxIterations,
-		TimeoutMinutes:    req.TimeoutMinutes,
-		GitCommitterName:  req.GitCommitterName,
-		GitCommitterEmail: req.GitCommitterEmail,
+		Name:                          req.Name,
+		Handle:                        req.Handle,
+		LLMProvider:                   req.LLMProvider,
+		LLMModel:                      req.LLMModel,
+		LLMAPIKey:                     req.LLMAPIKey,
+		LLMBaseURL:                    req.LLMBaseURL,
+		SystemPrompt:                  req.SystemPrompt,
+		TaskTriggerPrompt:             req.TaskTriggerPrompt,
+		DocCommentTriggerPrompt:       req.DocCommentTriggerPrompt,
+		ChatTriggerPrompt:             req.ChatTriggerPrompt,
+		DescriptionWriteTriggerPrompt: req.DescriptionWriteTriggerPrompt,
+		CanCloneRepos:                 req.CanCloneRepos,
+		CanCreatePRs:                  req.CanCreatePRs,
+		MaxIterations:                 req.MaxIterations,
+		TimeoutMinutes:                req.TimeoutMinutes,
+		GitCommitterName:              req.GitCommitterName,
+		GitCommitterEmail:             req.GitCommitterEmail,
 	})
 	if err != nil {
 		presenter.Error(c, err)
@@ -467,6 +490,55 @@ func (h *AgentHandler) SendChatMessage(c *gin.Context) {
 		presenter.Error(c, err)
 		return
 	}
+	presenter.Created(c, gin.H{"conversation": dto.ConversationFromEntity(conv)})
+}
+
+// --- Write with AI ----------------------------------------------------------
+
+// WriteTaskDescriptionWithAI handles POST /projects/:projectId/tasks/:taskId/write-with-ai.
+// It triggers the selected agent to write the description for the given task.
+func (h *AgentHandler) WriteTaskDescriptionWithAI(c *gin.Context) {
+	projectID, err := parseProjectID(c)
+	if err != nil {
+		presenter.Error(c, err)
+		return
+	}
+	taskID, err := parseParamUUID(c, "taskId")
+	if err != nil {
+		presenter.Error(c, err)
+		return
+	}
+
+	var req dto.WriteWithAIRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		presenter.Error(c, err)
+		return
+	}
+
+	claims := middleware.ClaimsFrom(c)
+	callerID, _ := uuid.Parse(claims.Subject)
+
+	conv, err := h.svc.TriggerDescriptionWrite(c.Request.Context(), projectID, req.AgentID, taskID, callerID)
+	if err != nil {
+		presenter.Error(c, err)
+		return
+	}
+
+	if conv != nil && h.activityRec != nil {
+		content, _ := json.Marshal(map[string]any{
+			"conversation_id": conv.ID.String(),
+			"agent_id":        req.AgentID.String(),
+		})
+		agentID := req.AgentID
+		_ = h.activityRec.RecordActivity(c.Request.Context(), taskdom.RecordActivityInput{
+			TaskID:       taskID,
+			ProjectID:    projectID,
+			ActorAgentID: &agentID,
+			ActivityType: taskdom.ActivityTypeAgentSessionStarted,
+			Content:      content,
+		})
+	}
+
 	presenter.Created(c, gin.H{"conversation": dto.ConversationFromEntity(conv)})
 }
 

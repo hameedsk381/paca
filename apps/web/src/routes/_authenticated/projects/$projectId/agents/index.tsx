@@ -2,6 +2,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
 	Bot,
+	BriefcaseBusiness,
+	CalendarRange,
 	ChevronLeft,
 	ChevronRight,
 	Code2,
@@ -60,6 +62,7 @@ import {
 	createAgent,
 	deleteAgent,
 	llmModelsQueryOptions,
+	TRIGGER_PROMPTS,
 } from "@/lib/agent-api";
 import { projectRolesQueryOptions } from "@/lib/project-api";
 import { cn } from "@/lib/utils";
@@ -82,6 +85,8 @@ const PRESET_ICON_MAP: Record<string, ComponentType<{ className?: string }>> = {
 	"software-engineer": Code2,
 	"code-reviewer": Search,
 	"qa-engineer": FlaskConical,
+	planner: CalendarRange,
+	"business-analyst": BriefcaseBusiness,
 	custom: Settings,
 };
 
@@ -151,6 +156,10 @@ function CreateAgentDialog({
 				llm_api_key: llmApiKey,
 				llm_base_url: llmBaseUrl || null,
 				system_prompt: systemPrompt,
+				task_trigger_prompt: TRIGGER_PROMPTS.task,
+				doc_comment_trigger_prompt: TRIGGER_PROMPTS.docComment,
+				chat_trigger_prompt: TRIGGER_PROMPTS.chat,
+				description_write_trigger_prompt: TRIGGER_PROMPTS.descriptionWrite,
 				project_role_id: roleId,
 			}),
 		onSuccess: () => {

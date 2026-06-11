@@ -74,7 +74,7 @@ _Goal: deliver the features that make Paca meaningfully different from standard 
 - 📋 OAuth token support for MCP Server (alongside API key)
 
 ### AI Agent Collaboration
-- 📋 In-app chat with agents — send messages directly to an agent on a task, get replies in the activity feed
+- ✅ In-app chat with agents — send messages directly to an agent on a task, get replies in the activity feed
 - 📋 Agent-to-human handoff workflow (agent flags tasks it cannot complete, notifies assignee with context)
 
 ### Official Plugins

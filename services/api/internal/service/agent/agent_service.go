@@ -98,24 +98,28 @@ func (s *Service) CreateAgent(ctx context.Context, projectID uuid.UUID, in agent
 
 	now := time.Now()
 	a := &agentdom.Agent{
-		ID:                uuid.New(),
-		ProjectID:         projectID,
-		Name:              name,
-		Handle:            handle,
-		LLMProvider:       in.LLMProvider,
-		LLMModel:          in.LLMModel,
-		LLMAPIKeySecret:   encryptedKey,
-		LLMBaseURL:        in.LLMBaseURL,
-		SystemPrompt:      in.SystemPrompt,
-		CanCloneRepos:     in.CanCloneRepos,
-		CanCreatePRs:      in.CanCreatePRs,
-		MaxIterations:     in.MaxIterations,
-		TimeoutMinutes:    in.TimeoutMinutes,
-		GitCommitterName:  in.GitCommitterName,
-		GitCommitterEmail: in.GitCommitterEmail,
-		CreatedBy:         in.CreatedBy,
-		CreatedAt:         now,
-		UpdatedAt:         now,
+		ID:                            uuid.New(),
+		ProjectID:                     projectID,
+		Name:                          name,
+		Handle:                        handle,
+		LLMProvider:                   in.LLMProvider,
+		LLMModel:                      in.LLMModel,
+		LLMAPIKeySecret:               encryptedKey,
+		LLMBaseURL:                    in.LLMBaseURL,
+		SystemPrompt:                  in.SystemPrompt,
+		TaskTriggerPrompt:             in.TaskTriggerPrompt,
+		DocCommentTriggerPrompt:       in.DocCommentTriggerPrompt,
+		ChatTriggerPrompt:             in.ChatTriggerPrompt,
+		DescriptionWriteTriggerPrompt: in.DescriptionWriteTriggerPrompt,
+		CanCloneRepos:                 in.CanCloneRepos,
+		CanCreatePRs:                  in.CanCreatePRs,
+		MaxIterations:                 in.MaxIterations,
+		TimeoutMinutes:                in.TimeoutMinutes,
+		GitCommitterName:              in.GitCommitterName,
+		GitCommitterEmail:             in.GitCommitterEmail,
+		CreatedBy:                     in.CreatedBy,
+		CreatedAt:                     now,
+		UpdatedAt:                     now,
 	}
 	const maxIterationsLimit = 500
 	const defaultMaxIterations = 500
@@ -188,6 +192,18 @@ func (s *Service) UpdateAgent(ctx context.Context, projectID, agentID uuid.UUID,
 	}
 	if in.SystemPrompt != nil {
 		a.SystemPrompt = *in.SystemPrompt
+	}
+	if in.TaskTriggerPrompt != nil {
+		a.TaskTriggerPrompt = *in.TaskTriggerPrompt
+	}
+	if in.DocCommentTriggerPrompt != nil {
+		a.DocCommentTriggerPrompt = *in.DocCommentTriggerPrompt
+	}
+	if in.ChatTriggerPrompt != nil {
+		a.ChatTriggerPrompt = *in.ChatTriggerPrompt
+	}
+	if in.DescriptionWriteTriggerPrompt != nil {
+		a.DescriptionWriteTriggerPrompt = *in.DescriptionWriteTriggerPrompt
 	}
 	if in.CanCloneRepos != nil {
 		a.CanCloneRepos = *in.CanCloneRepos
@@ -672,6 +688,43 @@ func (s *Service) TriggerCommentMention(ctx context.Context, projectID, agentID,
 		"repo_plugin_ids": strings.Join(repoPluginIDs, ","),
 	}
 	_ = s.publishTrigger(ctx, events.TopicAgentCommentMention, payload)
+	return conv, nil
+}
+
+// TriggerDescriptionWrite creates a conversation and publishes a trigger for
+// the agent to write a description for the given task.
+func (s *Service) TriggerDescriptionWrite(ctx context.Context, projectID, agentID, taskID, triggeredByMemberID uuid.UUID) (*agentdom.AgentConversation, error) {
+	repoPlugins := s.gatherRepoPlugins(ctx)
+	repoPluginIDs := make([]string, 0, len(repoPlugins))
+	for _, p := range repoPlugins {
+		repoPluginIDs = append(repoPluginIDs, p.Name)
+	}
+
+	var repoPluginID *uuid.UUID
+	if len(repoPlugins) > 0 {
+		id := repoPlugins[0].ID
+		repoPluginID = &id
+	}
+
+	conv, err := s.createConversation(ctx, projectID, agentID, triggeredByMemberID, agentdom.AgentConversation{
+		TriggerType:  "description_write",
+		TaskID:       &taskID,
+		RepoPluginID: repoPluginID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	payload := map[string]any{
+		"conversation_id": conv.ID.String(),
+		"project_id":      projectID.String(),
+		"agent_id":        agentID.String(),
+		"task_id":         taskID.String(),
+		"actor_member_id": triggeredByMemberID.String(),
+		"trigger_type":    "description_write",
+		"message":         "Please write a clear and detailed description for this task.",
+		"repo_plugin_ids": strings.Join(repoPluginIDs, ","),
+	}
+	_ = s.publishTrigger(ctx, events.TopicAgentDescriptionWrite, payload)
 	return conv, nil
 }
 

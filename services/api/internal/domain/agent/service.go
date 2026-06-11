@@ -22,6 +22,7 @@ type AgentService interface {
 	CreateAgent(ctx context.Context, projectID uuid.UUID, in CreateAgentInput) (*Agent, error)
 	UpdateAgent(ctx context.Context, projectID, agentID uuid.UUID, in UpdateAgentInput) (*Agent, error)
 	DeleteAgent(ctx context.Context, projectID, agentID uuid.UUID) error
+	TriggerDescriptionWrite(ctx context.Context, projectID, agentID, taskID, triggeredByMemberID uuid.UUID) (*AgentConversation, error)
 }
 
 // MCPServerService defines MCP server CRUD use cases.
@@ -61,38 +62,46 @@ type ChatSessionService interface {
 
 // CreateAgentInput carries fields required to create an agent.
 type CreateAgentInput struct {
-	Name              string
-	Handle            string
-	LLMProvider       string
-	LLMModel          string
-	LLMAPIKey         string // plain text key; stored encrypted by service
-	LLMBaseURL        *string
-	SystemPrompt      string
-	CanCloneRepos     bool
-	CanCreatePRs      bool
-	MaxIterations     int
-	TimeoutMinutes    int
-	GitCommitterName  string
-	GitCommitterEmail string
-	ProjectRoleID     uuid.UUID
-	CreatedBy         *uuid.UUID
+	Name                          string
+	Handle                        string
+	LLMProvider                   string
+	LLMModel                      string
+	LLMAPIKey                     string // plain text key; stored encrypted by service
+	LLMBaseURL                    *string
+	SystemPrompt                  string
+	TaskTriggerPrompt             string
+	DocCommentTriggerPrompt       string
+	ChatTriggerPrompt             string
+	DescriptionWriteTriggerPrompt string
+	CanCloneRepos                 bool
+	CanCreatePRs                  bool
+	MaxIterations                 int
+	TimeoutMinutes                int
+	GitCommitterName              string
+	GitCommitterEmail             string
+	ProjectRoleID                 uuid.UUID
+	CreatedBy                     *uuid.UUID
 }
 
 // UpdateAgentInput carries mutable agent fields.
 type UpdateAgentInput struct {
-	Name              *string
-	Handle            *string
-	LLMProvider       *string
-	LLMModel          *string
-	LLMAPIKey         *string
-	LLMBaseURL        *string
-	SystemPrompt      *string
-	CanCloneRepos     *bool
-	CanCreatePRs      *bool
-	MaxIterations     *int
-	TimeoutMinutes    *int
-	GitCommitterName  *string
-	GitCommitterEmail *string
+	Name                          *string
+	Handle                        *string
+	LLMProvider                   *string
+	LLMModel                      *string
+	LLMAPIKey                     *string
+	LLMBaseURL                    *string
+	SystemPrompt                  *string
+	TaskTriggerPrompt             *string
+	DocCommentTriggerPrompt       *string
+	ChatTriggerPrompt             *string
+	DescriptionWriteTriggerPrompt *string
+	CanCloneRepos                 *bool
+	CanCreatePRs                  *bool
+	MaxIterations                 *int
+	TimeoutMinutes                *int
+	GitCommitterName              *string
+	GitCommitterEmail             *string
 }
 
 // AddMCPServerInput carries fields to add an MCP server.

@@ -202,6 +202,9 @@ services:
       # API key for the built-in Paca MCP server.  Must match AGENT_API_KEY in
       # the api service so the AI agent can authenticate via the MCP.
       PACA_API_KEY: dev-agent-api-key-change-in-production
+      # Must match ENCRYPTION_KEY on the api service so that encrypted LLM API
+      # keys stored in the DB can be decrypted at conversation time.
+      ENCRYPTION_KEY: "3b4a93a4f2ffa732a5f7cf44b9a37050e49f5f9c3f105c3995432b9dd49e28ac"
       DOCKER_SOCKET: /var/run/docker.sock
       AGENT_SERVER_IMAGE: ghcr.io/openhands/agent-server:latest-python
       PORT_POOL_START: "10000"

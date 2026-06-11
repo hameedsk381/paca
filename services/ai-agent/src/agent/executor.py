@@ -409,6 +409,27 @@ async def run_conversation(trigger: TriggerMessage, agent_config: AgentConfig) -
                 "Do NOT skip steps 5 and 6 — always push your branch and open a PR when finished."
             )
 
+        # Append the trigger-specific prompt last so it takes precedence.
+        # These prompts are stored on the agent and sourced from TRIGGER_PROMPTS
+        # defined in the frontend (apps/web/src/lib/agent-api.ts).
+        if trigger.trigger_type == "agent.task_assigned":
+            if agent_config.task_trigger_prompt:
+                system_suffix += "\n\n" + agent_config.task_trigger_prompt
+        elif trigger.trigger_type == "agent.comment_mention":
+            # task_id is set for task-comment mentions; absent for doc-comment mentions.
+            if trigger.task_id:
+                if agent_config.task_trigger_prompt:
+                    system_suffix += "\n\n" + agent_config.task_trigger_prompt
+            else:
+                if agent_config.doc_comment_trigger_prompt:
+                    system_suffix += "\n\n" + agent_config.doc_comment_trigger_prompt
+        elif trigger.trigger_type == "agent.chat_message":
+            if agent_config.chat_trigger_prompt:
+                system_suffix += "\n\n" + agent_config.chat_trigger_prompt
+        elif trigger.trigger_type == "agent.description_write":
+            if agent_config.description_write_trigger_prompt:
+                system_suffix += "\n\n" + agent_config.description_write_trigger_prompt
+
         agent_context = AgentContext(skills=skills, system_message_suffix=system_suffix)
 
         def _run_sync() -> bool:

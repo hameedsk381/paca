@@ -433,6 +433,13 @@ func New(deps Deps) *gin.Engine {
 					deps.Task.DeleteTask,
 				)
 
+				if deps.Agent != nil {
+					tasks.POST("/:taskId/write-with-ai",
+						httpmw.RequirePermissions(deps.Authorizer, httpmw.ProjectScopeFromParam("projectId"), authz.PermissionTasksWrite),
+						deps.Agent.WriteTaskDescriptionWithAI,
+					)
+				}
+
 				// Activities — task activity log and user comments
 				activities := tasks.Group("/:taskId/activities")
 				{
