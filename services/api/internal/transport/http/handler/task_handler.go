@@ -716,7 +716,7 @@ func (h *TaskHandler) taskChangedFields(ctx context.Context, old *taskdom.Task, 
 	}
 
 	if req.Description.Set && string(req.Description.Value) != string(old.Description) {
-		changes = append(changes, taskdom.FieldChange{Field: "description"})
+		changes = append(changes, taskdom.FieldChange{Field: "description", Old: old.Description, New: req.Description.Value})
 	}
 
 	if req.Tags != nil {

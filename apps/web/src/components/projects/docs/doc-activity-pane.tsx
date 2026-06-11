@@ -1,5 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useMemo } from "react";
 import {
 	type ActivityEntry,
 	ActivityPane,
@@ -13,11 +13,14 @@ import {
 	docQueryKeys,
 	listActivities,
 	updateDocComment,
+	updateDocument,
 } from "@/lib/doc-api";
 import { projectMembersQueryOptions } from "@/lib/project-api";
 
 type DocActivityChange = {
 	field: string;
+	old?: unknown;
+	new?: unknown;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -67,9 +70,15 @@ function describeDocActivity(entry: ActivityEntry): string {
 interface DocActivityPaneProps {
 	projectId: string;
 	docId: string;
+	canEdit?: boolean;
 }
 
-export function DocActivityPane({ projectId, docId }: DocActivityPaneProps) {
+export function DocActivityPane({
+	projectId,
+	docId,
+	canEdit = true,
+}: DocActivityPaneProps) {
+	const qc = useQueryClient();
 	const { data: currentUser } = useQuery(currentUserQueryOptions);
 	const { data: membersData } = useQuery(projectMembersQueryOptions(projectId));
 
@@ -80,19 +89,86 @@ export function DocActivityPane({ projectId, docId }: DocActivityPaneProps) {
 
 	const queryKey = docQueryKeys.activities(projectId, docId);
 
+	const handleRevert = useCallback(
+		async (entry: DocActivity) => {
+			const c = entry.content as Record<string, unknown> | null;
+			const changes = c?.changes as DocActivityChange[] | undefined;
+			if (!changes?.length) return;
+
+			const payload: Parameters<typeof updateDocument>[2] = {};
+			for (const ch of changes) {
+				switch (ch.field) {
+					case "title":
+						if (typeof ch.old === "string") payload.title = ch.old;
+						break;
+					case "content":
+						if (ch.old !== undefined) {
+							payload.content = Array.isArray(ch.old)
+								? (ch.old as unknown[])
+								: null;
+						}
+						break;
+				}
+			}
+
+			if (Object.keys(payload).length === 0) return;
+			await updateDocument(projectId, docId, payload);
+			qc.invalidateQueries({
+				queryKey: docQueryKeys.detail(projectId, docId),
+			});
+		},
+		[projectId, docId, qc],
+	);
+
+	const getDiffContent = useCallback((entry: DocActivity) => {
+		if (entry.activity_type !== "doc.updated") return null;
+		const c = entry.content as Record<string, unknown> | null;
+		const changes = c?.changes as DocActivityChange[] | undefined;
+		if (!changes) return null;
+		const contentChange = changes.find((ch) => ch.field === "content");
+		if (!contentChange || contentChange.old === undefined) return null;
+		return {
+			old: contentChange.old,
+			new: contentChange.new,
+			title: "Content change diff",
+		};
+	}, []);
+
+	const isRevertable = useCallback((entry: DocActivity) => {
+		if (entry.activity_type !== "doc.updated") return false;
+		const c = entry.content as Record<string, unknown> | null;
+		const changes = c?.changes as DocActivityChange[] | undefined;
+		if (!changes?.length) return false;
+		return changes.some(
+			(ch) => (ch.field === "title" || ch.field === "content") && "old" in ch,
+		);
+	}, []);
+
 	return (
 		<ActivityPane<DocActivity>
 			projectId={projectId}
 			entityId={docId}
 			queryKey={queryKey}
 			queryFn={() => listActivities(projectId, docId)}
-			addComment={(blocks) => addDocComment(projectId, docId, blocks)}
-			updateComment={(commentId, blocks) =>
-				updateDocComment(projectId, docId, commentId, blocks)
+			addComment={
+				canEdit
+					? (blocks) => addDocComment(projectId, docId, blocks)
+					: undefined
 			}
-			deleteComment={(commentId) =>
-				deleteDocComment(projectId, docId, commentId)
+			updateComment={
+				canEdit
+					? (commentId, blocks) =>
+							updateDocComment(projectId, docId, commentId, blocks)
+					: undefined
 			}
+			deleteComment={
+				canEdit
+					? (commentId) => deleteDocComment(projectId, docId, commentId)
+					: undefined
+			}
+			onRevert={canEdit ? handleRevert : undefined}
+			getDiffContent={getDiffContent}
+			isRevertable={canEdit ? isRevertable : undefined}
 			describeActivity={describeDocActivity}
 			getCommentBlocks={(content) => {
 				if (Array.isArray(content)) return content;

@@ -557,7 +557,7 @@ func docChangedFields(old *docdom.Document, req dto.UpdateDocumentRequest) []doc
 
 	if req.Content.Set {
 		if string(req.Content.Value) != string(old.Content) {
-			changes = append(changes, docdom.FieldChange{Field: "content"})
+			changes = append(changes, docdom.FieldChange{Field: "content", Old: old.Content, New: req.Content.Value})
 		}
 	}
 

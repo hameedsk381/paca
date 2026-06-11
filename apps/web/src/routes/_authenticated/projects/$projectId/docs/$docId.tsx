@@ -1,13 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import {
-	AlertCircle,
-	Check,
-	ChevronRight,
-	History,
-	MessageSquare,
-	PanelRight,
-} from "lucide-react";
+import { AlertCircle, Check, ChevronRight, MessageSquare } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { DocActivityPane } from "@/components/projects/docs/doc-activity-pane";
@@ -15,10 +8,8 @@ import {
 	DocEditor,
 	type DocEditorHandle,
 } from "@/components/projects/docs/doc-editor";
-import { DocHistoryPanel } from "@/components/projects/docs/doc-history-panel";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useDebouncedCallback } from "@/hooks/use-debounced-callback";
 import { useProjectPermissions } from "@/hooks/use-project-permissions";
 import {
 	docFoldersQueryOptions,
@@ -34,10 +25,7 @@ export const Route = createFileRoute(
 	component: DocEditorPage,
 });
 
-const TITLE_CLASSES =
-	"font-[Syne] text-xl lg:text-[26px] font-bold leading-snug text-foreground tracking-tight w-full";
-
-type RightPanel = "activity" | "history" | null;
+type RightPanel = "activity" | null;
 
 function DocEditorPage() {
 	const { projectId, docId } = Route.useParams();
@@ -49,20 +37,14 @@ function DocEditorPage() {
 	const { data: allFolders = [] } = useQuery(docFoldersQueryOptions(projectId));
 
 	const [rightPanel, setRightPanel] = useState<RightPanel>(null);
-	const [editingTitle, setEditingTitle] = useState(false);
-	const [titleDraft, setTitleDraft] = useState("");
 	const [dirty, setDirty] = useState(false);
-	const titleInputRef = useRef<HTMLTextAreaElement>(null);
 	const editorRef = useRef<DocEditorHandle>(null);
 
 	const updateMutation = useMutation({
-		mutationFn: (payload: { title?: string; content?: unknown[] | null }) =>
+		mutationFn: (payload: { content?: unknown[] | null }) =>
 			updateDocument(projectId, docId, payload),
 		onSuccess: (updated) => {
 			qc.setQueryData(docQueryKeys.detail(projectId, docId), updated);
-			qc.invalidateQueries({
-				queryKey: docQueryKeys.snapshots(projectId, docId),
-			});
 			qc.invalidateQueries({ queryKey: docQueryKeys.list(projectId) });
 			if (updated.folder_id) {
 				qc.invalidateQueries({
@@ -72,47 +54,16 @@ function DocEditorPage() {
 		},
 	});
 
-	const commitTitle = useCallback(
-		(value: string) => {
-			const trimmed = (value ?? "").trim();
-			if (!trimmed || trimmed === doc?.title) {
-				setEditingTitle(false);
-				setTitleDraft("");
-				return;
-			}
-			updateMutation.mutate({ title: trimmed });
-			setEditingTitle(false);
-			setTitleDraft("");
-		},
-		[doc?.title, updateMutation],
-	);
-
 	useEffect(() => {
 		const handler = (e: KeyboardEvent) => {
 			if ((e.ctrlKey || e.metaKey) && e.key === "s") {
 				e.preventDefault();
-				if (editingTitle) commitTitle(titleDraft);
 				editorRef.current?.save();
 			}
 		};
 		window.addEventListener("keydown", handler);
 		return () => window.removeEventListener("keydown", handler);
-	}, [editingTitle, titleDraft, commitTitle]);
-
-	const debouncedCommitTitle = useDebouncedCallback(
-		(value: unknown) => commitTitle(value as string),
-		5000,
-	);
-
-	const handleTitleChange = useCallback(
-		(e: React.ChangeEvent<HTMLTextAreaElement>) => {
-			const value = e.target.value;
-			setTitleDraft(value);
-			setDirty(true);
-			debouncedCommitTitle(value);
-		},
-		[debouncedCommitTitle],
-	);
+	}, []);
 
 	const handleContentSave = useCallback(
 		(blocks: unknown[] | null) => {
@@ -185,7 +136,7 @@ function DocEditorPage() {
 					) : null}
 				</div>
 
-				{/* Right: save status + panel toggles */}
+				{/* Right: save status + panel toggle */}
 				<div className="flex items-center gap-2 shrink-0">
 					{dirty && !updateMutation.isPending && (
 						<span className="text-[11px] text-muted-foreground/50">
@@ -204,43 +155,18 @@ function DocEditorPage() {
 						</span>
 					)}
 
-					<div className="flex items-center gap-0.5">
-						<Button
-							variant="ghost"
-							size="icon"
-							className={cn(
-								"size-7 text-muted-foreground/60 hover:text-foreground hover:bg-muted/60 transition-all duration-150",
-								rightPanel === "activity" && "bg-muted/40 text-foreground",
-							)}
-							title="Comments & activity"
-							onClick={() => togglePanel("activity")}
-						>
-							<MessageSquare className="size-3.5" />
-						</Button>
-						<Button
-							variant="ghost"
-							size="icon"
-							className={cn(
-								"size-7 text-muted-foreground/60 hover:text-foreground hover:bg-muted/60 transition-all duration-150",
-								rightPanel === "history" && "bg-muted/40 text-foreground",
-							)}
-							title="Version history"
-							onClick={() => togglePanel("history")}
-						>
-							<History className="size-3.5" />
-						</Button>
-						{rightPanel !== null && (
-							<Button
-								variant="ghost"
-								size="icon"
-								className="size-7 text-muted-foreground/60 hover:text-foreground hover:bg-muted/60 transition-all duration-150"
-								title="Close panel"
-								onClick={() => setRightPanel(null)}
-							>
-								<PanelRight className="size-3.5" />
-							</Button>
+					<Button
+						variant="ghost"
+						size="icon"
+						className={cn(
+							"size-7 text-muted-foreground/60 hover:text-foreground hover:bg-muted/60 transition-all duration-150",
+							rightPanel === "activity" && "bg-muted/40 text-foreground",
 						)}
-					</div>
+						title="Comments & activity"
+						onClick={() => togglePanel("activity")}
+					>
+						<MessageSquare className="size-3.5" />
+					</Button>
 				</div>
 			</div>
 
@@ -248,61 +174,7 @@ function DocEditorPage() {
 			<div className="flex flex-1 min-h-0 overflow-hidden">
 				{/* Editor area */}
 				<div className="flex-1 overflow-y-auto [scrollbar-gutter:stable] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border/60 [&::-webkit-scrollbar-thumb]:hover:bg-border">
-					<div className="max-w-7xl mx-auto px-8 py-7 space-y-6">
-						{/* Title — inline edit pattern */}
-						{editingTitle ? (
-							<textarea
-								ref={titleInputRef}
-								value={titleDraft}
-								onChange={handleTitleChange}
-								onBlur={() => commitTitle(titleDraft)}
-								onKeyDown={(e) => {
-									if (e.key === "Enter" && !e.shiftKey) {
-										e.preventDefault();
-										e.currentTarget.blur();
-									}
-									if (e.key === "Escape") {
-										setEditingTitle(false);
-										setTitleDraft("");
-									}
-								}}
-								rows={1}
-								className={cn(
-									TITLE_CLASSES,
-									"resize-none bg-transparent outline-none py-0",
-								)}
-							/>
-						) : (
-							<h1
-								className={cn(
-									TITLE_CLASSES,
-									canWrite &&
-										"cursor-text hover:bg-muted/15 rounded-md px-2 -ml-2 py-1 transition-all duration-150",
-								)}
-								onClick={() => {
-									if (!canWrite || !doc) return;
-									setTitleDraft(doc.title || "");
-									setEditingTitle(true);
-									setTimeout(() => titleInputRef.current?.focus(), 0);
-								}}
-								onKeyDown={(e) => {
-									if (e.key === "Enter" || e.key === " ") {
-										if (!canWrite || !doc) return;
-										setTitleDraft(doc.title || "");
-										setEditingTitle(true);
-										setTimeout(() => titleInputRef.current?.focus(), 0);
-									}
-								}}
-							>
-								{doc?.title || (
-									<span className="text-muted-foreground/30 italic">
-										Untitled
-									</span>
-								)}
-							</h1>
-						)}
-
-						{/* BlockNote editor */}
+					<div className="max-w-7xl mx-auto px-8 py-7">
 						{doc && (
 							<DocEditor
 								ref={editorRef}
@@ -317,26 +189,20 @@ function DocEditorPage() {
 
 						{!doc && (
 							<div className="space-y-6">
-								{/* Title skeleton */}
-								<Skeleton className="h-9 w-2/3 rounded-md" />
-								{/* Content blocks skeleton */}
-								<div className="space-y-3 pt-2">
+								<div className="space-y-3">
 									<Skeleton className="h-4 w-full" />
 									<Skeleton className="h-4 w-11/12" />
 									<Skeleton className="h-4 w-5/6" />
 								</div>
-								<div className="space-y-3 pt-2">
+								<div className="space-y-3">
 									<Skeleton className="h-4 w-full" />
 									<Skeleton className="h-4 w-3/4" />
 								</div>
-								<div className="space-y-3 pt-2">
+								<div className="space-y-3">
 									<Skeleton className="h-4 w-full" />
 									<Skeleton className="h-4 w-11/12" />
 									<Skeleton className="h-4 w-4/5" />
 									<Skeleton className="h-4 w-2/3" />
-								</div>
-								<div className="space-y-3 pt-2">
-									<Skeleton className="h-4 w-1/2" />
 								</div>
 							</div>
 						)}
@@ -349,17 +215,10 @@ function DocEditorPage() {
 				{/* Right panel: activity */}
 				{rightPanel === "activity" && doc && (
 					<div className="w-80 shrink-0 h-full overflow-hidden">
-						<DocActivityPane projectId={projectId} docId={docId} />
-					</div>
-				)}
-
-				{/* Right panel: history */}
-				{rightPanel === "history" && doc && (
-					<div className="w-120 shrink-0 h-full overflow-hidden">
-						<DocHistoryPanel
+						<DocActivityPane
 							projectId={projectId}
 							docId={docId}
-							onClose={() => setRightPanel(null)}
+							canEdit={canWrite}
 						/>
 					</div>
 				)}

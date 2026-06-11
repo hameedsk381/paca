@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Bot } from "lucide-react";
 import { useCallback, useMemo } from "react";
@@ -12,8 +12,13 @@ import {
 	listTaskActivities,
 	sprintsQueryOptions,
 	updateComment,
+	updateTask,
 } from "@/lib/interaction-api";
-import { projectMembersQueryOptions } from "@/lib/project-api";
+import {
+	projectMembersQueryOptions,
+	taskStatusesQueryOptions,
+	taskTypesQueryOptions,
+} from "@/lib/project-api";
 import { describeTaskChange } from "./activity-item";
 
 type FieldChange = {
@@ -33,9 +38,12 @@ export function TaskActivityPane({
 	taskId,
 	canEdit = true,
 }: TaskActivityPaneProps) {
+	const qc = useQueryClient();
 	const { data: membersData } = useQuery(projectMembersQueryOptions(projectId));
 	const { data: sprintsData } = useQuery(sprintsQueryOptions(projectId));
 	const { data: currentUser } = useQuery(currentUserQueryOptions);
+	const { data: statusesData } = useQuery(taskStatusesQueryOptions(projectId));
+	const { data: taskTypesData } = useQuery(taskTypesQueryOptions(projectId));
 
 	const myMemberId = useMemo(() => {
 		if (!currentUser || !membersData) return undefined;
@@ -121,6 +129,118 @@ export function TaskActivityPane({
 		"activities",
 	] as const;
 
+	const handleRevert = useCallback(
+		async (entry: Activity) => {
+			const c = entry.content as Record<string, unknown> | null;
+			const changes = c?.changes as
+				| Array<{ field: string; old?: unknown }>
+				| undefined;
+			if (!changes?.length) return;
+
+			const payload: Parameters<typeof updateTask>[2] = {};
+			for (const ch of changes) {
+				const oldVal = ch.old;
+				switch (ch.field) {
+					case "status":
+						if (oldVal === null || oldVal === undefined) {
+							payload.status_id = null;
+						} else if (typeof oldVal === "string" && oldVal) {
+							const s = statusesData?.find((s) => s.name === oldVal);
+							if (s) payload.status_id = s.id;
+						} else {
+							payload.status_id = null;
+						}
+						break;
+					case "task_type":
+						if (oldVal === null || oldVal === undefined) {
+							payload.task_type_id = null;
+						} else if (typeof oldVal === "string" && oldVal) {
+							const t = taskTypesData?.find((t) => t.name === oldVal);
+							if (t) payload.task_type_id = t.id;
+						} else {
+							payload.task_type_id = null;
+						}
+						break;
+					case "title":
+						if (typeof oldVal === "string") payload.title = oldVal;
+						break;
+					case "importance":
+						if (typeof oldVal === "number") payload.importance = oldVal;
+						break;
+					case "assignee":
+						payload.assignee_id =
+							typeof oldVal === "string" && oldVal ? oldVal : null;
+						break;
+					case "reporter":
+						payload.reporter_id =
+							typeof oldVal === "string" && oldVal ? oldVal : null;
+						break;
+					case "sprint":
+						payload.sprint_id =
+							typeof oldVal === "string" && oldVal ? oldVal : null;
+						break;
+					case "parent_task":
+						payload.parent_task_id =
+							typeof oldVal === "string" && oldVal ? oldVal : null;
+						break;
+					case "start_date":
+						payload.start_date =
+							typeof oldVal === "string" && oldVal ? oldVal : null;
+						break;
+					case "due_date":
+						payload.due_date =
+							typeof oldVal === "string" && oldVal ? oldVal : null;
+						break;
+					case "description":
+						if (oldVal !== undefined) {
+							payload.description = Array.isArray(oldVal)
+								? (oldVal as unknown[])
+								: null;
+						}
+						break;
+					case "tags":
+						if (Array.isArray(oldVal)) {
+							payload.tags = oldVal.filter(
+								(v): v is string => typeof v === "string",
+							);
+						}
+						break;
+				}
+			}
+
+			if (Object.keys(payload).length === 0) return;
+			await updateTask(projectId, taskId, payload);
+			qc.invalidateQueries({
+				queryKey: ["projects", projectId, "tasks", taskId],
+			});
+		},
+		[projectId, taskId, statusesData, taskTypesData, qc],
+	);
+
+	const getDiffContent = useCallback((entry: Activity) => {
+		if (entry.activity_type !== "task.updated") return null;
+		const c = entry.content as Record<string, unknown> | null;
+		const changes = c?.changes as
+			| Array<{ field: string; old?: unknown; new?: unknown }>
+			| undefined;
+		if (!changes) return null;
+		const descChange = changes.find((ch) => ch.field === "description");
+		if (!descChange || descChange.old === undefined) return null;
+		return {
+			old: descChange.old,
+			new: descChange.new,
+			title: "Description change diff",
+		};
+	}, []);
+
+	const isRevertable = useCallback((entry: Activity) => {
+		if (entry.activity_type !== "task.updated") return false;
+		const c = entry.content as Record<string, unknown> | null;
+		const changes = c?.changes as Array<Record<string, unknown>> | undefined;
+		if (!changes?.length) return false;
+		return changes.some((ch) => typeof ch.field === "string" && "old" in ch);
+	}, []);
+
 	return (
 		<ActivityPane<Activity>
 			projectId={projectId}
@@ -141,6 +261,9 @@ export function TaskActivityPane({
 					? (commentId) => deleteComment(projectId, taskId, commentId)
 					: undefined
 			}
+			onRevert={canEdit ? handleRevert : undefined}
+			getDiffContent={getDiffContent}
+			isRevertable={canEdit ? isRevertable : undefined}
 			describeActivity={describeActivity}
 			getCommentBlocks={(content) => {
 				if (Array.isArray(content)) return content;

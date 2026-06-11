@@ -63,8 +63,8 @@ export type DocActivityType =
 
 export interface FieldChange {
 	field: string;
-	old: string;
-	new: string;
+	old: unknown;
+	new: unknown;
 }
 
 export interface DocActivityContent {
@@ -109,11 +109,7 @@ export function getActivityChanges(
 			!!change &&
 			typeof change === "object" &&
 			"field" in change &&
-			"old" in change &&
-			"new" in change &&
-			typeof change.field === "string" &&
-			typeof change.old === "string" &&
-			typeof change.new === "string",
+			typeof change.field === "string",
 	);
 }
 
