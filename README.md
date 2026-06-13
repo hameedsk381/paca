@@ -398,6 +398,12 @@ But Paca is built from conviction: human-AI collaboration in a real Scrum team s
 
 ---
 
+## Star History
+
+[![Star History Chart](https://api.star-history.com/chart?repos=paca-ai/paca&type=date&legend=top-left)](https://www.star-history.com/?repos=paca-ai%2Fpaca&type=date&legend=top-left)
+
+---
+
 ## License
 
 Distributed under the **Apache License 2.0**. See [LICENSE](LICENSE) for details.
