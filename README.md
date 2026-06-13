@@ -220,7 +220,7 @@ docker compose pull
 docker compose --env-file .env up -d
 ```
 
-Database migrations run automatically on API startup. Check [CHANGELOG.md](CHANGELOG.md) before upgrading for any release-specific steps.
+Database migrations run automatically on API startup.
 
 ---
 
@@ -405,7 +405,6 @@ But Paca is built from conviction: human-AI collaboration in a real Scrum team s
 | [docs/guides/claude-code-skill.md](docs/guides/claude-code-skill.md) | `/paca` skill for Claude Code — manage Paca from your editor |
 | [docs/plugins/](docs/plugins/) | Plugin system: backend (WASM) and frontend |
 | [deploy/README.md](deploy/README.md) | Full deployment reference |
-| [CHANGELOG.md](CHANGELOG.md) | Release history |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | How to contribute |
 | [SECURITY.md](SECURITY.md) | Security policy |
 

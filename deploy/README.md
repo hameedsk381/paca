@@ -119,8 +119,6 @@ docker compose --env-file .env up -d
 
 Database migrations run automatically on API startup — no manual steps are required.
 
-> **Before upgrading:** check the [CHANGELOG](../CHANGELOG.md) for breaking changes or release-specific migration steps.
-
 ---
 
 ### Upgrading from an earlier installation
