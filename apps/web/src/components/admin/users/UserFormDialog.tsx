@@ -94,6 +94,8 @@ export function UserFormDialog({
 			}
 
 			if (!username.trim()) throw new Error("Username is required.");
+			if (username.trim().length < 3)
+				throw new Error("Username must be at least 3 characters.");
 
 			const password = generatePassword();
 			await createUser({
@@ -121,6 +123,13 @@ export function UserFormDialog({
 			const code = getApiErrorCode(err);
 			if (code === ApiErrorCode.UsernameTaken) {
 				setUsernameError("This username is already taken.");
+				return;
+			}
+			if (
+				err instanceof Error &&
+				err.message.toLowerCase().includes("username")
+			) {
+				setUsernameError(err.message);
 				return;
 			}
 			const messages: Partial<Record<string, string>> = {
