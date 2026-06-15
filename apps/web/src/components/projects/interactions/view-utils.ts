@@ -1,4 +1,9 @@
-import type { Sprint, Task, ViewConfig } from "@/lib/interaction-api";
+import {
+	resolveFilterConfig,
+	type FilterConfig,
+	type Sprint,
+	type Task,
+} from "@/lib/interaction-api";
 import type {
 	CustomFieldDefinition,
 	ProjectMember,
@@ -138,6 +143,27 @@ export function getColumnGroupDefs(
 }
 
 /**
+ * Hides column defs whose status key is excluded by the active status filter.
+ * Pass the full defs list; returns a filtered copy (or the same reference when
+ * no filter applies so callers can avoid needless re-renders via useMemo).
+ */
+export function applyStatusFilterToColumnDefs(
+	defs: ColumnGroupDef[],
+	isStatusGrouping: boolean,
+	statusFilterConfig: FilterConfig | undefined,
+	statuses: TaskStatus[],
+): ColumnGroupDef[] {
+	if (!isStatusGrouping || !statusFilterConfig) return defs;
+	const allowed = new Set(
+		resolveFilterConfig(
+			statusFilterConfig,
+			statuses.map((s) => s.id),
+		),
+	);
+	return defs.filter((col) => allowed.has(col.key));
+}
+
+/**
  * Returns the column key(s) for a task given the column_by field.
  * Returns an array because multi_select tasks can appear in multiple columns.
  */
@@ -213,96 +239,6 @@ export function getTaskSwimlaneKey(
 	return getTaskColumnKeys(task, swimlanes, ctx)[0];
 }
 
-// ── Sort ──────────────────────────────────────────────────────────────────────
-
-/**
- * Sorts tasks according to the view config's sort_by value.
- * When sort_by is "manual" or unset the original order is preserved.
- */
-export function sortTasksByConfig(
-	tasks: Task[],
-	config: ViewConfig | undefined,
-	ctx: ViewContext,
-): Task[] {
-	const sortBy = config?.sort_by;
-	if (!sortBy || sortBy === "manual") return tasks;
-
-	return [...tasks].sort((a, b) => {
-		if (sortBy === "importance") return b.importance - a.importance;
-		if (sortBy === "title") return a.title.localeCompare(b.title);
-		if (sortBy === "created") return a.created_at.localeCompare(b.created_at);
-		if (sortBy === "start_date") {
-			const ad = a.start_date ?? "";
-			const bd = b.start_date ?? "";
-			if (!ad && !bd) return 0;
-			if (!ad) return 1;
-			if (!bd) return -1;
-			return ad.localeCompare(bd);
-		}
-		if (sortBy === "due_date") {
-			const ad = a.due_date ?? "";
-			const bd = b.due_date ?? "";
-			if (!ad && !bd) return 0;
-			if (!ad) return 1;
-			if (!bd) return -1;
-			return ad.localeCompare(bd);
-		}
-		if (sortBy === "story_points") {
-			const av = a.story_points ?? null;
-			const bv = b.story_points ?? null;
-			if (av === null && bv === null) return 0;
-			if (av === null) return 1; // nulls last
-			if (bv === null) return -1;
-			return bv - av; // descending (higher points first)
-		}
-
-		// Custom field sort
-		const cf = ctx.customFields.find((f) => f.field_key === sortBy);
-		if (cf) {
-			const av = a.custom_fields[cf.field_key];
-			const bv = b.custom_fields[cf.field_key];
-			if (av === null || av === undefined) return 1; // nulls last
-			if (bv === null || bv === undefined) return -1;
-			if (cf.field_type === "number") {
-				return (Number(av) || 0) - (Number(bv) || 0);
-			}
-			if (cf.field_type === "date") {
-				return String(av).localeCompare(String(bv));
-			}
-			if (cf.field_type === "select") {
-				const ai = cf.options.indexOf(String(av));
-				const bi = cf.options.indexOf(String(bv));
-				return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
-			}
-			return String(av).localeCompare(String(bv));
-		}
-
-		return 0;
-	});
-}
-
-// ── Field sum ─────────────────────────────────────────────────────────────────
-
-/**
- * Computes the aggregate value shown in the column/group heading.
- * When field_sum is "count" or unset the task count is returned.
- */
-export function computeFieldSum(
-	tasks: Task[],
-	fieldSum: string | undefined,
-	customFields: CustomFieldDefinition[],
-): number {
-	if (!fieldSum || fieldSum === "count") return tasks.length;
-	if (fieldSum === "story_points")
-		return tasks.reduce((acc, t) => acc + (t.story_points ?? 0), 0);
-	const cf = customFields.find((f) => f.field_key === fieldSum);
-	if (!cf) return tasks.length;
-	return tasks.reduce((acc, t) => {
-		const v = t.custom_fields[cf.field_key];
-		return acc + (typeof v === "number" ? v : Number(v) || 0);
-	}, 0);
-}
-
 // ── Option builders for ViewSettingsPanel dropdowns ──────────────────────────
 
 export const BUILTIN_COLUMN_BY: { key: string; label: string }[] = [
@@ -331,12 +267,6 @@ export const BUILTIN_SWIMLANES: { key: string; label: string }[] = [
 	{ key: "type", label: "Type" },
 ];
 
-export const BUILTIN_SLICE_BY: { key: string; label: string }[] = [
-	{ key: "none", label: "None" },
-	{ key: "assignee", label: "Assignee" },
-	{ key: "importance", label: "Importance" },
-	{ key: "type", label: "Type" },
-];
 
 export const FIELD_SUM_COUNT: { key: string; label: string } = {
 	key: "count",
@@ -412,14 +342,6 @@ export function buildFieldSumOptions(
 	];
 }
 
-export function buildSliceByOptions(
-	customFields: CustomFieldDefinition[],
-): { key: string; label: string }[] {
-	const custom = customFields
-		.filter((cf) => ["select", "multi_select"].includes(cf.field_type))
-		.map((cf) => ({ key: cf.field_key, label: cf.display_name }));
-	return [...BUILTIN_SLICE_BY, ...custom];
-}
 
 export function buildAllFieldOptions(
 	customFields: CustomFieldDefinition[],

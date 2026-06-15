@@ -51,6 +51,8 @@ export interface TaskListResult {
 	items: Task[];
 	page_size: number;
 	next_cursor?: string | null;
+	total_count?: number;
+	field_sum?: number | null;
 }
 
 export interface TaskPosition {
@@ -409,6 +411,16 @@ export interface ListTasksOptions {
 	parentTaskId?: string;
 	pageSize?: number;
 	cursor?: string;
+	/** When set to a field key (e.g. "story_points" or a custom field key), the API returns
+	 *  the total sum of that field across all matching tasks in the `field_sum` response field. */
+	sumField?: string;
+	/** Sort key to pass to the API.  "manual" and custom-field sorts are handled
+	 *  client-side only and must not be forwarded; all other recognised keys are
+	 *  sent as `sort_by` so the database applies the correct ORDER BY. */
+	sortBy?: string;
+	/** When provided for a manual-sort view, passed as view_id so the backend
+	 *  can JOIN view_task_positions and return tasks in saved position order. */
+	viewId?: string;
 }
 
 function buildTaskQueryParams(opts: ListTasksOptions = {}) {
@@ -435,6 +447,16 @@ function buildTaskQueryParams(opts: ListTasksOptions = {}) {
 	else if (opts.taskTypeIds && opts.taskTypeIds.length > 0)
 		params.task_type_ids = opts.taskTypeIds.join(",");
 	if (opts.parentTaskId) params.parent_task_id = opts.parentTaskId;
+	if (opts.sumField && opts.sumField !== "count") params.sum_field = opts.sumField;
+	// For non-manual sorts, pass sort_by to the backend so the database applies the
+	// correct ORDER BY. For manual sort (explicit "manual" or empty string), do not
+	// pass sort_by - the backend will use view_position ordering when view_id is provided.
+	if (opts.sortBy && opts.sortBy !== "manual" && opts.sortBy !== "") {
+		params.sort_by = opts.sortBy;
+	}
+	if (opts.viewId) {
+		params.view_id = opts.viewId;
+	}
 	return params;
 }
 

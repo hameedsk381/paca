@@ -222,7 +222,7 @@ func (r *fakeTaskRepo) FindDefaultTaskStatus(_ context.Context, projectID uuid.U
 
 // -- Task methods --
 
-func (r *fakeTaskRepo) ListTasks(_ context.Context, projectID uuid.UUID, filter taskdom.TaskFilter, limit int) ([]*taskdom.Task, bool, error) {
+func (r *fakeTaskRepo) ListTasks(_ context.Context, projectID uuid.UUID, filter taskdom.TaskFilter, limit int, _ taskdom.TaskSort) ([]*taskdom.Task, bool, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	all := make([]*taskdom.Task, 0)
@@ -327,6 +327,71 @@ func (r *fakeTaskRepo) DeleteTask(_ context.Context, id uuid.UUID) error {
 	now := time.Now()
 	t.DeletedAt = &now
 	return nil
+}
+
+// CountTasks returns the total number of matching tasks without cursor/limit.
+func (r *fakeTaskRepo) CountTasks(_ context.Context, projectID uuid.UUID, filter taskdom.TaskFilter) (int64, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	var count int64
+	for _, t := range r.tasks {
+		if t.ProjectID != projectID || t.DeletedAt != nil {
+			continue
+		}
+		if filter.SprintID != nil && (t.SprintID == nil || *t.SprintID != *filter.SprintID) {
+			continue
+		}
+		if filter.StatusID != nil && (t.StatusID == nil || *t.StatusID != *filter.StatusID) {
+			continue
+		}
+		if filter.AssigneeID != nil && (t.AssigneeID == nil || *t.AssigneeID != *filter.AssigneeID) {
+			continue
+		}
+		if filter.BacklogOnly && t.SprintID != nil {
+			continue
+		}
+		count++
+	}
+	return count, nil
+}
+
+// SumTaskField sums a numeric field across matching tasks without cursor/limit.
+func (r *fakeTaskRepo) SumTaskField(_ context.Context, projectID uuid.UUID, filter taskdom.TaskFilter, fieldKey string) (float64, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	var sum float64
+	for _, t := range r.tasks {
+		if t.ProjectID != projectID || t.DeletedAt != nil {
+			continue
+		}
+		if filter.SprintID != nil && (t.SprintID == nil || *t.SprintID != *filter.SprintID) {
+			continue
+		}
+		if filter.StatusID != nil && (t.StatusID == nil || *t.StatusID != *filter.StatusID) {
+			continue
+		}
+		if filter.AssigneeID != nil && (t.AssigneeID == nil || *t.AssigneeID != *filter.AssigneeID) {
+			continue
+		}
+		if filter.BacklogOnly && t.SprintID != nil {
+			continue
+		}
+		if fieldKey == "story_points" {
+			if t.StoryPoints != nil {
+				sum += float64(*t.StoryPoints)
+			}
+		} else {
+			if v, ok := t.CustomFields[fieldKey]; ok {
+				switch n := v.(type) {
+				case float64:
+					sum += n
+				case int:
+					sum += float64(n)
+				}
+			}
+		}
+	}
+	return sum, nil
 }
 
 // BulkMoveSprintTasks is not exercised by task service tests but must satisfy
@@ -796,6 +861,90 @@ func TestDeleteTask_NotFound(t *testing.T) {
 	}
 }
 
+func TestCountTasks_Total(t *testing.T) {
+	ctx := context.Background()
+	repo := newFakeTaskRepo()
+	svc := tasksvc.New(repo)
+	projectID := uuid.New()
+
+	for i := 0; i < 7; i++ {
+		_, _ = svc.CreateTask(ctx, taskdom.CreateTaskInput{ProjectID: projectID, Title: "Task"})
+	}
+
+	count, err := svc.CountTasks(ctx, projectID, taskdom.TaskFilter{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if count != 7 {
+		t.Errorf("expected count=7, got %d", count)
+	}
+}
+
+func TestCountTasks_FilterBySprint(t *testing.T) {
+	ctx := context.Background()
+	repo := newFakeTaskRepo()
+	svc := tasksvc.New(repo)
+	projectID := uuid.New()
+	sprintID := uuid.New()
+
+	_, _ = svc.CreateTask(ctx, taskdom.CreateTaskInput{ProjectID: projectID, Title: "Sprint Task", SprintID: &sprintID})
+	_, _ = svc.CreateTask(ctx, taskdom.CreateTaskInput{ProjectID: projectID, Title: "Sprint Task 2", SprintID: &sprintID})
+	_, _ = svc.CreateTask(ctx, taskdom.CreateTaskInput{ProjectID: projectID, Title: "Backlog Task"})
+
+	count, err := svc.CountTasks(ctx, projectID, taskdom.TaskFilter{SprintID: &sprintID})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if count != 2 {
+		t.Errorf("expected count=2, got %d", count)
+	}
+}
+
+func TestCountTasks_IgnoresCursor(t *testing.T) {
+	ctx := context.Background()
+	repo := newFakeTaskRepo()
+	svc := tasksvc.New(repo)
+	projectID := uuid.New()
+
+	for i := 0; i < 5; i++ {
+		_, _ = svc.CreateTask(ctx, taskdom.CreateTaskInput{ProjectID: projectID, Title: fmt.Sprintf("Task %d", i)})
+	}
+
+	// Fetch page 1 to get a cursor.
+	page1, _, _ := svc.ListTasks(ctx, projectID, taskdom.TaskFilter{}, 2, taskdom.TaskSort{})
+	last := page1[len(page1)-1]
+	cursor := taskdom.EncodeTaskCursor(last, taskdom.TaskSort{})
+
+	// CountTasks with a cursor filter should still return the full total (cursor is stripped).
+	count, err := svc.CountTasks(ctx, projectID, taskdom.TaskFilter{CursorAfter: &cursor})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if count != 5 {
+		t.Errorf("expected full count=5 (cursor ignored), got %d", count)
+	}
+}
+
+func TestCountTasks_BacklogOnly(t *testing.T) {
+	ctx := context.Background()
+	repo := newFakeTaskRepo()
+	svc := tasksvc.New(repo)
+	projectID := uuid.New()
+	sprintID := uuid.New()
+
+	_, _ = svc.CreateTask(ctx, taskdom.CreateTaskInput{ProjectID: projectID, Title: "Backlog 1"})
+	_, _ = svc.CreateTask(ctx, taskdom.CreateTaskInput{ProjectID: projectID, Title: "Backlog 2"})
+	_, _ = svc.CreateTask(ctx, taskdom.CreateTaskInput{ProjectID: projectID, Title: "In Sprint", SprintID: &sprintID})
+
+	count, err := svc.CountTasks(ctx, projectID, taskdom.TaskFilter{BacklogOnly: true})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if count != 2 {
+		t.Errorf("expected count=2, got %d", count)
+	}
+}
+
 func TestListTasks_FilterBySprint(t *testing.T) {
 	ctx := context.Background()
 	repo := newFakeTaskRepo()
@@ -814,7 +963,7 @@ func TestListTasks_FilterBySprint(t *testing.T) {
 		Title:     "No Sprint",
 	})
 
-	tasks, _, err := svc.ListTasks(ctx, projectID, taskdom.TaskFilter{SprintID: &sprintID}, 20)
+	tasks, _, err := svc.ListTasks(ctx, projectID, taskdom.TaskFilter{SprintID: &sprintID}, 20, taskdom.TaskSort{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -836,7 +985,7 @@ func TestListTasks_Pagination(t *testing.T) {
 		})
 	}
 
-	tasks, hasMore, err := svc.ListTasks(ctx, projectID, taskdom.TaskFilter{}, 3)
+	tasks, hasMore, err := svc.ListTasks(ctx, projectID, taskdom.TaskFilter{}, 3, taskdom.TaskSort{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -862,7 +1011,7 @@ func TestListTasks_CursorPagination(t *testing.T) {
 	}
 
 	// Page 1: first 3 tasks
-	page1, hasMore, err := svc.ListTasks(ctx, projectID, taskdom.TaskFilter{}, 3)
+	page1, hasMore, err := svc.ListTasks(ctx, projectID, taskdom.TaskFilter{}, 3, taskdom.TaskSort{})
 	if err != nil {
 		t.Fatalf("page 1 error: %v", err)
 	}
@@ -875,10 +1024,10 @@ func TestListTasks_CursorPagination(t *testing.T) {
 
 	// Encode cursor from the last item on page 1.
 	last := page1[len(page1)-1]
-	cursor := taskdom.EncodeTaskCursor(last.CreatedAt, last.ID.String())
+	cursor := taskdom.EncodeTaskCursor(last, taskdom.TaskSort{})
 
 	// Page 2: tasks after the cursor.
-	page2, hasMore2, err := svc.ListTasks(ctx, projectID, taskdom.TaskFilter{CursorAfter: &cursor}, 3)
+	page2, hasMore2, err := svc.ListTasks(ctx, projectID, taskdom.TaskFilter{CursorAfter: &cursor}, 3, taskdom.TaskSort{})
 	if err != nil {
 		t.Fatalf("page 2 error: %v", err)
 	}
@@ -1747,6 +1896,65 @@ func TestDeleteCustomFieldDefinition_NotFound(t *testing.T) {
 	err := svc.DeleteCustomFieldDefinition(ctx, uuid.New(), uuid.New())
 	if err != taskdom.ErrCustomFieldNotFound {
 		t.Errorf("expected ErrCustomFieldNotFound, got %v", err)
+	}
+}
+
+func TestSumTaskField_StoryPoints(t *testing.T) {
+	ctx := context.Background()
+	repo := newFakeTaskRepo()
+	svc := tasksvc.New(repo)
+	projectID := uuid.New()
+
+	sp1, sp2, sp3 := 3, 5, 10
+	_, _ = svc.CreateTask(ctx, taskdom.CreateTaskInput{ProjectID: projectID, Title: "A", StoryPoints: &sp1})
+	_, _ = svc.CreateTask(ctx, taskdom.CreateTaskInput{ProjectID: projectID, Title: "B", StoryPoints: &sp2})
+	_, _ = svc.CreateTask(ctx, taskdom.CreateTaskInput{ProjectID: projectID, Title: "C", StoryPoints: &sp3})
+
+	sum, err := svc.SumTaskField(ctx, projectID, taskdom.TaskFilter{}, "story_points")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if sum != 18 {
+		t.Errorf("expected sum=18, got %v", sum)
+	}
+}
+
+func TestSumTaskField_FilterBySprint(t *testing.T) {
+	ctx := context.Background()
+	repo := newFakeTaskRepo()
+	svc := tasksvc.New(repo)
+	projectID := uuid.New()
+	sprintID := uuid.New()
+
+	sp1, sp2 := 5, 8
+	_, _ = svc.CreateTask(ctx, taskdom.CreateTaskInput{ProjectID: projectID, Title: "Sprint", SprintID: &sprintID, StoryPoints: &sp1})
+	_, _ = svc.CreateTask(ctx, taskdom.CreateTaskInput{ProjectID: projectID, Title: "Backlog", StoryPoints: &sp2})
+
+	sum, err := svc.SumTaskField(ctx, projectID, taskdom.TaskFilter{SprintID: &sprintID}, "story_points")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if sum != 5 {
+		t.Errorf("expected sum=5 (sprint only), got %v", sum)
+	}
+}
+
+func TestSumTaskField_NilStoryPoints(t *testing.T) {
+	ctx := context.Background()
+	repo := newFakeTaskRepo()
+	svc := tasksvc.New(repo)
+	projectID := uuid.New()
+
+	sp := 4
+	_, _ = svc.CreateTask(ctx, taskdom.CreateTaskInput{ProjectID: projectID, Title: "With points", StoryPoints: &sp})
+	_, _ = svc.CreateTask(ctx, taskdom.CreateTaskInput{ProjectID: projectID, Title: "No points"})
+
+	sum, err := svc.SumTaskField(ctx, projectID, taskdom.TaskFilter{}, "story_points")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if sum != 4 {
+		t.Errorf("expected sum=4 (nil treated as 0), got %v", sum)
 	}
 }
 

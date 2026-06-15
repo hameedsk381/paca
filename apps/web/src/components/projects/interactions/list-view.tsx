@@ -1,7 +1,6 @@
 import { useMemo } from "react";
 
 import {
-	resolveFilterConfig,
 	type Sprint,
 	type Task,
 	type ViewConfig,
@@ -15,6 +14,7 @@ import type {
 
 import { ListGroup } from "./list-group";
 import {
+	applyStatusFilterToColumnDefs,
 	type ColumnGroupDef,
 	DEFAULT_VISIBLE_FIELDS,
 	getColumnGroupDefs,
@@ -64,7 +64,13 @@ export interface ListViewProps {
 	onCollapseChange?: (collapsedColumns: string[]) => void;
 	columnPagination?: Record<
 		string,
-		{ hasMore: boolean; isLoadingMore: boolean; onLoadMore: () => void }
+		{
+			hasMore: boolean;
+			isLoadingMore: boolean;
+			onLoadMore: () => void;
+			totalCount?: number;
+			fieldSum?: number;
+		}
 	>;
 }
 
@@ -159,18 +165,12 @@ export function ListView({
 			defs = dynamic;
 		}
 
-		// Hide groups whose status is excluded by the active status filter
-		if (isStatusGrouping && viewConfig?.filters?.statuses) {
-			const allowed = new Set(
-				resolveFilterConfig(
-					viewConfig.filters.statuses,
-					statuses.map((s) => s.id),
-				),
-			);
-			defs = defs.filter((grp) => allowed.has(grp.key));
-		}
-
-		return defs;
+		return applyStatusFilterToColumnDefs(
+			defs,
+			isStatusGrouping,
+			viewConfig?.filters?.statuses,
+			statuses,
+		);
 	}, [
 		groupDefs,
 		filtered,
@@ -268,6 +268,8 @@ export function ListView({
 								: undefined
 						}
 						groupPagination={columnPagination?.[grp.key]}
+						totalCount={columnPagination?.[grp.key]?.totalCount}
+						apiFieldSum={columnPagination?.[grp.key]?.fieldSum}
 						extraCreateFields={
 							!isStatusGrouping && columnBy === "sprint"
 								? {

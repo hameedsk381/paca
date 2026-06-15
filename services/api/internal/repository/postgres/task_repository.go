@@ -11,6 +11,7 @@ import (
 	taskdom "github.com/Paca-AI/api/internal/domain/task"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // --- GORM models ------------------------------------------------------------
@@ -77,6 +78,59 @@ type taskCounterRecord struct {
 }
 
 func (taskCounterRecord) TableName() string { return "task_counters" }
+
+// taskWithPositionRow is a flat struct for scanning the view_position LEFT JOIN
+// result. It explicitly lists every column from taskRecord plus vtp_position so
+// that GORM maps columns by name without the embedded-model relationship logic
+// that fires when the embedded type has a TableName() method.
+type taskWithPositionRow struct {
+	ID           string          `gorm:"column:id"`
+	ProjectID    string          `gorm:"column:project_id"`
+	TaskNumber   int64           `gorm:"column:task_number"`
+	TaskTypeID   *string         `gorm:"column:task_type_id"`
+	StatusID     *string         `gorm:"column:status_id"`
+	SprintID     *string         `gorm:"column:sprint_id"`
+	ParentTaskID *string         `gorm:"column:parent_task_id"`
+	Title        string          `gorm:"column:title"`
+	Description  json.RawMessage `gorm:"column:description"`
+	Importance   int             `gorm:"column:importance"`
+	StoryPoints  *int            `gorm:"column:story_points"`
+	AssigneeID   *string         `gorm:"column:assignee_id"`
+	ReporterID   *string         `gorm:"column:reporter_id"`
+	CustomFields []byte          `gorm:"column:custom_fields"`
+	StartDate    *time.Time      `gorm:"column:start_date"`
+	DueDate      *time.Time      `gorm:"column:due_date"`
+	Tags         []byte          `gorm:"column:tags"`
+	CreatedAt    time.Time       `gorm:"column:created_at"`
+	UpdatedAt    time.Time       `gorm:"column:updated_at"`
+	DeletedAt    gorm.DeletedAt  `gorm:"column:deleted_at"`
+	VTPPosition  *float64        `gorm:"column:vtp_position"`
+}
+
+func (r *taskWithPositionRow) asTaskRecord() taskRecord {
+	return taskRecord{
+		ID:           r.ID,
+		ProjectID:    r.ProjectID,
+		TaskNumber:   r.TaskNumber,
+		TaskTypeID:   r.TaskTypeID,
+		StatusID:     r.StatusID,
+		SprintID:     r.SprintID,
+		ParentTaskID: r.ParentTaskID,
+		Title:        r.Title,
+		Description:  r.Description,
+		Importance:   r.Importance,
+		StoryPoints:  r.StoryPoints,
+		AssigneeID:   r.AssigneeID,
+		ReporterID:   r.ReporterID,
+		CustomFields: r.CustomFields,
+		StartDate:    r.StartDate,
+		DueDate:      r.DueDate,
+		Tags:         r.Tags,
+		CreatedAt:    r.CreatedAt,
+		UpdatedAt:    r.UpdatedAt,
+		DeletedAt:    r.DeletedAt,
+	}
+}
 
 // --- Repository struct -------------------------------------------------------
 
@@ -317,11 +371,204 @@ func (r *TaskRepository) FindDefaultTaskStatus(ctx context.Context, projectID uu
 
 // --- Tasks ------------------------------------------------------------------
 
+// applyTaskSort adds the SELECT extension, JOIN (when needed), and ORDER BY
+// clause to q based on the sort configuration.
+// The secondary sort on (created_at ASC, id ASC) guarantees stable pagination.
+func applyTaskSort(q *gorm.DB, sort taskdom.TaskSort) *gorm.DB {
+	switch sort.By {
+	case "view_position":
+		// LEFT JOIN view_task_positions so the position value is available for
+		// ORDER BY and cursor pagination. Tasks without a row sort last (NULLS
+		// LAST), with created_at as the tiebreaker.
+		if sort.ViewID != nil {
+			q = q.
+				Select("tasks.*, vtp.position AS vtp_position").
+				Joins("LEFT JOIN view_task_positions vtp ON vtp.task_id = tasks.id AND vtp.view_id = ?", sort.ViewID)
+		}
+		return q.Order("vtp.position ASC NULLS LAST, tasks.created_at ASC, tasks.id ASC")
+	case "importance":
+		return q.Order("importance DESC, created_at ASC, id ASC")
+	case "title":
+		return q.Order("title ASC, created_at ASC, id ASC")
+	case "story_points":
+		return q.Order("story_points DESC NULLS LAST, created_at ASC, id ASC")
+	case "start_date":
+		return q.Order("start_date ASC NULLS LAST, created_at ASC, id ASC")
+	case "due_date":
+		return q.Order("due_date ASC NULLS LAST, created_at ASC, id ASC")
+	default:
+		if sort.By != "" && sort.CFType != "" {
+			return applyCFTaskSort(q, sort)
+		}
+		return q.Order("created_at ASC, id ASC")
+	}
+}
+
+// applyCFTaskSort applies ORDER BY for a custom-field sort using JSONB expressions.
+func applyCFTaskSort(q *gorm.DB, sort taskdom.TaskSort) *gorm.DB {
+	switch sort.CFType {
+	case "number":
+		return q.Order(clause.Expr{
+			SQL:  "(custom_fields->>?)::numeric ASC NULLS LAST, created_at ASC, id ASC",
+			Vars: []interface{}{sort.By},
+		})
+	case "date":
+		return q.Order(clause.Expr{
+			SQL:  "(custom_fields->>?)::date ASC NULLS LAST, created_at ASC, id ASC",
+			Vars: []interface{}{sort.By},
+		})
+	case "select":
+		if len(sort.CFOpts) == 0 {
+			return q.Order("created_at ASC, id ASC")
+		}
+		caseSQL, caseArgs := buildCFSelectCaseSQL(sort.By, sort.CFOpts)
+		return q.Order(clause.Expr{
+			SQL:  caseSQL + " ASC, created_at ASC, id ASC",
+			Vars: caseArgs,
+		})
+	}
+	return q.Order("created_at ASC, id ASC")
+}
+
+// buildCFSelectCaseSQL builds a parameterized CASE expression for select CF ordering.
+// Returns the SQL fragment and the corresponding bound args.
+func buildCFSelectCaseSQL(key string, opts []string) (string, []interface{}) {
+	args := []interface{}{key}
+	sql := "CASE custom_fields->>?"
+	for i, opt := range opts {
+		sql += fmt.Sprintf(" WHEN ? THEN %d", i)
+		args = append(args, opt)
+	}
+	sql += " ELSE 9999 END"
+	return sql, args
+}
+
+// applyCursorWhere adds the keyset-pagination WHERE predicate that skips rows
+// already returned on the previous page.  The predicate is derived from the
+// sort key stored inside the cursor so it correctly handles each sort order
+// (including DESC, NULLS LAST, and custom JSONB field variants).
+func applyCursorWhere(q *gorm.DB, cur *taskdom.TaskCursor, sort taskdom.TaskSort) *gorm.DB {
+	ca := cur.CreatedAt.UTC()
+	id := cur.ID
+
+	switch cur.SortBy {
+	case "view_position":
+		// Positioned tasks (vtp.position IS NOT NULL) sort before unpositioned ones.
+		// Cursor for a positioned task: skip all rows with a lower position, plus
+		// unpositioned rows only if we've already exhausted positioned ones.
+		// Cursor for an unpositioned task: skip later unpositioned tasks by created_at.
+		if cur.SortNumVal != nil {
+			pos := *cur.SortNumVal
+			return q.Where("vtp.position > ? OR vtp.position IS NULL", pos)
+		}
+		return q.Where("vtp.position IS NULL AND (tasks.created_at, tasks.id) > (?, ?)", ca, id)
+	case "importance":
+		imp := int64(*cur.SortNumVal)
+		return q.Where(
+			"importance < ? OR (importance = ? AND (created_at, id) > (?, ?))",
+			imp, imp, ca, id,
+		)
+	case "title":
+		t := *cur.SortStrVal
+		return q.Where(
+			"title > ? OR (title = ? AND (created_at, id) > (?, ?))",
+			t, t, ca, id,
+		)
+	case "story_points":
+		if cur.SortNumVal != nil {
+			sp := int64(*cur.SortNumVal)
+			return q.Where(
+				"story_points < ? OR (story_points = ? AND (created_at, id) > (?, ?)) OR story_points IS NULL",
+				sp, sp, ca, id,
+			)
+		}
+		return q.Where("story_points IS NULL AND (created_at, id) > (?, ?)", ca, id)
+	case "start_date":
+		if cur.SortTimeVal != nil {
+			d := *cur.SortTimeVal
+			return q.Where(
+				"start_date > ?::date OR (start_date = ?::date AND (created_at, id) > (?, ?)) OR start_date IS NULL",
+				d, d, ca, id,
+			)
+		}
+		return q.Where("start_date IS NULL AND (created_at, id) > (?, ?)", ca, id)
+	case "due_date":
+		if cur.SortTimeVal != nil {
+			d := *cur.SortTimeVal
+			return q.Where(
+				"due_date > ?::date OR (due_date = ?::date AND (created_at, id) > (?, ?)) OR due_date IS NULL",
+				d, d, ca, id,
+			)
+		}
+		return q.Where("due_date IS NULL AND (created_at, id) > (?, ?)", ca, id)
+	default:
+		// Custom field cursor — use sort metadata to build keyset predicate.
+		if cur.SortBy != "" && sort.CFType != "" {
+			return applyCFCursorWhere(q, cur, sort, ca, id)
+		}
+		return q.Where("(created_at, id) > (?, ?)", ca, id)
+	}
+}
+
+// applyCFCursorWhere builds the keyset WHERE predicate for custom-field sorts.
+func applyCFCursorWhere(q *gorm.DB, cur *taskdom.TaskCursor, sort taskdom.TaskSort, ca interface{}, id string) *gorm.DB {
+	switch sort.CFType {
+	case "number":
+		if cur.SortNumVal != nil {
+			v := *cur.SortNumVal
+			return q.Where(clause.Expr{
+				SQL:  "(custom_fields->>?)::numeric > ? OR ((custom_fields->>?)::numeric = ? AND (created_at, id) > (?, ?)) OR custom_fields->>? IS NULL",
+				Vars: []interface{}{sort.By, v, sort.By, v, ca, id, sort.By},
+			})
+		}
+		return q.Where(clause.Expr{
+			SQL:  "custom_fields->>? IS NULL AND (created_at, id) > (?, ?)",
+			Vars: []interface{}{sort.By, ca, id},
+		})
+	case "date":
+		if cur.SortTimeVal != nil {
+			d := *cur.SortTimeVal
+			return q.Where(clause.Expr{
+				SQL:  "(custom_fields->>?)::date > ?::date OR ((custom_fields->>?)::date = ?::date AND (created_at, id) > (?, ?)) OR custom_fields->>? IS NULL",
+				Vars: []interface{}{sort.By, d, sort.By, d, ca, id, sort.By},
+			})
+		}
+		return q.Where(clause.Expr{
+			SQL:  "custom_fields->>? IS NULL AND (created_at, id) > (?, ?)",
+			Vars: []interface{}{sort.By, ca, id},
+		})
+	case "select":
+		// Map cursor value to its option index (unknown → 9999).
+		curIdx := 9999
+		if cur.SortStrVal != nil {
+			for i, opt := range sort.CFOpts {
+				if opt == *cur.SortStrVal {
+					curIdx = i
+					break
+				}
+			}
+		}
+		caseSQL, caseArgs := buildCFSelectCaseSQL(sort.By, sort.CFOpts)
+		// Build: (CASE ...) > curIdx OR ((CASE ...) = curIdx AND (created_at, id) > (ca, id))
+		// The CASE expression appears twice, so caseArgs must be duplicated.
+		allArgs := make([]interface{}, 0, len(caseArgs)*2+4)
+		allArgs = append(allArgs, caseArgs...)
+		allArgs = append(allArgs, curIdx)
+		allArgs = append(allArgs, caseArgs...)
+		allArgs = append(allArgs, curIdx, ca, id)
+		return q.Where(clause.Expr{
+			SQL:  fmt.Sprintf("(%s) > ? OR ((%s) = ? AND (created_at, id) > (?, ?))", caseSQL, caseSQL),
+			Vars: allArgs,
+		})
+	}
+	return q.Where("(created_at, id) > (?, ?)", ca, id)
+}
+
 // ListTasks returns a page of tasks with optional filter.
 // When filter.CursorAfter is nil, returns from the beginning.
 // When set, returns tasks strictly after the cursor position.
 // hasMore is true when a next page exists beyond the returned slice.
-func (r *TaskRepository) ListTasks(ctx context.Context, projectID uuid.UUID, filter taskdom.TaskFilter, limit int) ([]*taskdom.Task, bool, error) {
+func (r *TaskRepository) ListTasks(ctx context.Context, projectID uuid.UUID, filter taskdom.TaskFilter, limit int, sort taskdom.TaskSort) ([]*taskdom.Task, bool, error) {
 	q := r.db.WithContext(ctx).Model(&taskRecord{}).
 		Where("project_id = ?", projectID.String())
 
@@ -365,13 +612,41 @@ func (r *TaskRepository) ListTasks(ctx context.Context, projectID uuid.UUID, fil
 		if err != nil {
 			return nil, false, fmt.Errorf("task repo: invalid cursor: %w", err)
 		}
-		q = q.Where("(created_at, id) > (?, ?)", cur.CreatedAt.UTC(), cur.ID)
+		q = applyCursorWhere(q, cur, sort)
+	}
+
+	// applyTaskSort adds the JOIN + SELECT extension for view_position and the
+	// ORDER BY for all sort keys — must happen before Limit so the DB sorts the
+	// full result set before pagination cuts it.
+	sortedQ := applyTaskSort(q, sort)
+
+	// view_position uses a flat scan struct (taskWithPositionRow) instead of
+	// taskRecord because GORM v2 treats embedded structs with TableName() as
+	// relationships and silently skips their fields during Scan.
+	if sort.By == "view_position" && sort.ViewID != nil {
+		var rows []taskWithPositionRow
+		if err := sortedQ.Limit(limit + 1).Scan(&rows).Error; err != nil {
+			return nil, false, fmt.Errorf("task repo: list (view_position): %w", err)
+		}
+		hasMore := len(rows) > limit
+		if hasMore {
+			rows = rows[:limit]
+		}
+		tasks := make([]*taskdom.Task, 0, len(rows))
+		for i := range rows {
+			rec := rows[i].asTaskRecord()
+			t, err := toTaskEntity(&rec)
+			if err != nil {
+				return nil, false, err
+			}
+			t.ViewPosition = rows[i].VTPPosition
+			tasks = append(tasks, t)
+		}
+		return tasks, hasMore, nil
 	}
 
 	var records []taskRecord
-	if err := q.Order("created_at ASC, id ASC").
-		Limit(limit + 1).
-		Find(&records).Error; err != nil {
+	if err := sortedQ.Limit(limit + 1).Find(&records).Error; err != nil {
 		return nil, false, fmt.Errorf("task repo: list: %w", err)
 	}
 
@@ -389,6 +664,109 @@ func (r *TaskRepository) ListTasks(ctx context.Context, projectID uuid.UUID, fil
 		tasks = append(tasks, t)
 	}
 	return tasks, hasMore, nil
+}
+
+// CountTasks returns the total number of tasks matching filter for a project,
+// ignoring cursor-based pagination so the result reflects the true total.
+func (r *TaskRepository) CountTasks(ctx context.Context, projectID uuid.UUID, filter taskdom.TaskFilter) (int64, error) {
+	q := r.db.WithContext(ctx).Model(&taskRecord{}).
+		Where("project_id = ?", projectID.String())
+
+	switch {
+	case filter.ParentTaskID != nil:
+		q = q.Where("parent_task_id = ?", filter.ParentTaskID.String())
+	case len(filter.SprintIDs) > 0:
+		q = q.Where("sprint_id IN ?", uuidSliceToStrSlice(filter.SprintIDs))
+	case filter.BacklogOnly:
+		q = q.Where("sprint_id IS NULL")
+	case filter.SprintID != nil:
+		q = q.Where("sprint_id = ?", filter.SprintID.String())
+	}
+
+	if len(filter.StatusIDs) > 0 {
+		q = q.Where("status_id IN ?", uuidSliceToStrSlice(filter.StatusIDs))
+	} else if filter.StatusID != nil {
+		q = q.Where("status_id = ?", filter.StatusID.String())
+	}
+
+	switch {
+	case filter.AssigneeNull && len(filter.AssigneeIDs) > 0:
+		q = q.Where("assignee_id IS NULL OR assignee_id IN ?", uuidSliceToStrSlice(filter.AssigneeIDs))
+	case filter.AssigneeNull:
+		q = q.Where("assignee_id IS NULL")
+	case len(filter.AssigneeIDs) > 0:
+		q = q.Where("assignee_id IN ?", uuidSliceToStrSlice(filter.AssigneeIDs))
+	case filter.AssigneeID != nil:
+		q = q.Where("assignee_id = ?", filter.AssigneeID.String())
+	}
+
+	switch {
+	case filter.TaskTypeNull:
+		q = q.Where("task_type_id IS NULL")
+	case len(filter.TaskTypeIDs) > 0:
+		q = q.Where("task_type_id IN ?", uuidSliceToStrSlice(filter.TaskTypeIDs))
+	}
+
+	var count int64
+	if err := q.Count(&count).Error; err != nil {
+		return 0, fmt.Errorf("task repo: count: %w", err)
+	}
+	return count, nil
+}
+
+// SumTaskField sums a numeric task field across all tasks matching filter,
+// ignoring cursor-based pagination so the result reflects the true total.
+// fieldKey must be "story_points" or a custom field key (stored in the custom_fields JSONB column).
+func (r *TaskRepository) SumTaskField(ctx context.Context, projectID uuid.UUID, filter taskdom.TaskFilter, fieldKey string) (float64, error) {
+	q := r.db.WithContext(ctx).Model(&taskRecord{}).
+		Where("project_id = ?", projectID.String())
+
+	switch {
+	case filter.ParentTaskID != nil:
+		q = q.Where("parent_task_id = ?", filter.ParentTaskID.String())
+	case len(filter.SprintIDs) > 0:
+		q = q.Where("sprint_id IN ?", uuidSliceToStrSlice(filter.SprintIDs))
+	case filter.BacklogOnly:
+		q = q.Where("sprint_id IS NULL")
+	case filter.SprintID != nil:
+		q = q.Where("sprint_id = ?", filter.SprintID.String())
+	}
+
+	if len(filter.StatusIDs) > 0 {
+		q = q.Where("status_id IN ?", uuidSliceToStrSlice(filter.StatusIDs))
+	} else if filter.StatusID != nil {
+		q = q.Where("status_id = ?", filter.StatusID.String())
+	}
+
+	switch {
+	case filter.AssigneeNull && len(filter.AssigneeIDs) > 0:
+		q = q.Where("assignee_id IS NULL OR assignee_id IN ?", uuidSliceToStrSlice(filter.AssigneeIDs))
+	case filter.AssigneeNull:
+		q = q.Where("assignee_id IS NULL")
+	case len(filter.AssigneeIDs) > 0:
+		q = q.Where("assignee_id IN ?", uuidSliceToStrSlice(filter.AssigneeIDs))
+	case filter.AssigneeID != nil:
+		q = q.Where("assignee_id = ?", filter.AssigneeID.String())
+	}
+
+	switch {
+	case filter.TaskTypeNull:
+		q = q.Where("task_type_id IS NULL")
+	case len(filter.TaskTypeIDs) > 0:
+		q = q.Where("task_type_id IN ?", uuidSliceToStrSlice(filter.TaskTypeIDs))
+	}
+
+	var sum float64
+	var err error
+	if fieldKey == "story_points" {
+		err = q.Select("COALESCE(SUM(story_points), 0)").Scan(&sum).Error
+	} else {
+		err = q.Select("COALESCE(SUM((custom_fields->>?)::numeric), 0)", fieldKey).Scan(&sum).Error
+	}
+	if err != nil {
+		return 0, fmt.Errorf("task repo: sum field %q: %w", fieldKey, err)
+	}
+	return sum, nil
 }
 
 // FindTaskByID returns the task with the given ID (non-deleted).

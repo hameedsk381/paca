@@ -242,11 +242,21 @@ func (s *Service) wouldCreateCycle(ctx context.Context, taskID, proposedParentID
 // ListTasks returns a page of tasks. When filter.CursorAfter is nil, returns from
 // the beginning. When set, returns tasks after the cursor position.
 // Returns hasMore=true when a next page exists.
-func (s *Service) ListTasks(ctx context.Context, projectID uuid.UUID, filter taskdom.TaskFilter, pageSize int) ([]*taskdom.Task, bool, error) {
+func (s *Service) ListTasks(ctx context.Context, projectID uuid.UUID, filter taskdom.TaskFilter, pageSize int, sort taskdom.TaskSort) ([]*taskdom.Task, bool, error) {
 	if pageSize < 1 {
 		pageSize = 20
 	}
-	return s.repo.ListTasks(ctx, projectID, filter, pageSize)
+	return s.repo.ListTasks(ctx, projectID, filter, pageSize, sort)
+}
+
+// CountTasks returns the number of tasks in a project matching the given filter.
+func (s *Service) CountTasks(ctx context.Context, projectID uuid.UUID, filter taskdom.TaskFilter) (int64, error) {
+	return s.repo.CountTasks(ctx, projectID, filter)
+}
+
+// SumTaskField sums a numeric field across all matching tasks, ignoring pagination.
+func (s *Service) SumTaskField(ctx context.Context, projectID uuid.UUID, filter taskdom.TaskFilter, fieldKey string) (float64, error) {
+	return s.repo.SumTaskField(ctx, projectID, filter, fieldKey)
 }
 
 // GetTask returns the task with the given ID, verifying it belongs to projectID.

@@ -102,12 +102,49 @@ func (f *fakeTaskSvc) SetDefaultTaskStatus(_ context.Context, _, _ uuid.UUID) (*
 
 // -- TaskService --
 
-func (f *fakeTaskSvc) ListTasks(_ context.Context, projectID uuid.UUID, filter taskdom.TaskFilter, _ int) ([]*taskdom.Task, bool, error) {
+func (f *fakeTaskSvc) ListTasks(_ context.Context, projectID uuid.UUID, filter taskdom.TaskFilter, _ int, _ taskdom.TaskSort) ([]*taskdom.Task, bool, error) {
 	f.mu.Lock()
 	f.lastProjectID = projectID
 	f.lastFilter = filter
 	f.mu.Unlock()
-	return nil, false, nil
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	var out []*taskdom.Task
+	for _, t := range f.tasks {
+		if t.ProjectID != projectID {
+			continue
+		}
+		cp := *t
+		out = append(out, &cp)
+	}
+	return out, false, nil
+}
+
+func (f *fakeTaskSvc) CountTasks(_ context.Context, projectID uuid.UUID, _ taskdom.TaskFilter) (int64, error) {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	var count int64
+	for _, t := range f.tasks {
+		if t.ProjectID == projectID {
+			count++
+		}
+	}
+	return count, nil
+}
+
+func (f *fakeTaskSvc) SumTaskField(_ context.Context, projectID uuid.UUID, _ taskdom.TaskFilter, fieldKey string) (float64, error) {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	var sum float64
+	for _, t := range f.tasks {
+		if t.ProjectID != projectID {
+			continue
+		}
+		if fieldKey == "story_points" && t.StoryPoints != nil {
+			sum += float64(*t.StoryPoints)
+		}
+	}
+	return sum, nil
 }
 
 func (f *fakeTaskSvc) GetTask(_ context.Context, _, id uuid.UUID) (*taskdom.Task, error) {
@@ -541,6 +578,37 @@ func TestTaskHandler_ListTasks_TaskTypeIDsDriveFiltering(t *testing.T) {
 	}
 	if len(svc.lastFilter.TaskTypeIDs) != 1 || svc.lastFilter.TaskTypeIDs[0] != taskTypeID {
 		t.Fatalf("unexpected task type ids: %+v", svc.lastFilter.TaskTypeIDs)
+	}
+}
+
+func TestTaskHandler_ListTasks_ResponseIncludesTotalCount(t *testing.T) {
+	svc := newFakeTaskSvc()
+	r := buildTaskHandlerRouter(svc)
+	projectID := uuid.New()
+
+	// Pre-populate 3 tasks for the project.
+	for i := 0; i < 3; i++ {
+		_, _ = svc.CreateTask(context.Background(), taskdom.CreateTaskInput{
+			ProjectID: projectID,
+			Title:     fmt.Sprintf("Task %d", i),
+		})
+	}
+
+	w := doTaskRequest(r, http.MethodGet, fmt.Sprintf("/projects/%s/tasks", projectID), nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var env struct {
+		Data struct {
+			TotalCount float64 `json:"total_count"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &env); err != nil {
+		t.Fatalf("decode body: %v", err)
+	}
+	if env.Data.TotalCount != 3 {
+		t.Errorf("expected total_count=3, got %v", env.Data.TotalCount)
 	}
 }
 

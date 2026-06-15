@@ -287,6 +287,34 @@ func (h *TaskHandler) SetDefaultTaskStatus(c *gin.Context) {
 
 // --- Tasks ------------------------------------------------------------------
 
+// parseTaskSort resolves the sort_by query parameter into a TaskSort.
+// For custom field sort keys the field definition is looked up via the service
+// (ListCustomFieldDefinitions is cached, so this is cheap).
+func parseTaskSort(ctx context.Context, svc taskdom.Service, projectID uuid.UUID, sortByRaw string) taskdom.TaskSort {
+	sortBy := strings.TrimSpace(sortByRaw)
+	switch sortBy {
+	case "importance", "title", "story_points", "start_date", "due_date", "created":
+		return taskdom.TaskSort{By: sortBy}
+	case "", "manual":
+		return taskdom.TaskSort{}
+	default:
+		cfs, err := svc.ListCustomFieldDefinitions(ctx, projectID)
+		if err != nil {
+			return taskdom.TaskSort{}
+		}
+		for _, cf := range cfs {
+			if cf.FieldKey == sortBy {
+				return taskdom.TaskSort{
+					By:     sortBy,
+					CFType: string(cf.FieldType),
+					CFOpts: cf.Options,
+				}
+			}
+		}
+		return taskdom.TaskSort{}
+	}
+}
+
 // ListTasks handles GET /projects/:projectId/tasks.
 // Supported filter query params:
 //   - sprint_id=<uuid>|null or sprint_ids=<uuid,uuid>
@@ -388,6 +416,7 @@ func (h *TaskHandler) ListTasks(c *gin.Context) {
 	if cursorRaw := c.Query("cursor"); cursorRaw != "" {
 		filter.CursorAfter = &cursorRaw
 	}
+	sort := parseTaskSort(c.Request.Context(), h.svc, projectID, c.Query("sort_by"))
 
 	var posMap map[uuid.UUID]*sprintdom.ViewTaskPosition
 	if raw := c.Query("view_id"); raw != "" {
@@ -406,12 +435,39 @@ func (h *TaskHandler) ListTasks(c *gin.Context) {
 			cp := p
 			posMap[p.TaskID] = cp
 		}
+		// When no explicit sort_by is requested (manual sort), order by the saved
+		// view positions so the first page reflects the user's manual order.
+		if sort.By == "" {
+			sort.By = "view_position"
+			sort.ViewID = &viewID
+		}
 	}
 
-	tasks, hasMore, err := h.svc.ListTasks(c.Request.Context(), projectID, filter, pageSize)
+	tasks, hasMore, err := h.svc.ListTasks(c.Request.Context(), projectID, filter, pageSize, sort)
 	if err != nil {
 		presenter.Error(c, err)
 		return
+	}
+
+	// Count without cursor so the total reflects all matching tasks, not just the current page.
+	aggFilter := filter
+	aggFilter.CursorAfter = nil
+	totalCount, err := h.svc.CountTasks(c.Request.Context(), projectID, aggFilter)
+	if err != nil {
+		presenter.Error(c, err)
+		return
+	}
+
+	// Optionally sum a numeric field across all matching tasks.
+	sumField := strings.TrimSpace(c.Query("sum_field"))
+	var fieldSum *float64
+	if sumField != "" && sumField != "count" {
+		s, err := h.svc.SumTaskField(c.Request.Context(), projectID, aggFilter, sumField)
+		if err != nil {
+			presenter.Error(c, err)
+			return
+		}
+		fieldSum = &s
 	}
 
 	resp := make([]dto.TaskResponse, 0, len(tasks))
@@ -427,13 +483,15 @@ func (h *TaskHandler) ListTasks(c *gin.Context) {
 	var nextCursor *string
 	if hasMore && len(tasks) > 0 {
 		last := tasks[len(tasks)-1]
-		s := taskdom.EncodeTaskCursor(last.CreatedAt, last.ID.String())
+		s := taskdom.EncodeTaskCursor(last, sort)
 		nextCursor = &s
 	}
 	presenter.OK(c, gin.H{
 		"items":       resp,
 		"page_size":   pageSize,
 		"next_cursor": nextCursor,
+		"total_count": totalCount,
+		"field_sum":   fieldSum,
 	})
 }
 
@@ -1021,6 +1079,7 @@ func (h *TaskHandler) ListBacklogTasks(c *gin.Context) {
 	if cursorRaw := c.Query("cursor"); cursorRaw != "" {
 		filter.CursorAfter = &cursorRaw
 	}
+	sort := parseTaskSort(c.Request.Context(), h.svc, projectID, c.Query("sort_by"))
 
 	var posMap map[uuid.UUID]*sprintdom.ViewTaskPosition
 	if raw := c.Query("view_id"); raw != "" {
@@ -1039,12 +1098,35 @@ func (h *TaskHandler) ListBacklogTasks(c *gin.Context) {
 			cp := p
 			posMap[p.TaskID] = cp
 		}
+		if sort.By == "" {
+			sort.By = "view_position"
+			sort.ViewID = &viewID
+		}
 	}
 
-	tasks, hasMore, err := h.svc.ListTasks(c.Request.Context(), projectID, filter, pageSize)
+	tasks, hasMore, err := h.svc.ListTasks(c.Request.Context(), projectID, filter, pageSize, sort)
 	if err != nil {
 		presenter.Error(c, err)
 		return
+	}
+
+	aggFilter := filter
+	aggFilter.CursorAfter = nil
+	totalCount, err := h.svc.CountTasks(c.Request.Context(), projectID, aggFilter)
+	if err != nil {
+		presenter.Error(c, err)
+		return
+	}
+
+	sumField := strings.TrimSpace(c.Query("sum_field"))
+	var fieldSum *float64
+	if sumField != "" && sumField != "count" {
+		s, err := h.svc.SumTaskField(c.Request.Context(), projectID, aggFilter, sumField)
+		if err != nil {
+			presenter.Error(c, err)
+			return
+		}
+		fieldSum = &s
 	}
 
 	resp := make([]dto.TaskResponse, 0, len(tasks))
@@ -1060,10 +1142,10 @@ func (h *TaskHandler) ListBacklogTasks(c *gin.Context) {
 	var nextCursor *string
 	if hasMore && len(tasks) > 0 {
 		last := tasks[len(tasks)-1]
-		s := taskdom.EncodeTaskCursor(last.CreatedAt, last.ID.String())
+		s := taskdom.EncodeTaskCursor(last, sort)
 		nextCursor = &s
 	}
-	presenter.OK(c, gin.H{"items": resp, "page_size": pageSize, "next_cursor": nextCursor})
+	presenter.OK(c, gin.H{"items": resp, "page_size": pageSize, "next_cursor": nextCursor, "total_count": totalCount, "field_sum": fieldSum})
 }
 
 // ListTimelineTasks handles GET /projects/:projectId/timeline.
@@ -1100,6 +1182,7 @@ func (h *TaskHandler) ListTimelineTasks(c *gin.Context) {
 	if cursorRaw := c.Query("cursor"); cursorRaw != "" {
 		filter.CursorAfter = &cursorRaw
 	}
+	sort := parseTaskSort(c.Request.Context(), h.svc, projectID, c.Query("sort_by"))
 
 	var posMap map[uuid.UUID]*sprintdom.ViewTaskPosition
 	if raw := c.Query("view_id"); raw != "" {
@@ -1118,9 +1201,13 @@ func (h *TaskHandler) ListTimelineTasks(c *gin.Context) {
 			cp := p
 			posMap[p.TaskID] = cp
 		}
+		if sort.By == "" {
+			sort.By = "view_position"
+			sort.ViewID = &viewID
+		}
 	}
 
-	tasks, hasMore, err := h.svc.ListTasks(c.Request.Context(), projectID, filter, pageSize)
+	tasks, hasMore, err := h.svc.ListTasks(c.Request.Context(), projectID, filter, pageSize, sort)
 	if err != nil {
 		presenter.Error(c, err)
 		return
@@ -1139,7 +1226,7 @@ func (h *TaskHandler) ListTimelineTasks(c *gin.Context) {
 	var nextCursor *string
 	if hasMore && len(tasks) > 0 {
 		last := tasks[len(tasks)-1]
-		s := taskdom.EncodeTaskCursor(last.CreatedAt, last.ID.String())
+		s := taskdom.EncodeTaskCursor(last, sort)
 		nextCursor = &s
 	}
 	presenter.OK(c, gin.H{"items": resp, "page_size": pageSize, "next_cursor": nextCursor})

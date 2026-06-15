@@ -215,6 +215,13 @@ func TestE2ETaskManagement_CRUD(t *testing.T) {
 		if len(items) < 1 {
 			t.Errorf("expected at least 1 task, got %d", len(items))
 		}
+		totalCount, _ := data["total_count"].(float64)
+		if int(totalCount) < 1 {
+			t.Errorf("expected total_count >= 1, got %v", totalCount)
+		}
+		if int(totalCount) != len(items) {
+			t.Errorf("expected total_count=%d to match items length=%d", int(totalCount), len(items))
+		}
 	})
 
 	t.Run("get_task", func(t *testing.T) {
@@ -433,6 +440,9 @@ func TestE2ESprintView_SprintTasks(t *testing.T) {
 		if len(items) != 1 {
 			t.Errorf("expected 1 sprint task, got %d", len(items))
 		}
+		if tc, _ := data["total_count"].(float64); int(tc) != 1 {
+			t.Errorf("expected total_count=1 for sprint filter, got %v", tc)
+		}
 	})
 }
 
@@ -477,6 +487,9 @@ func TestE2ESprintView_Backlog(t *testing.T) {
 		items, _ := data["items"].([]any)
 		if len(items) != 2 {
 			t.Errorf("expected 2 backlog tasks, got %d", len(items))
+		}
+		if tc, _ := data["total_count"].(float64); int(tc) != 2 {
+			t.Errorf("expected total_count=2 for backlog filter, got %v", tc)
 		}
 	})
 }

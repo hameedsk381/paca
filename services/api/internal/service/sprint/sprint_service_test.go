@@ -94,7 +94,7 @@ func newFakeTaskRepo() *fakeTaskRepo {
 	}
 }
 
-func (r *fakeTaskRepo) ListTasks(_ context.Context, projectID uuid.UUID, filter taskdom.TaskFilter, _ int) ([]*taskdom.Task, bool, error) {
+func (r *fakeTaskRepo) ListTasks(_ context.Context, projectID uuid.UUID, filter taskdom.TaskFilter, _ int, _ taskdom.TaskSort) ([]*taskdom.Task, bool, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	var out []*taskdom.Task
@@ -151,6 +151,29 @@ func (r *fakeTaskRepo) CreateStatus(_ context.Context, s *taskdom.TaskStatus) er
 }
 
 // BulkMoveSprintTasks moves non-done tasks from sourceSprintID to targetSprintID.
+func (r *fakeTaskRepo) CountTasks(_ context.Context, projectID uuid.UUID, filter taskdom.TaskFilter) (int64, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	var count int64
+	for _, t := range r.tasks {
+		if t.ProjectID != projectID || t.DeletedAt != nil {
+			continue
+		}
+		if filter.SprintID != nil && (t.SprintID == nil || *t.SprintID != *filter.SprintID) {
+			continue
+		}
+		if filter.BacklogOnly && t.SprintID != nil {
+			continue
+		}
+		count++
+	}
+	return count, nil
+}
+
+func (r *fakeTaskRepo) SumTaskField(_ context.Context, _ uuid.UUID, _ taskdom.TaskFilter, _ string) (float64, error) {
+	return 0, nil
+}
+
 func (r *fakeTaskRepo) BulkMoveSprintTasks(_ context.Context, projectID, sourceSprintID uuid.UUID, targetSprintID *uuid.UUID) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -425,7 +448,7 @@ func TestCompleteSprint_MovesToBacklog(t *testing.T) {
 	}
 
 	// All tasks should now have no sprint (backlog).
-	tasks, _, _ := taskRepo.ListTasks(ctx, projectID, taskdom.TaskFilter{}, 100)
+	tasks, _, _ := taskRepo.ListTasks(ctx, projectID, taskdom.TaskFilter{}, 100, taskdom.TaskSort{})
 	for _, task := range tasks {
 		if task.SprintID != nil {
 			t.Errorf("expected task %s to be in backlog, still has sprint %s", task.ID, *task.SprintID)

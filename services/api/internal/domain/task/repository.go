@@ -42,7 +42,11 @@ type TaskStatusRepository interface {
 
 // TaskRepository defines persistence operations for tasks.
 type TaskRepository interface {
-	ListTasks(ctx context.Context, projectID uuid.UUID, filter TaskFilter, limit int) ([]*Task, bool, error)
+	ListTasks(ctx context.Context, projectID uuid.UUID, filter TaskFilter, limit int, sort TaskSort) ([]*Task, bool, error)
+	CountTasks(ctx context.Context, projectID uuid.UUID, filter TaskFilter) (int64, error)
+	// SumTaskField sums a numeric field across all tasks matching the filter,
+	// ignoring cursor-based pagination. fieldKey is "story_points" or a custom field key.
+	SumTaskField(ctx context.Context, projectID uuid.UUID, filter TaskFilter, fieldKey string) (float64, error)
 	FindTaskByID(ctx context.Context, id uuid.UUID) (*Task, error)
 	FindTaskByNumber(ctx context.Context, projectID uuid.UUID, taskNumber int64) (*Task, error)
 	CreateTask(ctx context.Context, t *Task) error
@@ -52,6 +56,20 @@ type TaskRepository interface {
 	// targetSprintID. A nil targetSprintID moves tasks to the backlog (sprint_id = NULL).
 	// Tasks whose status has category "done" are not moved.
 	BulkMoveSprintTasks(ctx context.Context, projectID, sourceSprintID uuid.UUID, targetSprintID *uuid.UUID) error
+}
+
+// TaskSort carries resolved sort configuration for ListTasks.
+// Kept separate from TaskFilter because sort order is a presentation concern,
+// not a filter predicate.
+//
+// For built-in fields (importance, title, story_points, start_date, due_date,
+// created) only By is set.  For custom field sorts, CFType and (for select)
+// CFOpts are populated by the caller after looking up the field definition.
+type TaskSort struct {
+	By     string     // built-in field key, custom field key, or "" (default order)
+	CFType string     // "number" | "date" | "select" — only for custom field sorts
+	CFOpts []string   // ordered option values — only for "select" custom field sorts
+	ViewID *uuid.UUID // when By == "view_position", JOIN view_task_positions for this view
 }
 
 // TaskFilter carries optional criteria for listing tasks.

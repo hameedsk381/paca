@@ -3,7 +3,6 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import {
-	resolveFilterConfig,
 	type Sprint,
 	type Task,
 	updateTask,
@@ -20,9 +19,9 @@ import { cn } from "@/lib/utils";
 import { AddTaskRow } from "./add-task-row";
 import { TaskCard } from "./task-card";
 import {
+	applyStatusFilterToColumnDefs,
 	buildColumnDropUpdate,
 	type ColumnGroupDef,
-	computeFieldSum,
 	DEFAULT_VISIBLE_FIELDS,
 	getColumnGroupDefs,
 	getSwimlaneDefs,
@@ -62,7 +61,13 @@ interface BoardViewProps {
 	onCollapseChange?: (collapsedColumns: string[]) => void;
 	columnPagination?: Record<
 		string,
-		{ hasMore: boolean; isLoadingMore: boolean; onLoadMore: () => void }
+		{
+			hasMore: boolean;
+			isLoadingMore: boolean;
+			onLoadMore: () => void;
+			totalCount?: number;
+			fieldSum?: number;
+		}
 	>;
 }
 
@@ -98,9 +103,6 @@ export function BoardView({
 	const [overCardId, setOverCardId] = useState<string | null>(null);
 	// Tracks which swimlane band is being hovered: "colKey|swimKey"
 	const [overSwimKey, setOverSwimKey] = useState<string | null>(null);
-	const [columnOrderMap, setColumnOrderMap] = useState<
-		Record<string, string[]>
-	>({});
 	const [collapsedColumns, setCollapsedColumns] = useState<Set<string>>(
 		() => new Set(viewConfig?.collapsed_columns ?? []),
 	);
@@ -119,11 +121,6 @@ export function BoardView({
 			return next;
 		});
 	};
-
-	// biome-ignore lint/correctness/useExhaustiveDependencies: reset local order when server tasks change
-	useEffect(() => {
-		setColumnOrderMap({});
-	}, [tasks]);
 
 	// Generic field-update for drag between columns
 	const updateMutation = useMutation({
@@ -201,22 +198,15 @@ export function BoardView({
 
 	// ── Column tasks helper ───────────────────────────────────────────────────
 
-	const getColumnTasks = (colKey: string): Task[] => {
-		// For manual-sort status columns, respect saved order
-		const ids = columnOrderMap[colKey];
-		let col: Task[];
+	const getColumnTasks = (colKey: string): Task[] =>
+		filteredTasks.filter((t) =>
+			getTaskColumnKeys(t, columnBy, viewCtx).includes(colKey),
+		);
 
-		if (ids) {
-			col = ids
-				.map((id) => filteredTasks.find((t) => t.id === id))
-				.filter((t): t is Task => t !== undefined);
-		} else {
-			// For multi_select columns a task may appear in multiple
-			col = filteredTasks.filter((t) =>
-				getTaskColumnKeys(t, columnBy, viewCtx).includes(colKey),
-			);
-		}
-		return col;
+	const getDisplayCount = (colKey: string): number => {
+		const colPagination = columnPagination?.[colKey];
+		if (fieldSum && fieldSum !== "count") return colPagination?.fieldSum ?? 0;
+		return colPagination?.totalCount ?? getColumnTasks(colKey).length;
 	};
 
 	// ── Swimlane task helper ──────────────────────────────────────────────────
@@ -361,16 +351,13 @@ export function BoardView({
 			const current = getColumnTasks(colDef.key);
 			const srcIdx = current.findIndex((t) => t.id === taskId);
 			if (srcIdx !== -1) {
-				const next = [...current];
-				const [moved] = next.splice(srcIdx, 1);
-				next.splice(targetIndex, 0, moved);
-				setColumnOrderMap((prev) => ({
-					...prev,
-					[colDef.key]: next.map((t) => t.id),
-				}));
-			}
-			if (isStatusGrouping) {
-				onReorderTask?.(colDef.key, taskId, targetIndex);
+				// After removing source, indices shift by -1 for elements past it.
+				// Adjust so the item lands BEFORE the visual drop target.
+				const adjustedTarget =
+					srcIdx < targetIndex ? targetIndex - 1 : targetIndex;
+				if (isStatusGrouping) {
+					onReorderTask?.(colDef.key, taskId, adjustedTarget);
+				}
 			}
 		}
 		setDraggingId(null);
@@ -479,18 +466,12 @@ export function BoardView({
 			defs = dynamic;
 		}
 
-		// Hide columns whose status is excluded by the active status filter
-		if (isStatusGrouping && viewConfig?.filters?.statuses) {
-			const allowed = new Set(
-				resolveFilterConfig(
-					viewConfig.filters.statuses,
-					statuses.map((s) => s.id),
-				),
-			);
-			defs = defs.filter((col) => allowed.has(col.key));
-		}
-
-		return defs;
+		return applyStatusFilterToColumnDefs(
+			defs,
+			isStatusGrouping,
+			viewConfig?.filters?.statuses,
+			statuses,
+		);
 	}, [
 		columnDefs,
 		filteredTasks,
@@ -539,7 +520,7 @@ export function BoardView({
 						: handleDropOnColumn(e, colDef)
 				}
 			>
-				{laneTasks.length === 0 && (
+				{laneTasks.length === 0 && !columnPagination?.[colDef.key]?.hasMore && (
 					<div className="flex flex-1 flex-col items-center justify-center py-6 text-muted-foreground/30">
 						<p className="text-[11px]">No tasks</p>
 					</div>
@@ -651,8 +632,7 @@ export function BoardView({
 
 	/** Column header chip — used both in swimlane and non-swimlane layouts. */
 	const renderColHeader = (colDef: ColumnGroupDef) => {
-		const colTasks = getColumnTasks(colDef.key);
-		const sumValue = computeFieldSum(colTasks, fieldSum, customFields);
+		const displayCount = getDisplayCount(colDef.key);
 		const isCollapsed = collapsedColumns.has(colDef.key);
 		return (
 			<div className="flex items-center gap-2 px-2 pb-1 group">
@@ -681,7 +661,7 @@ export function BoardView({
 					)}
 				</button>
 				<span className="rounded-full bg-muted/60 px-2 py-0.5 text-[10px] font-bold text-muted-foreground/70 tabular-nums">
-					{fieldSum && fieldSum !== "count" ? sumValue : colTasks.length}
+					{displayCount}
 				</span>
 			</div>
 		);
@@ -707,14 +687,7 @@ export function BoardView({
 						<div className="w-36 shrink-0" />
 						{effectiveColumnDefs.map((colDef) => {
 							const isCollapsed = collapsedColumns.has(colDef.key);
-							const colTasks = getColumnTasks(colDef.key);
-							const sumValue = computeFieldSum(
-								colTasks,
-								fieldSum,
-								customFields,
-							);
-							const displayCount =
-								fieldSum && fieldSum !== "count" ? sumValue : colTasks.length;
+							const displayCount = getDisplayCount(colDef.key);
 
 							if (isCollapsed) {
 								return (
@@ -816,10 +789,7 @@ export function BoardView({
 		<div className="flex flex-1 min-h-0 gap-4 overflow-x-auto px-6 py-5 pb-8">
 			{effectiveColumnDefs.map((colDef) => {
 				const isCollapsed = collapsedColumns.has(colDef.key);
-				const colTasks = getColumnTasks(colDef.key);
-				const sumValue = computeFieldSum(colTasks, fieldSum, customFields);
-				const displayCount =
-					fieldSum && fieldSum !== "count" ? sumValue : colTasks.length;
+				const displayCount = getDisplayCount(colDef.key);
 
 				if (isCollapsed) {
 					return (

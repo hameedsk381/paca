@@ -373,7 +373,7 @@ export function RoadmapView({
 								const groupTasks = filtered.filter(
 									(t) => t.status_id === status.id,
 								);
-								if (groupTasks.length === 0) return null;
+								if (groupTasks.length === 0 && !pagination?.hasMore) return null;
 
 								return (
 									<div
@@ -395,7 +395,7 @@ export function RoadmapView({
 							{/* Unstatused tasks */}
 							{(() => {
 								const uns = filtered.filter((t) => !t.status_id);
-								if (!uns.length) return null;
+								if (!uns.length && !pagination?.hasMore) return null;
 								return (
 									<div className="border-b border-border/20 last:border-0">
 										<GroupHeader

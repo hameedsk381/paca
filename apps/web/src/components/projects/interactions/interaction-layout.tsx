@@ -50,6 +50,7 @@ import {
 	resolveTaskTypeFilter,
 	sprintsQueryOptions,
 	type Task,
+	type TaskListResult,
 	updateSprint,
 	updateTask,
 	updateViewById,
@@ -57,7 +58,6 @@ import {
 	type ViewLayout,
 	type ViewsContext,
 	viewsByContextQueryOptions,
-	viewTaskPositionsQueryOptions,
 } from "@/lib/interaction-api";
 import type { PluginRegistration } from "@/lib/plugin-api";
 import { RemoteComponent } from "@/lib/plugins/loader";
@@ -80,7 +80,7 @@ import { TaskDetailModal } from "./task-detail-modal";
 import { UNASSIGNED_FILTER_ID, ViewSettingsPanel } from "./view-settings-panel";
 import {
 	getColumnGroupDefs,
-	sortTasksByConfig,
+	getTaskColumnKeys,
 	type TaskFieldUpdate,
 	type ViewContext,
 } from "./view-utils";
@@ -338,8 +338,7 @@ export function InteractionLayout({
 		viewsByContextQueryOptions(projectId, context, sprintId),
 	);
 
-	const serverViews = viewsQuery.data ?? [];
-	const views = serverViews.length > 0 ? serverViews : [];
+	const views = viewsQuery.data ?? [];
 
 	const viewsQueryKey = viewsByContextQueryOptions(
 		projectId,
@@ -351,7 +350,7 @@ export function InteractionLayout({
 	useEffect(() => {
 		if (
 			!viewsQuery.isSuccess ||
-			serverViews.length > 0 ||
+			views.length > 0 ||
 			seedingRef.current ||
 			taskTypes.length === 0
 		)
@@ -398,7 +397,7 @@ export function InteractionLayout({
 	}, [
 		buildDefaultViewConfig,
 		viewsQuery.isSuccess,
-		serverViews.length,
+		views.length,
 		taskTypes.length,
 		sprintId,
 		context,
@@ -410,7 +409,7 @@ export function InteractionLayout({
 	const initializedFiltersRef = useRef<Set<string>>(new Set());
 	useEffect(() => {
 		if (!viewsQuery.isSuccess || defaultPageTaskTypeIds.length === 0) return;
-		const uninitializedViews = serverViews.filter(
+		const uninitializedViews = views.filter(
 			(view) =>
 				view.layout !== "Plugin" &&
 				!initializedFiltersRef.current.has(view.id) &&
@@ -434,7 +433,7 @@ export function InteractionLayout({
 		defaultPageTaskTypeIds.length,
 		projectId,
 		qc,
-		serverViews,
+		views,
 		viewsQuery.isSuccess,
 		viewsQueryKey,
 	]);
@@ -599,8 +598,13 @@ export function InteractionLayout({
 		return getColumnGroupDefs(columnBy, viewCtx);
 	}, [isColumnBySupported, columnBy, viewCtx]);
 
+	// Guard: do not start column queries until views have finished loading.
+	// Without this, queries fire before effectiveViewId is available, fetching
+	// tasks without view_id and briefly rendering them in created_at order.
 	const colQueriesEnabled =
-		fetchColumnDefs.length > 0 && activeView?.layout !== "Roadmap";
+		fetchColumnDefs.length > 0 &&
+		!viewsQuery.isLoading &&
+		activeView?.layout !== "Roadmap";
 
 	// Page size: board = 20, list/roadmap = 5 on first page
 	const isBoard = activeView?.layout === "Board";
@@ -621,6 +625,9 @@ export function InteractionLayout({
 				columnBy !== "assignee" ? apiFilters.assignee_null : undefined,
 			taskTypeIds: columnBy !== "type" ? apiFilters.task_type_ids : undefined,
 			pageSize: initialColPageSize,
+			sumField: activeViewConfig?.field_sum,
+			sortBy: activeViewConfig?.sort_by,
+			viewId: effectiveViewId,
 		}),
 		[
 			context,
@@ -629,6 +636,9 @@ export function InteractionLayout({
 			apiFilters,
 			columnBy,
 			initialColPageSize,
+			activeViewConfig?.field_sum,
+			activeViewConfig?.sort_by,
+			effectiveViewId,
 		],
 	);
 
@@ -654,7 +664,7 @@ export function InteractionLayout({
 									items: [] as Task[],
 									page_size: 0,
 									next_cursor: null,
-								}),
+								} as TaskListResult),
 							enabled: false,
 						};
 					}
@@ -693,8 +703,10 @@ export function InteractionLayout({
 			assigneeIds: apiFilters.assignee_ids,
 			assigneeNull: apiFilters.assignee_null,
 			taskTypeIds: apiFilters.task_type_ids,
+			sortBy: activeViewConfig?.sort_by,
+			viewId: effectiveViewId,
 		}),
-		[context, hasExplicitFilterConfig, sprintId, apiFilters],
+		[context, hasExplicitFilterConfig, sprintId, apiFilters, activeViewConfig?.sort_by, effectiveViewId],
 	);
 
 	const initialGlobalPageSize =
@@ -705,7 +717,7 @@ export function InteractionLayout({
 	});
 	const fallbackQuery = useQuery({
 		...fallbackQueryOpts,
-		enabled: !colQueriesEnabled,
+		enabled: !colQueriesEnabled && !viewsQuery.isLoading,
 	});
 
 	// Per-column load-more state
@@ -827,12 +839,6 @@ export function InteractionLayout({
 		initialGlobalPageSize,
 	]);
 
-	const taskPositionsQuery = useQuery({
-		...viewTaskPositionsQueryOptions(projectId, effectiveViewId ?? ""),
-		enabled: !!effectiveViewId,
-	});
-
-	// Merged tasks: column queries (initial + load-more extras) OR fallback
 	const tasks = useMemo(() => {
 		if (colQueriesEnabled) {
 			const base = columnQueries.flatMap((q) => q.data?.items ?? []);
@@ -865,26 +871,44 @@ export function InteractionLayout({
 		globalExtraTasks,
 	]);
 
-	const tasksLoading = colQueriesEnabled
-		? columnQueries.some((q) => q.isLoading)
-		: fallbackQuery.isLoading;
+	const tasksLoading =
+		viewsQuery.isLoading ||
+		(colQueriesEnabled
+			? columnQueries.some((q) => q.isLoading)
+			: fallbackQuery.isLoading);
 
 	// Per-column pagination props for views
 	const columnPagination = useMemo(() => {
 		if (!colQueriesEnabled)
 			return {} as Record<
 				string,
-				{ hasMore: boolean; isLoadingMore: boolean; onLoadMore: () => void }
+				{
+					hasMore: boolean;
+					isLoadingMore: boolean;
+					onLoadMore: () => void;
+					totalCount?: number;
+					fieldSum?: number;
+				}
 			>;
 		const result: Record<
 			string,
-			{ hasMore: boolean; isLoadingMore: boolean; onLoadMore: () => void }
+			{
+				hasMore: boolean;
+				isLoadingMore: boolean;
+				onLoadMore: () => void;
+				totalCount?: number;
+				fieldSum?: number;
+			}
 		> = {};
-		for (const col of fetchColumnDefs) {
+		for (let i = 0; i < fetchColumnDefs.length; i++) {
+			const col = fetchColumnDefs[i];
+			const apiFieldSum = columnQueries[i]?.data?.field_sum;
 			result[col.key] = {
 				hasMore: Boolean(colNextCursors[col.key]),
 				isLoadingMore: Boolean(colLoadingMore[col.key]),
 				onLoadMore: () => handleLoadMoreColumn(col.key),
+				totalCount: columnQueries[i]?.data?.total_count,
+				fieldSum: apiFieldSum != null ? apiFieldSum : undefined,
 			};
 		}
 		return result;
@@ -894,6 +918,7 @@ export function InteractionLayout({
 		colNextCursors,
 		colLoadingMore,
 		handleLoadMoreColumn,
+		columnQueries,
 	]);
 
 	const globalPagination = useMemo(
@@ -905,46 +930,17 @@ export function InteractionLayout({
 		[globalNextCursor, globalLoadingMore, handleLoadMoreGlobal],
 	);
 
-	const tasksWithViewPositions = useMemo(() => {
-		if (!effectiveViewId || !taskPositionsQuery.data?.length) return tasks;
-		const positionByTaskId = new Map(
-			taskPositionsQuery.data.map((position) => [position.task_id, position]),
-		);
-		return tasks.map((task) => {
-			const position = positionByTaskId.get(task.id);
-			if (!position) return task;
-			return {
-				...task,
-				view_position: position.position,
-				view_group_key: position.group_key ?? null,
-			};
-		});
-	}, [effectiveViewId, taskPositionsQuery.data, tasks]);
 	const tasksListQueryKey = useMemo(
 		() => ["projects", projectId, "tasks"],
 		[projectId],
 	);
 
-	const sortedTasks = useMemo(() => {
-		if (isManualSort) {
-			return [...tasksWithViewPositions].sort((a, b) => {
-				const pa = a.view_position;
-				const pb = b.view_position;
-				if (pa != null && pb != null) return pa - pb;
-				if (pa != null) return -1;
-				if (pb != null) return 1;
-				return a.created_at.localeCompare(b.created_at);
-			});
-		}
-		return sortTasksByConfig(tasksWithViewPositions, activeViewConfig, viewCtx);
-	}, [isManualSort, tasksWithViewPositions, activeViewConfig, viewCtx]);
-
 	const selectedTask = useMemo(
 		() =>
 			selectedTaskId
-				? (sortedTasks.find((t) => t.id === selectedTaskId) ?? null)
+				? (tasks.find((t) => t.id === selectedTaskId) ?? null)
 				: null,
-		[selectedTaskId, sortedTasks],
+		[selectedTaskId, tasks],
 	);
 
 	const restoredFromUrl = useRef(false);
@@ -996,14 +992,14 @@ export function InteractionLayout({
 
 	const handleStatusChange = useCallback(
 		(taskId: string, newStatusId: string) => {
-			const task = sortedTasks.find((t) => t.id === taskId);
+			const task = tasks.find((t) => t.id === taskId);
 			updateStatusMutation.mutate({
 				taskId,
 				statusId: newStatusId,
 				taskSprintId: task?.sprint_id,
 			});
 		},
-		[updateStatusMutation, sortedTasks],
+		[updateStatusMutation, tasks],
 	);
 
 	const createTaskMutation = useMutation({
@@ -1055,7 +1051,9 @@ export function InteractionLayout({
 	const handleReorderTask = useCallback(
 		(groupKey: string, taskId: string, newIndex: number) => {
 			if (!effectiveViewId) return;
-			const groupTasks = sortedTasks.filter((t) => t.status_id === groupKey);
+			const groupTasks = tasks.filter((t) =>
+				getTaskColumnKeys(t, columnBy, viewCtx).includes(groupKey),
+			);
 			const srcIdx = groupTasks.findIndex((t) => t.id === taskId);
 			const reordered = [...groupTasks];
 			if (srcIdx !== -1) {
@@ -1131,20 +1129,12 @@ export function InteractionLayout({
 				group_key: groupKey,
 			}));
 			bulkMoveViewTaskPositions(projectId, effectiveViewId, bulkItems)
-				.then(async () => {
-					await qc.invalidateQueries({ queryKey: tasksListQueryKey });
-					if (effectiveViewId) {
-						await qc.invalidateQueries({
-							queryKey: viewTaskPositionsQueryOptions(
-								projectId,
-								effectiveViewId,
-							).queryKey,
-						});
-					}
-				})
+				.then(() =>
+					qc.invalidateQueries({ queryKey: tasksListQueryKey }),
+				)
 				.catch(console.error);
 		},
-		[effectiveViewId, sortedTasks, projectId, qc, tasksListQueryKey],
+		[effectiveViewId, tasks, projectId, qc, columnBy, viewCtx],
 	);
 
 	const handleMoveToColumn = useCallback(
@@ -1483,7 +1473,7 @@ export function InteractionLayout({
 						registration={activePluginView}
 						componentProps={{
 							projectId,
-							tasks: sortedTasks,
+							tasks: tasks,
 							statuses,
 							taskTypes,
 							members,
@@ -1507,7 +1497,7 @@ export function InteractionLayout({
 					<BoardView
 						projectId={projectId}
 						taskIdPrefix={taskIdPrefix}
-						tasks={sortedTasks}
+						tasks={tasks}
 						statuses={statuses}
 						taskTypes={creatableTaskTypes}
 						members={members}
@@ -1542,7 +1532,7 @@ export function InteractionLayout({
 					/>
 				) : activeView?.layout === "Roadmap" ? (
 					<RoadmapView
-						tasks={sortedTasks}
+						tasks={tasks}
 						taskIdPrefix={taskIdPrefix}
 						statuses={statuses}
 						taskTypes={creatableTaskTypes}
@@ -1554,7 +1544,7 @@ export function InteractionLayout({
 					/>
 				) : (
 					<ListView
-						tasks={sortedTasks}
+						tasks={tasks}
 						taskIdPrefix={taskIdPrefix}
 						statuses={statuses}
 						taskTypes={creatableTaskTypes}

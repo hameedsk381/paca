@@ -16,7 +16,6 @@ import { getRowColConfig, TaskRow } from "./task-row";
 import {
 	buildColumnDropUpdate,
 	type ColumnGroupDef,
-	computeFieldSum,
 	getTaskSwimlaneKey,
 	type TaskFieldUpdate,
 } from "./view-utils";
@@ -74,6 +73,10 @@ export interface ListGroupProps {
 		isLoadingMore: boolean;
 		onLoadMore: () => void;
 	};
+	/** Total task count from the API, used in place of tasks.length in the header badge */
+	totalCount?: number;
+	/** Field sum from the API, used in place of the front-end computed sum in the header badge */
+	apiFieldSum?: number;
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
@@ -108,6 +111,8 @@ export function ListGroup({
 	columnBy,
 	onCollapseChange,
 	groupPagination,
+	totalCount,
+	apiFieldSum,
 }: ListGroupProps) {
 	const [collapsed, setCollapsed] = useState(defaultCollapsed ?? false);
 	const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -122,7 +127,6 @@ export function ListGroup({
 	}, [tasks]);
 
 	const isDraggable = !!(canEdit || manualSort);
-	const sumValue = computeFieldSum(tasks, fieldSum, customFields);
 	const getViewCtxTasks = () => orderedTasks;
 
 	// Builds onCreateTask arguments for either grouping mode
@@ -187,11 +191,15 @@ export function ListGroup({
 			(t) => t.id === currentDraggingId,
 		);
 		if (sourceIndex === -1) return;
+		// After removing source, indices shift by -1 for elements past it.
+		// Adjust so the item lands BEFORE the visual drop target (top-border indicator).
+		const adjustedTarget =
+			sourceIndex < targetIndex ? targetIndex - 1 : targetIndex;
 		const updated = [...orderedTasks];
 		const [moved] = updated.splice(sourceIndex, 1);
-		updated.splice(targetIndex, 0, moved);
+		updated.splice(adjustedTarget, 0, moved);
 		setOrderedTasks(updated);
-		onReorderTask?.(groupDef.key, currentDraggingId, targetIndex);
+		onReorderTask?.(groupDef.key, currentDraggingId, adjustedTarget);
 		setDraggingId(null);
 		setDragOverId(null);
 	};
@@ -364,14 +372,18 @@ export function ListGroup({
 							);
 							if (sourceOrderedIndex === -1 || targetOrderedIndex === -1)
 								return;
+							const adjustedTarget =
+								sourceOrderedIndex < targetOrderedIndex
+									? targetOrderedIndex - 1
+									: targetOrderedIndex;
 							const updated = [...orderedTasks];
 							const [moved] = updated.splice(sourceOrderedIndex, 1);
-							updated.splice(targetOrderedIndex, 0, moved);
+							updated.splice(adjustedTarget, 0, moved);
 							setOrderedTasks(updated);
 							onReorderTask?.(
 								groupDef.key,
 								currentDraggingId,
-								targetOrderedIndex,
+								adjustedTarget,
 							);
 							setDraggingId(null);
 							setDragOverId(null);
@@ -495,7 +507,9 @@ export function ListGroup({
 
 				{/* Task count / field sum badge */}
 				<span className="rounded-full bg-muted/60 px-2 py-0.5 text-[10px] font-bold text-muted-foreground/70 tabular-nums">
-					{fieldSum && fieldSum !== "count" ? `${sumValue}` : tasks.length}
+					{fieldSum && fieldSum !== "count"
+						? `${apiFieldSum ?? 0}`
+						: (totalCount ?? tasks.length)}
 				</span>
 			</div>
 
@@ -585,7 +599,7 @@ export function ListGroup({
 									{/* Column headers shown once for the first band */}
 									{swimDef.key === (swimlaneDefs[0]?.key ?? "__all") &&
 										columnHeaders}
-									{laneTasks.length === 0 ? (
+									{laneTasks.length === 0 && !groupPagination?.hasMore ? (
 										<div className="flex flex-col items-center py-5 text-muted-foreground/40">
 											<p className="text-[12px] font-medium">No tasks</p>
 										</div>
@@ -612,7 +626,7 @@ export function ListGroup({
 				) : (
 					<>
 						{columnHeaders}
-						{orderedTasks.length === 0 ? (
+						{orderedTasks.length === 0 && !groupPagination?.hasMore ? (
 							<div className="flex flex-col items-center py-8 text-muted-foreground/40">
 								<p className="text-[12px] font-medium">No tasks</p>
 							</div>

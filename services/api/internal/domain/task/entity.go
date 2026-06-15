@@ -119,4 +119,8 @@ type Task struct {
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 	DeletedAt    *time.Time
+	// ViewPosition is a transient field populated only when ListTasks is called
+	// with a view_position sort (i.e. view_id provided + manual sort). It is not
+	// persisted in the tasks table.
+	ViewPosition *float64
 }
