@@ -1,6 +1,32 @@
-import { Check, ChevronRight, Hash, Share2, X } from "lucide-react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+	Check,
+	ChevronRight,
+	Hash,
+	Loader2,
+	MoreVertical,
+	Share2,
+	Trash2,
+	X,
+} from "lucide-react";
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from "@/components/ui/dialog";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import type { Task } from "@/lib/interaction-api";
+import { deleteTask } from "@/lib/interaction-api";
 import { cn } from "@/lib/utils";
 import { formatDate, shortId } from "./helpers";
 
@@ -11,7 +37,9 @@ interface TaskHeaderProps {
 	interactionName?: string;
 	projectId?: string;
 	taskIdPrefix?: string;
+	canDelete?: boolean;
 	onClose: () => void;
+	onDeleted?: () => void;
 }
 
 export function TaskHeader({
@@ -21,9 +49,33 @@ export function TaskHeader({
 	interactionName,
 	projectId,
 	taskIdPrefix = "",
+	canDelete = false,
 	onClose,
+	onDeleted,
 }: TaskHeaderProps) {
+	const qc = useQueryClient();
 	const [linkCopied, setLinkCopied] = useState(false);
+	const [confirmDelete, setConfirmDelete] = useState(false);
+
+	const deleteMutation = useMutation({
+		mutationFn: () => {
+			if (!projectId || !task) throw new Error("missing context");
+			return deleteTask(projectId, task.id);
+		},
+		onSuccess: () => {
+			if (projectId) {
+				qc.invalidateQueries({
+					queryKey: ["projects", projectId],
+					predicate: (q) => {
+						const key = q.queryKey as string[];
+						return key.includes("tasks") || key.includes("backlog-tasks");
+					},
+				});
+			}
+			setConfirmDelete(false);
+			onDeleted?.();
+		},
+	});
 
 	const handleShare = () => {
 		// Always share the canonical task detail page URL, not modal URLs with query params
@@ -96,6 +148,26 @@ export function TaskHeader({
 					)}
 				</button>
 
+				{canDelete && (
+					<DropdownMenu>
+						<DropdownMenuTrigger
+							className="flex size-7 items-center justify-center rounded-md text-muted-foreground/60 hover:text-foreground hover:bg-muted/60 transition-all duration-150"
+							aria-label="Task actions"
+						>
+							<MoreVertical className="size-4" />
+						</DropdownMenuTrigger>
+						<DropdownMenuContent align="end" className="w-40">
+							<DropdownMenuItem
+								className="text-destructive focus:text-destructive"
+								onClick={() => setConfirmDelete(true)}
+							>
+								<Trash2 className="size-3.5 mr-2" />
+								Delete
+							</DropdownMenuItem>
+						</DropdownMenuContent>
+					</DropdownMenu>
+				)}
+
 				{mode === "modal" && (
 					<button
 						type="button"
@@ -107,6 +179,39 @@ export function TaskHeader({
 					</button>
 				)}
 			</div>
+
+			{/* Delete confirmation dialog */}
+			<Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+				<DialogContent className="max-w-sm">
+					<DialogHeader>
+						<DialogTitle>Delete task?</DialogTitle>
+						<DialogDescription>
+							This permanently deletes "{task.title}" and all of its data. This
+							action cannot be undone.
+						</DialogDescription>
+					</DialogHeader>
+					<DialogFooter>
+						<Button
+							variant="outline"
+							onClick={() => setConfirmDelete(false)}
+							disabled={deleteMutation.isPending}
+						>
+							Cancel
+						</Button>
+						<Button
+							variant="destructive"
+							onClick={() => deleteMutation.mutate()}
+							disabled={deleteMutation.isPending}
+						>
+							{deleteMutation.isPending ? (
+								<Loader2 className="size-4 animate-spin" />
+							) : (
+								"Delete"
+							)}
+						</Button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
 		</div>
 	);
 }

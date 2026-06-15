@@ -20,6 +20,7 @@ vi.mock("./api-client", () => ({
 
 import {
 	createTask,
+	deleteTask,
 	getTask,
 	layoutToViewType,
 	listAllTasks,
@@ -170,6 +171,30 @@ describe("interaction-api", () => {
 			expect(mockPatch).toHaveBeenCalledWith(
 				`/projects/${PROJECT_ID}/tasks/${TASK_ID}`,
 				expect.any(Object),
+			);
+		});
+	});
+
+	// ── deleteTask ────────────────────────────────────────────────────────────
+
+	describe("deleteTask", () => {
+		it("sends a DELETE request to the correct path and resolves void", async () => {
+			mockDelete.mockResolvedValue({ data: { data: null, success: true } });
+
+			await expect(deleteTask(PROJECT_ID, TASK_ID)).resolves.toBeUndefined();
+			expect(mockDelete).toHaveBeenCalledWith(
+				`/projects/${PROJECT_ID}/tasks/${TASK_ID}`,
+			);
+		});
+
+		it("does not send a request body", async () => {
+			mockDelete.mockResolvedValue({ data: { data: null, success: true } });
+
+			await deleteTask(PROJECT_ID, TASK_ID);
+
+			expect(mockDelete).toHaveBeenCalledTimes(1);
+			expect(mockDelete).toHaveBeenCalledWith(
+				`/projects/${PROJECT_ID}/tasks/${TASK_ID}`,
 			);
 		});
 	});

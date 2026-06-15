@@ -234,7 +234,18 @@ export function TaskDetailModal({
 				interactionName={interactionName}
 				projectId={projectId}
 				taskIdPrefix={taskIdPrefix}
+				canDelete={canEdit}
 				onClose={() => onOpenChange(false)}
+				onDeleted={() => {
+					if (mode === "page" && projectId) {
+						navigate({
+							to: "/projects/$projectId",
+							params: { projectId },
+						});
+					} else {
+						onOpenChange(false);
+					}
+				}}
 			/>
 
 			{/* ── Body: stacks on mobile, side-by-side on lg+ ── */}

@@ -538,6 +538,13 @@ export async function updateTask(
 	return data.data;
 }
 
+export async function deleteTask(
+	projectId: string,
+	taskId: string,
+): Promise<void> {
+	await apiClient.instance.delete(`/projects/${projectId}/tasks/${taskId}`);
+}
+
 export async function listSubtasks(
 	projectId: string,
 	parentTaskId: string,
