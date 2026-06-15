@@ -560,8 +560,13 @@ export const chatSessionsQueryOptions = (projectId: string, agentId: string) =>
 
 // ── LLM Models ────────────────────────────────────────────────────────────────
 
+export interface LLMProviderInfo {
+	models: string[];
+	base_url: string | null;
+}
+
 export interface LLMModelsResponse {
-	[provider: string]: string[];
+	[provider: string]: LLMProviderInfo;
 }
 
 export async function listLLMModels(): Promise<LLMModelsResponse> {

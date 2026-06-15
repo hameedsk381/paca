@@ -49,6 +49,7 @@ import {
 	Select,
 	SelectContent,
 	SelectItem,
+	SelectSeparator,
 	SelectTrigger,
 	SelectValue,
 } from "@/components/ui/select";
@@ -103,17 +104,25 @@ function CreateAgentDialog({
 	const { data: roles = [] } = useQuery(projectRolesQueryOptions(projectId));
 	const { data: llmModels = {} } = useQuery(llmModelsQueryOptions);
 
+	const CUSTOM = "__custom__";
+
 	const [step, setStep] = useState<1 | 2>(1);
 	const [name, setName] = useState("");
 	const [handle, setHandle] = useState("");
 	const [presetId, setPresetId] = useState("");
 	const [roleId, setRoleId] = useState("");
-	const [llmProvider, setLlmProvider] = useState("anthropic");
-	const [llmModel, setLlmModel] = useState("claude-sonnet-4-5-20250929");
+	const [providerSelect, setProviderSelect] = useState("anthropic");
+	const [customProvider, setCustomProvider] = useState("");
+	const [modelSelect, setModelSelect] = useState("claude-sonnet-4-5-20250929");
+	const [customModel, setCustomModel] = useState("");
 	const [llmApiKey, setLlmApiKey] = useState("");
 	const [llmBaseUrl, setLlmBaseUrl] = useState("");
 	const [systemPrompt, setSystemPrompt] = useState("");
 	const [showApiKey, setShowApiKey] = useState(false);
+
+	// Derived final values sent to the API
+	const llmProvider = providerSelect === CUSTOM ? customProvider.trim() : providerSelect;
+	const llmModel = modelSelect === CUSTOM ? customModel.trim() : modelSelect;
 
 	const reset = () => {
 		setStep(1);
@@ -121,6 +130,10 @@ function CreateAgentDialog({
 		setHandle("");
 		setPresetId("");
 		setRoleId("");
+		setProviderSelect("anthropic");
+		setCustomProvider("");
+		setModelSelect("claude-sonnet-4-5-20250929");
+		setCustomModel("");
 		setLlmApiKey("");
 		setLlmBaseUrl("");
 		setSystemPrompt("");
@@ -132,19 +145,34 @@ function CreateAgentDialog({
 		onOpenChange(v);
 	};
 
+	const handleProviderChange = (v: string | null) => {
+		if (!v) return;
+		setProviderSelect(v);
+		if (v !== CUSTOM) {
+			const info = llmModels[v];
+			setLlmBaseUrl(info?.base_url ?? "");
+			const firstModel = info?.models?.[0] ?? "";
+			setModelSelect(firstModel || CUSTOM);
+			if (!firstModel) setCustomModel("");
+		}
+	};
+
 	const onPresetChange = (id: string) => {
 		setPresetId(id);
 		const preset = AGENT_PRESETS.find((p) => p.id === id);
 		if (preset) {
-			if (preset.defaultLLMProvider) setLlmProvider(preset.defaultLLMProvider);
-			if (preset.defaultLLMModel) setLlmModel(preset.defaultLLMModel);
-			if (preset.defaultSystemPrompt)
-				setSystemPrompt(preset.defaultSystemPrompt);
+			if (preset.defaultLLMProvider) {
+				setProviderSelect(preset.defaultLLMProvider);
+				setLlmBaseUrl(llmModels[preset.defaultLLMProvider]?.base_url ?? "");
+			}
+			if (preset.defaultLLMModel) setModelSelect(preset.defaultLLMModel);
+			if (preset.defaultSystemPrompt) setSystemPrompt(preset.defaultSystemPrompt);
 		}
 	};
 
 	const providers = Object.keys(llmModels);
-	const availableModels: string[] = llmModels[llmProvider] ?? [];
+	const availableModels: string[] =
+		providerSelect !== CUSTOM ? (llmModels[providerSelect]?.models ?? []) : [];
 
 	const createMutation = useMutation({
 		mutationFn: () =>
@@ -183,6 +211,9 @@ function CreateAgentDialog({
 	const step1Valid = !!(name.trim() && handle.trim() && roleId);
 	const canSubmit = !!(
 		step1Valid &&
+		llmProvider &&
+		llmModel &&
+		llmBaseUrl.trim() &&
 		llmApiKey.trim() &&
 		!createMutation.isPending
 	);
@@ -363,14 +394,7 @@ function CreateAgentDialog({
 							<div className="grid grid-cols-2 gap-3">
 								<div className="space-y-1.5">
 									<Label>Provider</Label>
-									<Select
-										value={llmProvider}
-										onValueChange={(v) => {
-											if (!v) return;
-											setLlmProvider(v);
-											setLlmModel(llmModels[v]?.[0] ?? "");
-										}}
-									>
+									<Select value={providerSelect} onValueChange={handleProviderChange}>
 										<SelectTrigger>
 											<SelectValue />
 										</SelectTrigger>
@@ -380,26 +404,54 @@ function CreateAgentDialog({
 													{p}
 												</SelectItem>
 											))}
+											<SelectSeparator />
+											<SelectItem value={CUSTOM}>Custom…</SelectItem>
 										</SelectContent>
 									</Select>
+									{providerSelect === CUSTOM && (
+										<Input
+											placeholder="my-provider"
+											value={customProvider}
+											onChange={(e) => setCustomProvider(e.target.value)}
+										/>
+									)}
 								</div>
 								<div className="space-y-1.5">
 									<Label>Model</Label>
-									<Select
-										value={llmModel}
-										onValueChange={(v) => v && setLlmModel(v)}
-									>
-										<SelectTrigger>
-											<SelectValue />
-										</SelectTrigger>
-										<SelectContent>
-											{availableModels.map((m) => (
-												<SelectItem key={m} value={m}>
-													{m}
-												</SelectItem>
-											))}
-										</SelectContent>
-									</Select>
+									{providerSelect === CUSTOM ? (
+										<Input
+											placeholder="my-model-name"
+											value={customModel}
+											onChange={(e) => setCustomModel(e.target.value)}
+										/>
+									) : (
+										<>
+											<Select
+												value={modelSelect}
+												onValueChange={(v) => v && setModelSelect(v)}
+											>
+												<SelectTrigger>
+													<SelectValue />
+												</SelectTrigger>
+												<SelectContent>
+													{availableModels.map((m) => (
+														<SelectItem key={m} value={m}>
+															{m}
+														</SelectItem>
+													))}
+													<SelectSeparator />
+													<SelectItem value={CUSTOM}>Custom…</SelectItem>
+												</SelectContent>
+											</Select>
+											{modelSelect === CUSTOM && (
+												<Input
+													placeholder="my-model-name"
+													value={customModel}
+													onChange={(e) => setCustomModel(e.target.value)}
+												/>
+											)}
+										</>
+									)}
 								</div>
 							</div>
 						</div>
@@ -442,13 +494,10 @@ function CreateAgentDialog({
 							</p>
 						</div>
 
-						{/* Base URL (optional) */}
+						{/* Base URL */}
 						<div className="space-y-1.5">
 							<Label htmlFor="agent-base-url">
-								Base URL{" "}
-								<span className="text-muted-foreground font-normal text-xs">
-									(optional)
-								</span>
+								Base URL <span className="text-destructive">*</span>
 							</Label>
 							<Input
 								id="agent-base-url"
@@ -456,9 +505,6 @@ function CreateAgentDialog({
 								value={llmBaseUrl}
 								onChange={(e) => setLlmBaseUrl(e.target.value)}
 							/>
-							<p className="text-[10px] text-muted-foreground">
-								Leave blank to use the provider's default endpoint.
-							</p>
 						</div>
 
 						{/* System Prompt */}

@@ -13,48 +13,25 @@ from ..models.agent import AgentConfig, AgentMCPServerRow, AgentSkillRow
 
 logger = logging.getLogger(__name__)
 
-# Providers that use an OpenAI-compatible REST API but are not natively
-# recognised by LiteLLM.  A base URL is transparently injected for them.
-_OPENAI_COMPAT_PROVIDER_URLS: dict[str, str] = {
-    "glm": "https://open.bigmodel.cn/api/paas/v4/",
-    "nvidia": "https://integrate.api.nvidia.com/v1",
-    "qwen": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-}
-
 
 def build_llm(agent_config: AgentConfig) -> LLM:
     """Construct an OpenHands SDK LLM instance from agent configuration."""
     provider = agent_config.llm_provider
-    llm_base_url = agent_config.llm_base_url
-
-    if not llm_base_url and provider in _OPENAI_COMPAT_PROVIDER_URLS:
-        llm_base_url = _OPENAI_COMPAT_PROVIDER_URLS[provider]
-
-    # When a base_url is present the endpoint is OpenAI-compatible;
-    # LiteLLM requires the "openai/" prefix in that case.
-    model_str = (
-        f"openai/{agent_config.llm_model}"
-        if llm_base_url
-        else f"{provider}/{agent_config.llm_model}"
-    )
+    model_str = f"{provider}/{agent_config.llm_model}"
 
     key_val = agent_config.llm_api_key_secret_ref or ""
     logger.info(
         "LLM config — model=%s base_url=%s api_key_set=%s",
         model_str,
-        llm_base_url or "(none)",
+        agent_config.llm_base_url,
         bool(key_val),
     )
-
-    llm_kwargs: dict = {
-        "model": model_str,
-        "api_key": SecretStr(key_val),
-        "stream": True,
-    }
-    if llm_base_url:
-        llm_kwargs["base_url"] = llm_base_url
-
-    return LLM(**llm_kwargs)
+    return LLM(
+        model=model_str,
+        api_key=SecretStr(key_val),
+        base_url=agent_config.llm_base_url,
+        stream=True,
+    )
 
 
 def build_skills(db_skills: list[AgentSkillRow]) -> list[Skill]:
