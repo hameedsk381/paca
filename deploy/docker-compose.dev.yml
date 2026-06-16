@@ -247,3 +247,7 @@ volumes:
   bun_cache:
   minio_data:
   realtime_node_modules:
+
+networks:
+  default:
+    name: paca_net

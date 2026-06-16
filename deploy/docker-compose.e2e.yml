@@ -213,3 +213,7 @@ volumes:
   postgres_data:
   valkey_data:
   minio_data:
+
+networks:
+  default:
+    name: paca_net

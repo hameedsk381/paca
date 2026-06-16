@@ -240,3 +240,7 @@ volumes:
   backend_plugins:
   frontend_plugins:
   mcp_plugins:
+
+networks:
+  default:
+    name: paca_net
