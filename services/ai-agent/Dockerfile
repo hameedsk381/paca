@@ -8,6 +8,7 @@ WORKDIR /app
 COPY pyproject.toml .
 RUN uv pip install --system -e .
 
+COPY data/ ./data/
 COPY src/ ./src/
 
 ENV PYTHONPATH=/app
