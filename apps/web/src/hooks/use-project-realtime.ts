@@ -26,9 +26,10 @@
 // safer and simpler.
 
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import {
 	connectSocket,
+	isConnected,
 	joinProject,
 	leaveProject,
 	type RealtimeEvent,
@@ -36,12 +37,26 @@ import {
 
 export function useProjectRealtime(projectId: string): void {
 	const queryClient = useQueryClient();
+	const [connectionLost, setConnectionLost] = useState(false);
 
 	useEffect(() => {
 		const socket = connectSocket();
 
 		// Subscribe to the project rooms.
 		joinProject(projectId);
+
+		function onConnect() {
+			setConnectionLost(false);
+			joinProject(projectId);
+		}
+
+		function onDisconnect() {
+			setConnectionLost(true);
+		}
+
+		function onConnectError() {
+			setConnectionLost(true);
+		}
 
 		function handleEvent(event: RealtimeEvent) {
 			const { type } = event;
@@ -107,9 +122,15 @@ export function useProjectRealtime(projectId: string): void {
 		}
 
 		socket.on("event", handleEvent);
+		socket.on("connect", onConnect);
+		socket.on("disconnect", onDisconnect);
+		socket.on("connect_error", onConnectError);
 
 		return () => {
 			socket.off("event", handleEvent);
+			socket.off("connect", onConnect);
+			socket.off("disconnect", onDisconnect);
+			socket.off("connect_error", onConnectError);
 			leaveProject(projectId);
 		};
 	}, [projectId, queryClient]);

@@ -31,14 +31,22 @@ export function connectSocket(): Socket {
 
 	socket = io(REALTIME_URL, {
 		path: SOCKET_PATH,
-		// Cookies are sent automatically by the browser (HttpOnly access_token).
 		withCredentials: true,
-		// Prefer WebSocket; fall back to polling only when necessary.
 		transports: ["websocket", "polling"],
 		autoConnect: true,
+		timeout: 15000,
+		reconnection: true,
+		reconnectionAttempts: 10,
+		reconnectionDelay: 2000,
+		reconnectionDelayMax: 30000,
 	});
 
 	return socket;
+}
+
+/** Returns true if the socket is currently connected. */
+export function isConnected(): boolean {
+	return socket?.connected ?? false;
 }
 
 /** Disconnect and destroy the socket.  Call on logout. */
