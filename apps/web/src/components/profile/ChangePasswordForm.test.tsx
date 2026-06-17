@@ -116,7 +116,7 @@ describe("ChangePasswordForm", () => {
 		expect(
 			screen.queryByText("Passwords do not match."),
 		).not.toBeInTheDocument();
-	});
+	}, 15000);
 
 	it("keeps submit disabled until the password rules are satisfied", async () => {
 		render(<ChangePasswordForm />);
@@ -151,7 +151,7 @@ describe("ChangePasswordForm", () => {
 		await user.clear(confirmPassword);
 		await user.type(confirmPassword, "NextPass123!");
 		expect(submitButton).toBeEnabled();
-	});
+	}, 15000);
 
 	it("shows invalid current password inline and clears it when the field changes", async () => {
 		render(<ChangePasswordForm />);

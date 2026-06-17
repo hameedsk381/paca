@@ -88,6 +88,8 @@ import { ExtensionPoint } from "@/lib/plugins/extension-point";
 import { projectQueryOptions, projectsQueryOptions } from "@/lib/project-api";
 import { cn } from "@/lib/utils";
 import { UserMenu } from "./user-menu";
+import { ConfirmDialog } from "@/components/shared/confirm-dialog";
+import { toast } from "@/components/ui/sonner";
 
 // ── Docs Tree ─────────────────────────────────────────────────────────────────
 
@@ -162,13 +164,19 @@ function DocsDocRow({
 		},
 	});
 
+	const [showConfirmDelete, setShowConfirmDelete] = useState(false);
+
 	const deleteMutation = useMutation({
 		mutationFn: () => deleteDocument(projectId, doc.id),
 		onSuccess: () => {
 			qc.invalidateQueries({ queryKey: docQueryKeys.all(projectId) });
+			toast.success(`Document "${doc.title || "Untitled"}" deleted`);
 			if (isActive) {
 				navigate({ to: "/projects/$projectId", params: { projectId } });
 			}
+		},
+		onError: () => {
+			toast.error("Failed to delete document");
 		},
 	});
 
@@ -250,7 +258,7 @@ function DocsDocRow({
 							className="text-destructive focus:text-destructive"
 							onClick={(e) => {
 								e.stopPropagation();
-								deleteMutation.mutate();
+								setShowConfirmDelete(true);
 							}}
 						>
 							<Trash2 className="size-3.5 mr-2" />
@@ -259,6 +267,16 @@ function DocsDocRow({
 					</DropdownMenuContent>
 				</DropdownMenu>
 			)}
+
+			<ConfirmDialog
+				open={showConfirmDelete}
+				onOpenChange={setShowConfirmDelete}
+				title="Delete Document"
+				description={`Are you sure you want to delete "${doc.title || "Untitled"}"? This permanently deletes the document.`}
+				confirmText="Delete"
+				onConfirm={() => deleteMutation.mutate()}
+				isPending={deleteMutation.isPending}
+			/>
 		</div>
 	);
 }
@@ -300,10 +318,17 @@ function DocsFolderNode({
 			qc.invalidateQueries({ queryKey: docQueryKeys.folders(projectId) }),
 	});
 
+	const [showConfirmDelete, setShowConfirmDelete] = useState(false);
+
 	const deleteMutation = useMutation({
 		mutationFn: () => deleteFolder(projectId, folder.id),
-		onSuccess: () =>
-			qc.invalidateQueries({ queryKey: docQueryKeys.folders(projectId) }),
+		onSuccess: () => {
+			qc.invalidateQueries({ queryKey: docQueryKeys.folders(projectId) });
+			toast.success(`Folder "${folder.name}" deleted`);
+		},
+		onError: () => {
+			toast.error("Failed to delete folder");
+		},
 	});
 
 	const newDocMutation = useMutation({
@@ -395,7 +420,7 @@ function DocsFolderNode({
 									className="text-destructive focus:text-destructive"
 									onClick={(e) => {
 										e.stopPropagation();
-										deleteMutation.mutate();
+										setShowConfirmDelete(true);
 									}}
 								>
 									<Trash2 className="size-3.5 mr-2" />
@@ -405,6 +430,16 @@ function DocsFolderNode({
 						</DropdownMenu>
 					</div>
 				)}
+
+				<ConfirmDialog
+					open={showConfirmDelete}
+					onOpenChange={setShowConfirmDelete}
+					title="Delete Folder"
+					description={`Are you sure you want to delete "${folder.name}" and all of its contents? This action cannot be undone.`}
+					confirmText="Delete"
+					onConfirm={() => deleteMutation.mutate()}
+					isPending={deleteMutation.isPending}
+				/>
 			</div>
 
 			{/* Children */}
@@ -566,6 +601,16 @@ function DocsSidebarSection({ projectId }: { projectId: string }) {
 		},
 	});
 
+	useEffect(() => {
+		const handleTrigger = () => {
+			if (canWrite) {
+				newDocMutation.mutate();
+			}
+		};
+		window.addEventListener("trigger-create-doc", handleTrigger);
+		return () => window.removeEventListener("trigger-create-doc", handleTrigger);
+	}, [canWrite, newDocMutation]);
+
 	const newFolderMutation = useMutation({
 		mutationFn: (name: string) => createFolder(projectId, { name }),
 		onSuccess: () =>
@@ -631,8 +676,19 @@ function DocsSidebarSection({ projectId }: { projectId: string }) {
 				<SidebarGroupContent>
 					<div className="py-1 space-y-0.5">
 						{isEmpty ? (
-							<div className="px-4 py-2 text-[11.5px] text-sidebar-foreground/40 italic">
-								No documents yet
+							<div className="px-3.5 py-4 text-center border border-dashed border-sidebar-border/30 rounded-lg mx-3 my-1">
+								<p className="text-[11px] text-sidebar-foreground/50 font-medium">No documents yet</p>
+								{canWrite && (
+									<button
+										type="button"
+										onClick={() => newDocMutation.mutate()}
+										disabled={newDocMutation.isPending}
+										className="mt-2 text-[10px] font-semibold text-primary hover:text-primary/80 transition-colors flex items-center justify-center gap-1 mx-auto disabled:opacity-50"
+									>
+										<Plus className="size-3" />
+										Create document
+									</button>
+								)}
 							</div>
 						) : (
 							<>

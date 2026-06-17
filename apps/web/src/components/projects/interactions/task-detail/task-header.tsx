@@ -29,6 +29,7 @@ import type { Task } from "@/lib/interaction-api";
 import { deleteTask } from "@/lib/interaction-api";
 import { cn } from "@/lib/utils";
 import { formatDate, shortId } from "./helpers";
+import { toast } from "@/components/ui/sonner";
 
 interface TaskHeaderProps {
 	task: Task;
@@ -72,8 +73,12 @@ export function TaskHeader({
 					},
 				});
 			}
+			toast.success(`Task "${task.title}" deleted`);
 			setConfirmDelete(false);
 			onDeleted?.();
+		},
+		onError: () => {
+			toast.error("Failed to delete task");
 		},
 	});
 

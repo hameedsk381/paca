@@ -247,6 +247,7 @@ export function TaskActivityPane({
 			entityId={taskId}
 			queryKey={queryKey}
 			queryFn={() => listTaskActivities(projectId, taskId)}
+			members={membersData}
 			addComment={
 				canEdit ? (blocks) => addComment(projectId, taskId, blocks) : undefined
 			}

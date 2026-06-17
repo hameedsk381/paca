@@ -1,5 +1,5 @@
 import { ChevronDown, Plus } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { getTaskTypeIconComponent } from "@/components/projects/task-types/task-type-icons";
 import {
@@ -27,6 +27,18 @@ export function AddTaskRow({
 	const [value, setValue] = useState("");
 	const [selectedTypeId, setSelectedTypeId] = useState<string | null>(null);
 	const inputRef = useRef<HTMLInputElement>(null);
+	const btnRef = useRef<HTMLButtonElement>(null);
+
+	useEffect(() => {
+		const handleTrigger = () => {
+			const allButtons = document.querySelectorAll('[data-add-task-btn="true"]');
+			if (allButtons.length > 0 && allButtons[0] === btnRef.current) {
+				openForm();
+			}
+		};
+		window.addEventListener("trigger-create-task", handleTrigger);
+		return () => window.removeEventListener("trigger-create-task", handleTrigger);
+	}, []);
 
 	const defaultType =
 		taskTypes.find((tt) => tt.is_default) ?? taskTypes[0] ?? null;
@@ -120,6 +132,8 @@ export function AddTaskRow({
 		if (variant === "board") {
 			return (
 				<button
+					ref={btnRef}
+					data-add-task-btn="true"
 					type="button"
 					onClick={openForm}
 					className="flex w-full items-center gap-1.5 rounded-lg bg-primary/8 text-primary/80 hover:bg-primary/15 hover:text-primary px-2.5 py-1.5 text-[11px] font-semibold transition-all duration-150"
@@ -131,6 +145,8 @@ export function AddTaskRow({
 		}
 		return (
 			<button
+				ref={btnRef}
+				data-add-task-btn="true"
 				type="button"
 				onClick={openForm}
 				className="flex items-center gap-1.5 px-4 py-2.5 text-[12px] text-muted-foreground/70 hover:text-foreground hover:bg-muted/30 transition-all duration-150 w-full"

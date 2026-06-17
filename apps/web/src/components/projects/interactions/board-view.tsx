@@ -1,7 +1,8 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-
+import { toast } from "@/components/ui/sonner";
+import { useIsMobile } from "@/hooks/use-mobile";
 import {
 	type Sprint,
 	type Task,
@@ -29,6 +30,33 @@ import {
 	getTaskSwimlaneKey,
 	type TaskFieldUpdate,
 } from "./view-utils";
+
+function getUndoUpdate(task: Task, update: TaskFieldUpdate): TaskFieldUpdate {
+	const undo: TaskFieldUpdate = {};
+	if ("status_id" in update) {
+		undo.status_id = task.status_id;
+	}
+	if ("sprint_id" in update) {
+		undo.sprint_id = task.sprint_id;
+	}
+	if ("assignee_id" in update) {
+		undo.assignee_id = task.assignee_id;
+	}
+	if ("importance" in update) {
+		undo.importance = task.importance;
+	}
+	if ("task_type_id" in update) {
+		undo.task_type_id = task.task_type_id;
+	}
+	if ("custom_fields" in update && update.custom_fields) {
+		const customUndo: Record<string, any> = {};
+		for (const key of Object.keys(update.custom_fields)) {
+			customUndo[key] = task.custom_fields?.[key] ?? null;
+		}
+		undo.custom_fields = customUndo;
+	}
+	return undo;
+}
 
 // ── Props ────────────────────────────────────────────────────────────────────
 
@@ -133,6 +161,49 @@ export function BoardView({
 		}) => updateTask(projectId, taskId, update),
 		onSuccess: () => qc.invalidateQueries({ queryKey: tasksQueryKey }),
 	});
+
+	const executeMoveWithUndo = (
+		taskId: string,
+		update: TaskFieldUpdate,
+		task: Task,
+		newLabel: string,
+	) => {
+		const undoUpdate = getUndoUpdate(task, update);
+
+		if (onMoveToColumn) {
+			onMoveToColumn(taskId, update);
+		} else {
+			updateMutation.mutate({ taskId, update });
+		}
+
+		toast.success(`Task moved to "${newLabel}"`, {
+			duration: 5000,
+			action: {
+				label: "Undo",
+				onClick: () => {
+					if (onMoveToColumn) {
+						onMoveToColumn(taskId, undoUpdate);
+					} else {
+						updateMutation.mutate({ taskId, update: undoUpdate });
+					}
+
+					toast.success("Task movement undone", {
+						duration: 5000,
+						action: {
+							label: "Redo",
+							onClick: () => {
+								if (onMoveToColumn) {
+									onMoveToColumn(taskId, update);
+								} else {
+									updateMutation.mutate({ taskId, update });
+								}
+							},
+						},
+					});
+				},
+			},
+		});
+	};
 
 	// Inline field update handler used by TaskCard — delegates to onMoveToColumn
 	// (which does proper cache invalidation) or falls back to updateMutation.
@@ -261,11 +332,7 @@ export function BoardView({
 			if (isStatusGrouping) {
 				update.sprint_id = task.sprint_id;
 			}
-			if (onMoveToColumn) {
-				onMoveToColumn(taskId, update);
-			} else {
-				updateMutation.mutate({ taskId, update });
-			}
+			executeMoveWithUndo(taskId, update, task, colDef.label);
 		}
 		setDraggingId(null);
 		setOverColumnKey(null);
@@ -341,11 +408,7 @@ export function BoardView({
 		}
 
 		if (Object.keys(updates).length > 0) {
-			if (onMoveToColumn) {
-				onMoveToColumn(taskId, updates);
-			} else {
-				updateMutation.mutate({ taskId, update: updates });
-			}
+			executeMoveWithUndo(taskId, updates, task, colDef.label);
 		} else if (manualSort && taskId !== targetTaskId && !colChanged) {
 			// Reorder within same column
 			const current = getColumnTasks(colDef.key);
@@ -426,11 +489,7 @@ export function BoardView({
 		}
 
 		if (Object.keys(updates).length > 0) {
-			if (onMoveToColumn) {
-				onMoveToColumn(taskId, updates);
-			} else {
-				updateMutation.mutate({ taskId, update: updates });
-			}
+			executeMoveWithUndo(taskId, updates, task, colDef.label);
 		}
 		setDraggingId(null);
 		setOverColumnKey(null);
@@ -481,6 +540,73 @@ export function BoardView({
 		viewConfig?.filters?.statuses,
 		statuses,
 	]);
+
+	const isMobile = useIsMobile();
+	const [activeColumnIndex, setActiveColumnIndex] = useState(0);
+
+	const clampedActiveIndex = Math.max(
+		0,
+		Math.min(activeColumnIndex, effectiveColumnDefs.length - 1),
+	);
+
+	const mobileColumnDefs = useMemo(() => {
+		if (isMobile && effectiveColumnDefs.length > 0) {
+			return [effectiveColumnDefs[clampedActiveIndex]].filter(Boolean);
+		}
+		return effectiveColumnDefs;
+	}, [isMobile, effectiveColumnDefs, clampedActiveIndex]);
+
+	useEffect(() => {
+		if (!isMobile) return;
+		const handleKeyDown = (e: KeyboardEvent) => {
+			const activeEl = document.activeElement;
+			if (
+				activeEl &&
+				(activeEl.tagName === "INPUT" ||
+					activeEl.tagName === "TEXTAREA" ||
+					activeEl.getAttribute("contenteditable") === "true")
+			) {
+				return;
+			}
+
+			if (e.key === "ArrowLeft") {
+				e.preventDefault();
+				setActiveColumnIndex((prev) => Math.max(prev - 1, 0));
+			} else if (e.key === "ArrowRight") {
+				e.preventDefault();
+				setActiveColumnIndex((prev) =>
+					Math.min(prev + 1, effectiveColumnDefs.length - 1),
+				);
+			}
+		};
+
+		window.addEventListener("keydown", handleKeyDown);
+		return () => window.removeEventListener("keydown", handleKeyDown);
+	}, [isMobile, effectiveColumnDefs.length]);
+
+	const [touchStartX, setTouchStartX] = useState<number | null>(null);
+
+	const handleTouchStart = (e: React.TouchEvent) => {
+		setTouchStartX(e.touches[0].clientX);
+	};
+
+	const handleTouchEnd = (e: React.TouchEvent) => {
+		if (touchStartX === null) return;
+		const touchEndX = e.changedTouches[0].clientX;
+		const diffX = touchStartX - touchEndX;
+		const swipeThreshold = 50;
+
+		if (diffX > swipeThreshold) {
+			// Swipe Left -> next column
+			setActiveColumnIndex((prev) =>
+				Math.min(prev + 1, effectiveColumnDefs.length - 1),
+			);
+		} else if (diffX < -swipeThreshold) {
+			// Swipe Right -> previous column
+			setActiveColumnIndex((prev) => Math.max(prev - 1, 0));
+		}
+		setTouchStartX(null);
+	};
 
 	// ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -667,183 +793,273 @@ export function BoardView({
 		);
 	};
 
-	if (hasSwimlanes) {
-		// ── Swimlanes-outer layout: swimlane rows → column cells inside ──────
-		// Shared singleton swimlane def for "no swimlane" filter
-		const noSwim: ColumnGroupDef = {
+	const boardContent = (() => {
+		if (hasSwimlanes) {
+			const noSwim: ColumnGroupDef = {
+				key: "__all",
+				label: "",
+				fieldValue: null,
+			};
+			const visibleSwimDefs = swimlaneDefs.filter((s) => s.key !== "__all");
+
+			return (
+				<div className="flex flex-1 min-h-0 flex-col overflow-auto">
+					<div className="min-w-max px-6 pt-5 pb-8 flex flex-col gap-0">
+						{/* Sticky column-header row */}
+						<div className="flex gap-4 pb-2 sticky top-0 z-10 bg-background border-b border-border/20 mb-1">
+							{/* Swimlane label placeholder to align with row labels */}
+							<div className="w-36 shrink-0" />
+							{mobileColumnDefs.map((colDef) => {
+								const isCollapsed = isMobile
+									? false
+									: collapsedColumns.has(colDef.key);
+								const displayCount = getDisplayCount(colDef.key);
+
+								if (isCollapsed) {
+									return (
+										<div
+											key={colDef.key}
+											className="w-10 shrink-0 flex flex-col items-center gap-1.5 pt-1"
+										>
+											<button
+												type="button"
+												onClick={() => toggleCollapse(colDef.key)}
+												className="flex size-7 shrink-0 items-center justify-center rounded-lg hover:bg-muted/60 transition-colors"
+												title="Expand column"
+											>
+												<ChevronRight className="size-3.5 text-muted-foreground" />
+											</button>
+											<span className="rounded-full bg-muted/60 px-2 py-0.5 text-[10px] font-bold text-muted-foreground/70 tabular-nums">
+												{displayCount}
+											</span>
+											{colDef.color && (
+												<span
+													className="size-1.75 rounded-full shrink-0"
+													style={{
+														background: colDef.color,
+														boxShadow: `0 0 6px ${colDef.color}40`,
+													}}
+												/>
+											)}
+											<div className="flex flex-1 items-start justify-center pt-1">
+												<span
+													className="text-[11px] font-bold text-foreground/60 tracking-[0.08em] uppercase whitespace-nowrap"
+													style={{
+														writingMode: "vertical-rl",
+														transform: "rotate(180deg)",
+													}}
+												>
+													{colDef.label}
+												</span>
+											</div>
+										</div>
+									);
+								}
+
+								return (
+									<div
+										key={colDef.key}
+										className={cn(
+											"shrink-0",
+											isMobile ? "w-full flex-1" : "w-72",
+										)}
+									>
+										{!isMobile && renderColHeader(colDef)}
+									</div>
+								);
+							})}
+						</div>
+
+						{/* One row per swimlane */}
+						{(visibleSwimDefs.length > 0 ? visibleSwimDefs : [noSwim]).map(
+							(swimDef) => (
+								<div
+									key={swimDef.key}
+									className="flex gap-4 py-3 border-b border-border/15 last:border-0"
+								>
+									{/* Swimlane label */}
+									<div className="w-36 shrink-0 flex items-start pt-1 gap-2">
+										{swimDef.color && (
+											<span
+												className="size-1.5 rounded-full mt-1.5 shrink-0"
+												style={{ background: swimDef.color }}
+											/>
+										)}
+										<span className="text-[11px] font-bold uppercase tracking-[0.08em] text-foreground/70 wrap-break-word leading-snug">
+											{swimDef.label}
+										</span>
+									</div>
+
+									{/* Column cells */}
+									{mobileColumnDefs.map((colDef) => {
+										const isCollapsed = isMobile
+											? false
+											: collapsedColumns.has(colDef.key);
+										return (
+											<div
+												key={colDef.key}
+												className={cn(
+													"shrink-0",
+													isMobile
+														? "w-full flex-1"
+														: isCollapsed
+															? "w-10"
+															: "w-72",
+												)}
+											>
+												{!isCollapsed && renderCellCards(colDef, swimDef)}
+											</div>
+										);
+									})}
+								</div>
+							),
+						)}
+					</div>
+				</div>
+			);
+		}
+
+		// ── No-swimlane layout ──
+		const noSwimAll: ColumnGroupDef = {
 			key: "__all",
 			label: "",
 			fieldValue: null,
 		};
-		// Only use defined defs; filter out the __all sentinel
-		const visibleSwimDefs = swimlaneDefs.filter((s) => s.key !== "__all");
 
 		return (
-			<div className="flex flex-1 min-h-0 flex-col overflow-auto">
-				<div className="min-w-max px-6 pt-5 pb-8 flex flex-col gap-0">
-					{/* Sticky column-header row */}
-					<div className="flex gap-4 pb-2 sticky top-0 z-10 bg-background border-b border-border/20 mb-1">
-						{/* Swimlane label placeholder to align with row labels */}
-						<div className="w-36 shrink-0" />
-						{effectiveColumnDefs.map((colDef) => {
-							const isCollapsed = collapsedColumns.has(colDef.key);
-							const displayCount = getDisplayCount(colDef.key);
+			<div className="flex flex-1 min-h-0 gap-4 overflow-x-auto px-6 py-5 pb-8">
+				{mobileColumnDefs.map((colDef) => {
+					const isCollapsed = isMobile
+						? false
+						: collapsedColumns.has(colDef.key);
+					const displayCount = getDisplayCount(colDef.key);
 
-							if (isCollapsed) {
-								return (
-									<div
-										key={colDef.key}
-										className="w-10 shrink-0 flex flex-col items-center gap-1.5 pt-1"
-									>
-										<button
-											type="button"
-											onClick={() => toggleCollapse(colDef.key)}
-											className="flex size-7 shrink-0 items-center justify-center rounded-lg hover:bg-muted/60 transition-colors"
-											title="Expand column"
-										>
-											<ChevronRight className="size-3.5 text-muted-foreground" />
-										</button>
-										<span className="rounded-full bg-muted/60 px-2 py-0.5 text-[10px] font-bold text-muted-foreground/70 tabular-nums">
-											{displayCount}
-										</span>
-										{colDef.color && (
-											<span
-												className="size-1.75 rounded-full shrink-0"
-												style={{
-													background: colDef.color,
-													boxShadow: `0 0 6px ${colDef.color}40`,
-												}}
-											/>
-										)}
-										<div className="flex flex-1 items-start justify-center pt-1">
-											<span
-												className="text-[11px] font-bold text-foreground/60 tracking-[0.08em] uppercase whitespace-nowrap"
-												style={{
-													writingMode: "vertical-rl",
-													transform: "rotate(180deg)",
-												}}
-											>
-												{colDef.label}
-											</span>
-										</div>
-									</div>
-								);
-							}
-
-							return (
-								<div key={colDef.key} className="w-72 shrink-0">
-									{renderColHeader(colDef)}
-								</div>
-							);
-						})}
-					</div>
-
-					{/* One row per swimlane */}
-					{(visibleSwimDefs.length > 0 ? visibleSwimDefs : [noSwim]).map(
-						(swimDef) => (
+					if (isCollapsed) {
+						return (
 							<div
-								key={swimDef.key}
-								className="flex gap-4 py-3 border-b border-border/15 last:border-0"
+								key={colDef.key}
+								data-column-key={colDef.key}
+								className="flex w-10 shrink-0 flex-col items-center gap-2 pt-1"
 							>
-								{/* Swimlane label */}
-								<div className="w-36 shrink-0 flex items-start pt-1 gap-2">
-									{swimDef.color && (
-										<span
-											className="size-1.5 rounded-full mt-1.5 shrink-0"
-											style={{ background: swimDef.color }}
-										/>
-									)}
-									<span className="text-[11px] font-bold uppercase tracking-[0.08em] text-foreground/70 wrap-break-word leading-snug">
-										{swimDef.label}
+								<button
+									type="button"
+									onClick={() => toggleCollapse(colDef.key)}
+									className="flex size-7 shrink-0 items-center justify-center rounded-lg hover:bg-muted/60 transition-colors"
+									title="Expand column"
+								>
+									<ChevronRight className="size-3.5 text-muted-foreground" />
+								</button>
+								<span className="rounded-full bg-muted/60 px-2 py-0.5 text-[10px] font-bold text-muted-foreground/70 tabular-nums">
+									{displayCount}
+								</span>
+								{colDef.color && (
+									<span
+										className="size-1.75 rounded-full shrink-0"
+										style={{
+											background: colDef.color,
+											boxShadow: `0 0 6px ${colDef.color}40`,
+										}}
+									/>
+								)}
+								<div className="flex flex-1 items-start justify-center pt-1">
+									<span
+										className="text-[11px] font-bold text-foreground/60 tracking-[0.08em] uppercase whitespace-nowrap"
+										style={{
+											writingMode: "vertical-rl",
+											transform: "rotate(180deg)",
+										}}
+									>
+										{colDef.label}
 									</span>
 								</div>
-
-								{/* Column cells */}
-								{effectiveColumnDefs.map((colDef) => {
-									const isCollapsed = collapsedColumns.has(colDef.key);
-									return (
-										<div
-											key={colDef.key}
-											className={cn("shrink-0", isCollapsed ? "w-10" : "w-72")}
-										>
-											{!isCollapsed && renderCellCards(colDef, swimDef)}
-										</div>
-									);
-								})}
 							</div>
-						),
+						);
+					}
+
+					return (
+						<div
+							key={colDef.key}
+							data-column-key={colDef.key}
+							className={cn(
+								"flex flex-col gap-2.5 shrink-0",
+								isMobile ? "w-full flex-1" : "w-72",
+							)}
+						>
+							{!isMobile && renderColHeader(colDef)}
+							{renderCellCards(colDef, noSwimAll)}
+						</div>
+					);
+				})}
+			</div>
+		);
+	})();
+
+	if (isMobile) {
+		return (
+			<div className="flex flex-1 flex-col min-h-0">
+				{/* Mobile Column Tabs Header */}
+				<div className="flex items-center gap-2 px-6 py-3 bg-muted/20 border-b border-border/40 overflow-x-auto shrink-0 select-none no-scrollbar">
+					{effectiveColumnDefs.map((colDef, idx) => {
+						const isActive = idx === clampedActiveIndex;
+						const displayCount = getDisplayCount(colDef.key);
+						return (
+							<button
+								key={colDef.key}
+								type="button"
+								onClick={() => setActiveColumnIndex(idx)}
+								className={cn(
+									"flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all border cursor-pointer",
+									isActive
+										? "bg-background text-foreground border-border/60 shadow-sm"
+										: "bg-transparent text-muted-foreground border-transparent hover:text-foreground hover:bg-muted/40",
+								)}
+							>
+								{colDef.color && (
+									<span
+										className="size-1.5 rounded-full shrink-0"
+										style={{ background: colDef.color }}
+									/>
+								)}
+								<span>{colDef.label}</span>
+								<span className="rounded-full bg-muted/60 px-1.5 py-0.25 text-[9px] font-bold text-muted-foreground/75 tabular-nums">
+									{displayCount}
+								</span>
+							</button>
+						);
+					})}
+				</div>
+
+				{/* Single Swipeable Column Content wrapper */}
+				<div
+					onTouchStart={handleTouchStart}
+					onTouchEnd={handleTouchEnd}
+					className="flex flex-1 min-h-0 flex-col overflow-y-auto relative"
+				>
+					{boardContent}
+
+					{/* Navigation Chevrons overlays on mobile */}
+					{clampedActiveIndex > 0 && (
+						<button
+							type="button"
+							onClick={() => setActiveColumnIndex((prev) => prev - 1)}
+							className="absolute left-2 top-1/2 -translate-y-1/2 flex size-8 items-center justify-center rounded-full bg-background/80 backdrop-blur-sm border border-border shadow-md text-muted-foreground hover:text-foreground active:scale-95 transition-all z-20 cursor-pointer"
+						>
+							<ChevronLeft className="size-4" />
+						</button>
+					)}
+					{clampedActiveIndex < effectiveColumnDefs.length - 1 && (
+						<button
+							type="button"
+							onClick={() => setActiveColumnIndex((prev) => prev + 1)}
+							className="absolute right-2 top-1/2 -translate-y-1/2 flex size-8 items-center justify-center rounded-full bg-background/80 backdrop-blur-sm border border-border shadow-md text-muted-foreground hover:text-foreground active:scale-95 transition-all z-20 cursor-pointer"
+						>
+							<ChevronRight className="size-4" />
+						</button>
 					)}
 				</div>
 			</div>
 		);
 	}
 
-	// ── No-swimlane layout: horizontal columns ────────────────────────────────
-	const noSwimAll: ColumnGroupDef = {
-		key: "__all",
-		label: "",
-		fieldValue: null,
-	};
-
-	return (
-		<div className="flex flex-1 min-h-0 gap-4 overflow-x-auto px-6 py-5 pb-8">
-			{effectiveColumnDefs.map((colDef) => {
-				const isCollapsed = collapsedColumns.has(colDef.key);
-				const displayCount = getDisplayCount(colDef.key);
-
-				if (isCollapsed) {
-					return (
-						<div
-							key={colDef.key}
-							data-column-key={colDef.key}
-							className="flex w-10 shrink-0 flex-col items-center gap-2 pt-1"
-						>
-							<button
-								type="button"
-								onClick={() => toggleCollapse(colDef.key)}
-								className="flex size-7 shrink-0 items-center justify-center rounded-lg hover:bg-muted/60 transition-colors"
-								title="Expand column"
-							>
-								<ChevronRight className="size-3.5 text-muted-foreground" />
-							</button>
-							<span className="rounded-full bg-muted/60 px-2 py-0.5 text-[10px] font-bold text-muted-foreground/70 tabular-nums">
-								{displayCount}
-							</span>
-							{colDef.color && (
-								<span
-									className="size-1.75 rounded-full shrink-0"
-									style={{
-										background: colDef.color,
-										boxShadow: `0 0 6px ${colDef.color}40`,
-									}}
-								/>
-							)}
-							<div className="flex flex-1 items-start justify-center pt-1">
-								<span
-									className="text-[11px] font-bold text-foreground/60 tracking-[0.08em] uppercase whitespace-nowrap"
-									style={{
-										writingMode: "vertical-rl",
-										transform: "rotate(180deg)",
-									}}
-								>
-									{colDef.label}
-								</span>
-							</div>
-						</div>
-					);
-				}
-
-				return (
-					<div
-						key={colDef.key}
-						data-column-key={colDef.key}
-						className="flex w-72 shrink-0 flex-col gap-2.5"
-					>
-						{renderColHeader(colDef)}
-						{renderCellCards(colDef, noSwimAll)}
-					</div>
-				);
-			})}
-		</div>
-	);
+	return boardContent;
 }

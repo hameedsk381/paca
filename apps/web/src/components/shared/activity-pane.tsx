@@ -5,6 +5,7 @@ import {
 	useQueryClient,
 } from "@tanstack/react-query";
 import {
+	Bot,
 	GitBranch,
 	Loader2,
 	MessageSquare,
@@ -23,6 +24,8 @@ import {
 	type CommentEditorHandle,
 } from "@/components/shared/comment-blocknote";
 import { ContentDiffDialog } from "@/components/shared/content-diff";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import type { ProjectMember } from "@/lib/project-api";
 import { Button } from "@/components/ui/button";
 import {
 	DropdownMenu,
@@ -62,6 +65,7 @@ export interface ActivityPaneConfig<T extends ActivityEntry> {
 	sortAscending?: boolean;
 	nameMaps?: Record<string, Record<string, string>>;
 	currentUserId?: string;
+	members?: ProjectMember[];
 }
 
 export function ActivityPane<T extends ActivityEntry>({
@@ -78,6 +82,7 @@ export function ActivityPane<T extends ActivityEntry>({
 	getCommentBlocks,
 	sortAscending = false,
 	currentUserId,
+	members = [],
 }: ActivityPaneConfig<T>) {
 	const editorRef = useRef<CommentEditorHandle>(null);
 	const scrollAreaRef = useRef<HTMLDivElement>(null);
@@ -98,6 +103,69 @@ export function ActivityPane<T extends ActivityEntry>({
 		);
 	}, [activities, sortAscending]);
 
+	const groupedActivities = useMemo(() => {
+		const result: Array<{
+			id: string;
+			actor_id?: string | null;
+			actor_name: string;
+			actor_username: string;
+			created_at: string;
+			isComment: boolean;
+			activities: T[];
+		}> = [];
+
+		const chronological = [...activities].sort(
+			(a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+		);
+
+		for (const entry of chronological) {
+			const isComment = entry.activity_type === "comment";
+			if (isComment) {
+				result.push({
+					id: entry.id,
+					actor_id: entry.actor_id,
+					actor_name: entry.actor_name,
+					actor_username: entry.actor_username,
+					created_at: entry.created_at,
+					isComment: true,
+					activities: [entry],
+				});
+				continue;
+			}
+
+			const prevGroup = result[result.length - 1];
+			const timeDiff = prevGroup
+				? Math.abs(new Date(entry.created_at).getTime() - new Date(prevGroup.created_at).getTime())
+				: Number.MAX_VALUE;
+
+			if (
+				prevGroup &&
+				!prevGroup.isComment &&
+				prevGroup.actor_id === entry.actor_id &&
+				prevGroup.actor_name === entry.actor_name &&
+				timeDiff < 5 * 60 * 1000
+			) {
+				prevGroup.activities.push(entry);
+				prevGroup.created_at = entry.created_at;
+			} else {
+				result.push({
+					id: entry.id,
+					actor_id: entry.actor_id,
+					actor_name: entry.actor_name,
+					actor_username: entry.actor_username,
+					created_at: entry.created_at,
+					isComment: false,
+					activities: [entry],
+				});
+			}
+		}
+
+		if (!sortAscending) {
+			result.reverse();
+		}
+		return result;
+	}, [activities, sortAscending]);
+
 	// biome-ignore lint/correctness/useExhaustiveDependencies: activities is needed to scroll when new items are added
 	useEffect(() => {
 		requestAnimationFrame(() => {
@@ -108,7 +176,7 @@ export function ActivityPane<T extends ActivityEntry>({
 				viewport.scrollTop = viewport.scrollHeight;
 			}
 		});
-	}, [sorted]);
+	}, [groupedActivities]);
 
 	const addMutation = useMutation({
 		mutationFn: (blocks: unknown[]) => {
@@ -193,10 +261,10 @@ export function ActivityPane<T extends ActivityEntry>({
 							<p className="text-[12px] font-medium">No activity yet</p>
 						</div>
 					)}
-					{sorted.map((entry) => (
+					{groupedActivities.map((group) => (
 						<ActivityItemInner
-							key={entry.id}
-							entry={entry}
+							key={group.id}
+							group={group}
 							describeActivity={describeActivity}
 							getCommentBlocks={getCommentBlocks}
 							updateComment={updateComment}
@@ -206,6 +274,7 @@ export function ActivityPane<T extends ActivityEntry>({
 							isRevertable={isRevertable}
 							queryKey={queryKey}
 							currentUserId={currentUserId}
+							members={members}
 							editingCommentId={editingCommentId}
 							onStartEdit={(commentId) => {
 								setEditingCommentId(commentId);
@@ -292,7 +361,15 @@ function timeAgo(iso: string): string {
 }
 
 interface ActivityItemInnerProps<T extends ActivityEntry> {
-	entry: T;
+	group: {
+		id: string;
+		actor_id?: string | null;
+		actor_name: string;
+		actor_username: string;
+		created_at: string;
+		isComment: boolean;
+		activities: T[];
+	};
 	describeActivity: (entry: T) => ReactNode;
 	getCommentBlocks: (content: T["content"]) => unknown[] | null;
 	updateComment?: (commentId: string, blocks: unknown[]) => Promise<unknown>;
@@ -304,12 +381,91 @@ interface ActivityItemInnerProps<T extends ActivityEntry> {
 	isRevertable?: (entry: T) => boolean;
 	queryKey: QueryKey;
 	currentUserId?: string;
+	members?: ProjectMember[];
 	editingCommentId: string | null;
 	onStartEdit: (commentId: string) => void;
 }
 
+function ActivityActionMenu<T extends ActivityEntry>({
+	act,
+	diffContent,
+	canRevert,
+	onRevert,
+	queryKey,
+}: {
+	act: T;
+	diffContent: { old: unknown; new: unknown; title?: string } | null;
+	canRevert: boolean;
+	onRevert?: (entry: T) => Promise<void>;
+	queryKey: QueryKey;
+}) {
+	const qc = useQueryClient();
+	const [diffOpen, setDiffOpen] = useState(false);
+	const [revertPending, setRevertPending] = useState(false);
+	const [revertError, setRevertError] = useState<string | null>(null);
+
+	const handleRevert = async () => {
+		if (!onRevert) return;
+		setRevertPending(true);
+		setRevertError(null);
+		try {
+			await onRevert(act);
+			qc.invalidateQueries({ queryKey });
+		} catch {
+			setRevertError("Revert failed.");
+		} finally {
+			setRevertPending(false);
+		}
+	};
+
+	return (
+		<>
+			<DropdownMenu>
+				<DropdownMenuTrigger className="shrink-0 inline-flex items-center justify-center size-4.5 rounded-md text-muted-foreground/40 hover:text-foreground hover:bg-muted/60 transition-all duration-150">
+					<MoreVertical className="size-3" />
+				</DropdownMenuTrigger>
+				<DropdownMenuContent align="end" className="w-40">
+					{diffContent && (
+						<DropdownMenuItem onClick={() => setDiffOpen(true)}>
+							<GitBranch className="size-3.5 mr-2" />
+							View diff
+						</DropdownMenuItem>
+					)}
+					{canRevert && (
+						<DropdownMenuItem
+							onClick={handleRevert}
+							disabled={revertPending}
+						>
+							{revertPending ? (
+								<Loader2 className="size-3.5 mr-2 animate-spin" />
+							) : (
+								<RotateCcw className="size-3.5 mr-2" />
+							)}
+							Revert
+						</DropdownMenuItem>
+					)}
+				</DropdownMenuContent>
+			</DropdownMenu>
+			{diffContent && (
+				<ContentDiffDialog
+					open={diffOpen}
+					onOpenChange={setDiffOpen}
+					oldContent={diffContent.old}
+					newContent={diffContent.new}
+					title={diffContent.title ?? "Change diff"}
+				/>
+			)}
+			{revertError && (
+				<span className="text-[10px] text-destructive ml-1">
+					{revertError}
+				</span>
+			)}
+		</>
+	);
+}
+
 function ActivityItemInner<T extends ActivityEntry>({
-	entry,
+	group,
 	describeActivity,
 	getCommentBlocks,
 	updateComment,
@@ -319,17 +475,19 @@ function ActivityItemInner<T extends ActivityEntry>({
 	isRevertable,
 	queryKey,
 	currentUserId,
+	members = [],
 	editingCommentId,
 	onStartEdit,
 }: ActivityItemInnerProps<T>) {
 	const qc = useQueryClient();
+	const entry = group.activities[0];
 	const commentBlocks = getCommentBlocks(entry.content);
-	const [diffOpen, setDiffOpen] = useState(false);
-	const [revertPending, setRevertPending] = useState(false);
-	const [revertError, setRevertError] = useState<string | null>(null);
 
-	const isComment = entry.activity_type === "comment";
-	const displayName = entry.actor_name || entry.actor_username || "System";
+	const isComment = group.isComment;
+	const member = group.actor_id ? members.find((m) => m.id === group.actor_id) : null;
+	const isAgent = member?.member_type === "agent" || !!member?.agent_id || group.actor_username?.toLowerCase().includes("agent") || group.actor_username?.toLowerCase().includes("bot");
+	
+	const displayName = member?.full_name || member?.username || group.actor_name || group.actor_username || "System";
 	const initial = displayName.slice(0, 1).toUpperCase();
 
 	const isOwnComment =
@@ -342,14 +500,8 @@ function ActivityItemInner<T extends ActivityEntry>({
 
 	const isEditing = editingCommentId === entry.id;
 
-	const diffContent =
-		!isComment && getDiffContent ? getDiffContent(entry) : null;
-	const canRevert =
-		!isComment && !!onRevert && (isRevertable ? isRevertable(entry) : false);
-
 	const deleteMutation = useMutation({
 		mutationFn: () => {
-			// biome-ignore lint/style/noNonNullAssertion: guarded by canDelete
 			return deleteComment!(entry.id);
 		},
 		onSuccess: () => {
@@ -357,32 +509,25 @@ function ActivityItemInner<T extends ActivityEntry>({
 		},
 	});
 
-	const handleRevert = async () => {
-		if (!onRevert) return;
-		setRevertPending(true);
-		setRevertError(null);
-		try {
-			await onRevert(entry);
-			qc.invalidateQueries({ queryKey });
-		} catch {
-			setRevertError("Revert failed. Please try again.");
-		} finally {
-			setRevertPending(false);
-		}
-	};
-
 	return (
 		<div className="flex gap-3">
-			<div
-				className={cn(
-					"flex size-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold mt-0.5 ring-1",
-					isComment
-						? "bg-linear-to-br from-primary/20 to-primary/10 text-primary ring-primary/15"
-						: "bg-muted/40 text-muted-foreground/80 ring-border/20",
+			<Avatar size="sm" className="mt-0.5">
+				{isAgent ? (
+					<AvatarFallback className="bg-violet-100 dark:bg-violet-950/45 text-violet-600 dark:text-violet-400 ring-1 ring-violet-500/20">
+						<Bot className="size-3.5" />
+					</AvatarFallback>
+				) : (
+					<AvatarFallback className={cn(
+						"text-[10px] font-bold text-muted-foreground/80 ring-1 ring-border/20",
+						isComment
+							? "bg-linear-to-br from-primary/20 to-primary/10 text-primary ring-primary/15"
+							: "bg-muted/40"
+					)}>
+						{initial}
+					</AvatarFallback>
 				)}
-			>
-				{initial}
-			</div>
+			</Avatar>
+
 			<div className="flex-1 min-w-0">
 				{isComment ? (
 					<div className="group rounded-xl rounded-tl-lg border border-border/25 bg-card/70 px-3.5 py-2.5">
@@ -390,7 +535,10 @@ function ActivityItemInner<T extends ActivityEntry>({
 							<span className="text-[12px] font-semibold text-foreground">
 								{displayName}
 							</span>
-							<span className="text-[10px] text-muted-foreground/50">
+							<span 
+								className="text-[10px] text-muted-foreground/50 cursor-help"
+								title={new Date(entry.created_at).toLocaleString()}
+							>
 								{timeAgo(entry.created_at)}
 							</span>
 							{isEditing && (
@@ -437,62 +585,52 @@ function ActivityItemInner<T extends ActivityEntry>({
 				) : (
 					<div className="flex flex-col min-w-0">
 						<div className="group flex items-start gap-1 py-0.5">
-							<div className="flex-1 min-w-0 flex flex-wrap items-center gap-1.5">
-								<span className="text-[12px] font-medium text-foreground/80">
-									{displayName}
-								</span>
-								<span className="text-[12px] text-muted-foreground/70">
-									{describeActivity(entry)}
-								</span>
-								<span className="text-[10px] text-muted-foreground/45">
-									{timeAgo(entry.created_at)}
-								</span>
-							</div>
-							{(diffContent || canRevert) && (
-								<>
-									<DropdownMenu>
-										<DropdownMenuTrigger className="shrink-0 inline-flex items-center justify-center size-5 rounded-md text-muted-foreground/50 hover:text-foreground hover:bg-muted/60 opacity-0 group-hover:opacity-100 transition-all duration-150">
-											<MoreVertical className="size-3" />
-										</DropdownMenuTrigger>
-										<DropdownMenuContent align="end" className="w-40">
-											{diffContent && (
-												<DropdownMenuItem onClick={() => setDiffOpen(true)}>
-													<GitBranch className="size-3.5 mr-2" />
-													View diff
-												</DropdownMenuItem>
-											)}
-											{canRevert && (
-												<DropdownMenuItem
-													onClick={handleRevert}
-													disabled={revertPending}
-												>
-													{revertPending ? (
-														<Loader2 className="size-3.5 mr-2 animate-spin" />
-													) : (
-														<RotateCcw className="size-3.5 mr-2" />
-													)}
-													Revert
-												</DropdownMenuItem>
-											)}
-										</DropdownMenuContent>
-									</DropdownMenu>
-									{diffContent && (
-										<ContentDiffDialog
-											open={diffOpen}
-											onOpenChange={setDiffOpen}
-											oldContent={diffContent.old}
-											newContent={diffContent.new}
-											title={diffContent.title ?? "Change diff"}
-										/>
+							<div className="flex-1 min-w-0 flex flex-col gap-1">
+								<div className="flex items-center gap-1.5 flex-wrap">
+									<span className="text-[12px] font-semibold text-foreground">
+										{displayName}
+									</span>
+									{isAgent && (
+										<span className="inline-flex items-center rounded bg-violet-100 dark:bg-violet-950/50 px-1.5 py-0.5 text-[9px] font-bold text-violet-600 dark:text-violet-400 leading-none">
+											AI
+										</span>
 									)}
-								</>
-							)}
+									<span 
+										className="text-[10px] text-muted-foreground/45 cursor-help"
+										title={new Date(group.created_at).toLocaleString()}
+									>
+										{timeAgo(group.created_at)}
+									</span>
+								</div>
+								
+								<div className="flex flex-col gap-1 pl-0.5">
+									{group.activities.map((act) => {
+										const itemDiffContent = getDiffContent ? getDiffContent(act) : null;
+										const itemCanRevert = !!onRevert && (isRevertable ? isRevertable(act) : false);
+										
+										return (
+											<div key={act.id} className="group/action flex items-center gap-1.5 text-[12px] text-muted-foreground/75 min-w-0">
+												<span className="leading-relaxed">
+													{describeActivity(act)}
+												</span>
+												
+												{(itemDiffContent || itemCanRevert) && (
+													<div className="inline-flex opacity-0 group-hover/action:opacity-100 transition-opacity duration-150">
+														<ActivityActionMenu
+															act={act}
+															diffContent={itemDiffContent}
+															canRevert={itemCanRevert}
+															onRevert={onRevert}
+															queryKey={queryKey}
+														/>
+													</div>
+												)}
+											</div>
+										);
+									})}
+								</div>
+							</div>
 						</div>
-						{revertError && (
-							<p className="text-[11px] text-destructive/70 pl-0.5">
-								{revertError}
-							</p>
-						)}
 					</div>
 				)}
 			</div>

@@ -1,8 +1,20 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Task } from "@/lib/interaction-api";
 import type { TaskStatus, TaskType } from "@/lib/project-api";
 import { TaskCard } from "./task-card";
+
+const { mockUseQuery } = vi.hoisted(() => ({
+	mockUseQuery: vi.fn().mockReturnValue({ data: [] }),
+}));
+
+vi.mock("@tanstack/react-query", async (importOriginal) => {
+	const actual = await importOriginal() as any;
+	return {
+		...actual,
+		useQuery: mockUseQuery,
+	};
+});
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -44,6 +56,11 @@ const bugType: TaskType = {
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe("TaskCard", () => {
+	beforeEach(() => {
+		mockUseQuery.mockReset();
+		mockUseQuery.mockReturnValue({ data: [] });
+	});
+
 	it("renders the task title", () => {
 		render(
 			<TaskCard
@@ -174,5 +191,69 @@ describe("TaskCard", () => {
 		// assigned state: filled avatar circle with ring-primary/20
 		const assigneeEl = container.querySelector(".ring-primary\\/20");
 		expect(assigneeEl).toBeInTheDocument();
+	});
+
+	it("renders Epic progress bar when task is Epic and has subtasks", () => {
+		const epicType: TaskType = {
+			id: "type-epic",
+			project_id: "proj-1",
+			name: "Epic",
+			icon: null,
+			color: "#8B5CF6",
+			description: null,
+			is_system: true,
+			created_at: "2026-01-01T00:00:00Z",
+			updated_at: "2026-01-01T00:00:00Z",
+		};
+		const subtasks: Task[] = [
+			makeTask({ id: "st-1", status_id: "status-done" }),
+			makeTask({ id: "st-2", status_id: "status-todo" }),
+		];
+		const statuses: TaskStatus[] = [
+			{ id: "status-done", project_id: "proj-1", name: "Done", position: 1, category: "done", created_at: "2026-01-01", updated_at: "2026-01-01" },
+			{ id: "status-todo", project_id: "proj-1", name: "Todo", position: 2, category: "todo", created_at: "2026-01-01", updated_at: "2026-01-01" },
+		];
+
+		mockUseQuery.mockImplementation(({ queryKey }) => {
+			if (queryKey.includes("subtasks") || queryKey.includes("children")) {
+				return { data: subtasks };
+			}
+			return { data: [] };
+		});
+
+		render(
+			<TaskCard
+				task={makeTask({ task_type_id: "type-epic" })}
+				statuses={statuses}
+				taskTypes={[epicType]}
+			/>
+		);
+
+		expect(screen.getByText("Subtasks")).toBeInTheDocument();
+		expect(screen.getByText("1/2 (50%)")).toBeInTheDocument();
+	});
+
+	it("renders comment and attachment counts when present", () => {
+		mockUseQuery.mockImplementation(({ queryKey }) => {
+			if (queryKey.includes("activities")) {
+				return { data: [{ id: "act-1", activity_type: "comment" }] };
+			}
+			if (queryKey.includes("attachments")) {
+				return { data: [{ id: "att-1" }] };
+			}
+			return { data: [] };
+		});
+
+		render(
+			<TaskCard
+				task={makeTask()}
+				statuses={NO_STATUSES}
+				taskTypes={NO_TYPES}
+			/>
+		);
+
+		expect(screen.getByTitle("1 attachment")).toBeInTheDocument();
+		expect(screen.getByTitle("1 comment")).toBeInTheDocument();
+		expect(screen.getAllByText("1")).toHaveLength(2);
 	});
 });

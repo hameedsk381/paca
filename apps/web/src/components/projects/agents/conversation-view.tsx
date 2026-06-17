@@ -11,7 +11,7 @@ import {
 	User,
 	Zap,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -453,6 +453,40 @@ export function ConversationView({
 
 	const messages: ChatMessage[] = events.flatMap(eventToChatMessages);
 
+	const tokenStats = useMemo(() => {
+		let inputChars = 0;
+		let outputChars = 0;
+
+		for (const ev of events) {
+			const p = ev.payload;
+			const source = ev.event_source; // "agent", "user", "system"
+
+			// Stringify payload to estimate total event payload length
+			const payloadStr = JSON.stringify(p);
+
+			if (source === "agent") {
+				outputChars += payloadStr.length;
+			} else {
+				inputChars += payloadStr.length;
+			}
+		}
+
+		// 1 token is roughly 4.2 characters on average for English / JSON.
+		const inputTokens = Math.round(inputChars / 4.2);
+		const outputTokens = Math.round(outputChars / 4.2);
+		const totalTokens = inputTokens + outputTokens;
+
+		// Average cost per 1M tokens (e.g. Claude 3.5 Sonnet: $3/M input, $15/M output)
+		const cost = (inputTokens * 3.0 + outputTokens * 15.0) / 1_000_000;
+
+		return {
+			inputTokens,
+			outputTokens,
+			totalTokens,
+			cost,
+		};
+	}, [events]);
+
 	// Scroll to bottom when new messages arrive
 	// biome-ignore lint/correctness/useExhaustiveDependencies: events is needed to trigger scroll
 	useEffect(() => {
@@ -510,6 +544,19 @@ export function ConversationView({
 					>
 						{statusLabel}
 					</Badge>
+					{tokenStats.totalTokens > 0 && (
+						<Badge
+							variant="secondary"
+							className="text-[10px] font-medium bg-muted/60 text-muted-foreground shrink-0 flex items-center gap-1 cursor-help animate-rise-in"
+							title={`Input: ${tokenStats.inputTokens.toLocaleString()} | Output: ${tokenStats.outputTokens.toLocaleString()}`}
+						>
+							<Zap className="size-2.5 text-amber-500 fill-amber-500 shrink-0" />
+							<span>
+								{tokenStats.totalTokens.toLocaleString()} tokens ($
+								{tokenStats.cost.toFixed(3)})
+							</span>
+						</Badge>
+					)}
 				</div>
 
 				<div className="flex items-center gap-3 shrink-0">

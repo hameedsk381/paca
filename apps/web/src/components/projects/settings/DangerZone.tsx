@@ -15,6 +15,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { deleteProject, projectQueryOptions } from "@/lib/project-api";
+import { toast } from "@/components/ui/sonner";
 
 export function DangerZone({ projectId }: { projectId: string }) {
 	const navigate = useNavigate();
@@ -27,8 +28,12 @@ export function DangerZone({ projectId }: { projectId: string }) {
 		mutationFn: () => deleteProject(projectId),
 		onSuccess: async () => {
 			queryClient.removeQueries({ queryKey: ["projects", projectId] });
+			toast.success(`Project "${project?.name || "Project"}" deleted`);
 			await navigate({ to: "/home" });
 			await queryClient.invalidateQueries({ queryKey: ["projects"] });
+		},
+		onError: () => {
+			toast.error("Failed to delete project");
 		},
 	});
 

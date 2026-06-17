@@ -16,9 +16,9 @@ import {
 	Wand2,
 	Zap,
 } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { ConversationView } from "@/components/projects/agents/conversation-view";
-
+import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -42,6 +42,7 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
+import { toast } from "@/components/ui/sonner";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useProjectPermissions } from "@/hooks/use-project-permissions";
@@ -65,10 +66,16 @@ import {
 	updateMCPServer,
 	updateSkill,
 } from "@/lib/agent-api";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute(
 	"/_authenticated/projects/$projectId/agents/$agentId/",
 )({
+	validateSearch: (search: Record<string, unknown>): { tab?: string } => {
+		return {
+			tab: (search.tab as string) || undefined,
+		};
+	},
 	loader: async ({
 		context: { queryClient },
 		params: { projectId, agentId },
@@ -642,12 +649,21 @@ function MCPServersTab({
 		},
 	});
 
+	const [serverToDelete, setServerToDelete] = useState<AgentMCPServer | null>(
+		null,
+	);
+
 	const deleteMutation = useMutation({
 		mutationFn: (id: string) => deleteMCPServer(projectId, agentId, id),
 		onSuccess: () => {
 			qc.invalidateQueries({
 				queryKey: ["projects", projectId, "agents", agentId, "mcp-servers"],
 			});
+			toast.success("MCP server deleted");
+			setServerToDelete(null);
+		},
+		onError: () => {
+			toast.error("Failed to delete MCP server");
 		},
 	});
 
@@ -711,7 +727,7 @@ function MCPServersTab({
 										variant="ghost"
 										size="icon"
 										className="size-7 text-muted-foreground hover:text-destructive"
-										onClick={() => deleteMutation.mutate(s.id)}
+										onClick={() => setServerToDelete(s)}
 										disabled={deleteMutation.isPending}
 									>
 										<Trash2 className="size-3.5" />
@@ -728,6 +744,22 @@ function MCPServersTab({
 				agentId={agentId}
 				open={addOpen}
 				onOpenChange={setAddOpen}
+			/>
+
+			<ConfirmDialog
+				open={!!serverToDelete}
+				onOpenChange={(open) => !open && setServerToDelete(null)}
+				title="Delete MCP Server"
+				description={
+					serverToDelete
+						? `Are you sure you want to delete the MCP server "${serverToDelete.server_name}"? This permanently removes it from the agent.`
+						: ""
+				}
+				confirmText="Delete"
+				onConfirm={() =>
+					serverToDelete && deleteMutation.mutate(serverToDelete.id)
+				}
+				isPending={deleteMutation.isPending}
 			/>
 		</div>
 	);
@@ -883,12 +915,19 @@ function SkillsTab({
 		},
 	});
 
+	const [skillToDelete, setSkillToDelete] = useState<AgentSkill | null>(null);
+
 	const deleteMutation = useMutation({
 		mutationFn: (id: string) => deleteSkill(projectId, agentId, id),
 		onSuccess: () => {
 			qc.invalidateQueries({
 				queryKey: ["projects", projectId, "agents", agentId, "skills"],
 			});
+			toast.success("Agent skill deleted");
+			setSkillToDelete(null);
+		},
+		onError: () => {
+			toast.error("Failed to delete agent skill");
 		},
 	});
 
@@ -949,7 +988,7 @@ function SkillsTab({
 										variant="ghost"
 										size="icon"
 										className="size-7 text-muted-foreground hover:text-destructive"
-										onClick={() => deleteMutation.mutate(s.id)}
+										onClick={() => setSkillToDelete(s)}
 										disabled={deleteMutation.isPending}
 									>
 										<Trash2 className="size-3.5" />
@@ -966,6 +1005,22 @@ function SkillsTab({
 				agentId={agentId}
 				open={addOpen}
 				onOpenChange={setAddOpen}
+			/>
+
+			<ConfirmDialog
+				open={!!skillToDelete}
+				onOpenChange={(open) => !open && setSkillToDelete(null)}
+				title="Delete Agent Skill"
+				description={
+					skillToDelete
+						? `Are you sure you want to delete the skill "${skillToDelete.skill_name}"? This permanently detaches it from the agent.`
+						: ""
+				}
+				confirmText="Delete"
+				onConfirm={() =>
+					skillToDelete && deleteMutation.mutate(skillToDelete.id)
+				}
+				isPending={deleteMutation.isPending}
 			/>
 		</div>
 	);
@@ -1077,6 +1132,40 @@ function ConversationsTab({
 	);
 	const [modalConvId, setModalConvId] = useState<string | null>(null);
 
+	// Compute metrics
+	const stats = useMemo(() => {
+		if (conversations.length === 0) return null;
+
+		const total = conversations.length;
+		const finished = conversations.filter(
+			(c) => c.status === "finished",
+		).length;
+		const failed = conversations.filter((c) => c.status === "failed").length;
+		const running = conversations.filter((c) => c.status === "running").length;
+
+		// Success rate excludes currently running conversations
+		const successRate =
+			total > 0 ? Math.round((finished / (total - running || 1)) * 100) : 0;
+		const totalIterations = conversations.reduce(
+			(sum, c) => sum + c.iteration_count,
+			0,
+		);
+
+		// Estimate LLM tokens and cost (avg 16,000 tokens per iteration turn)
+		// 16,000 tokens at average $0.0035/1k input + output tokens cost = ~$0.052 per iteration
+		const estimatedCost = totalIterations * 0.052;
+
+		return {
+			total,
+			finished,
+			failed,
+			running,
+			successRate,
+			totalIterations,
+			estimatedCost,
+		};
+	}, [conversations]);
+
 	if (isLoading) {
 		return (
 			<div className="space-y-2">
@@ -1101,17 +1190,165 @@ function ConversationsTab({
 		);
 	}
 
+	// Get the last 5 conversations for the activity timeline
+	const recentActivities = conversations.slice(0, 5);
+
 	return (
 		<>
-			<div className="space-y-2">
-				{conversations.map((conv) => (
-					<ConversationRow
-						key={conv.id}
-						conv={conv}
-						projectId={projectId}
-						onClick={() => setModalConvId(conv.id)}
-					/>
-				))}
+			{/* Analytics Dashboard Grid */}
+			{stats && (
+				<div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+					<div className="rounded-xl border border-border/60 bg-card p-4 flex flex-col justify-between">
+						<span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+							Total Sessions
+						</span>
+						<div className="flex items-baseline gap-2 mt-2">
+							<span className="text-2xl font-bold">{stats.total}</span>
+							{stats.running > 0 && (
+								<span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-violet-500/10 text-violet-500 animate-pulse border border-violet-500/20">
+									{stats.running} active
+								</span>
+							)}
+						</div>
+					</div>
+
+					<div className="rounded-xl border border-border/60 bg-card p-4 flex flex-col justify-between">
+						<span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+							Success Rate
+						</span>
+						<div className="flex items-baseline gap-2 mt-2">
+							<span className="text-2xl font-bold">{stats.successRate}%</span>
+							<span className="text-xs text-muted-foreground">
+								{stats.finished} of {stats.total - stats.running}
+							</span>
+						</div>
+					</div>
+
+					<div className="rounded-xl border border-border/60 bg-card p-4 flex flex-col justify-between">
+						<span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+							Total Run Steps
+						</span>
+						<div className="flex items-baseline gap-2 mt-2">
+							<span className="text-2xl font-bold">
+								{stats.totalIterations}
+							</span>
+							<span className="text-xs text-muted-foreground">iterations</span>
+						</div>
+					</div>
+
+					<div className="rounded-xl border border-border/60 bg-card p-4 flex flex-col justify-between">
+						<span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+							Est. Token Cost
+						</span>
+						<div className="flex items-baseline gap-2 mt-2">
+							<span className="text-2xl font-bold text-amber-600 dark:text-amber-500">
+								${stats.estimatedCost.toFixed(2)}
+							</span>
+							<span className="text-xs text-muted-foreground">USD</span>
+						</div>
+					</div>
+				</div>
+			)}
+
+			<div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+				{/* Recent History List */}
+				<div className="lg:col-span-2 space-y-4">
+					<h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+						All Sessions
+					</h3>
+					<div className="space-y-2">
+						{conversations.map((conv) => (
+							<ConversationRow
+								key={conv.id}
+								conv={conv}
+								projectId={projectId}
+								onClick={() => setModalConvId(conv.id)}
+							/>
+						))}
+					</div>
+				</div>
+
+				{/* Visual Activity Timeline */}
+				<div className="space-y-4">
+					<h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+						Recent Activity Timeline
+					</h3>
+					<div className="rounded-xl border border-border/60 bg-card p-5 space-y-5 relative">
+						<div className="absolute left-7.5 top-8.5 bottom-8.5 w-0.5 bg-border/60" />
+
+						{recentActivities.map((conv) => {
+							const statusColors = {
+								queued: "bg-muted-foreground/30 ring-muted-foreground/20",
+								running: "bg-blue-500 ring-blue-500/20 animate-pulse",
+								finished: "bg-emerald-500 ring-emerald-500/20",
+								failed: "bg-destructive ring-destructive/20",
+								stopped: "bg-muted-foreground/40 ring-muted-foreground/15",
+							};
+
+							const dotColor = statusColors[conv.status] || "bg-muted";
+
+							return (
+								<div
+									key={conv.id}
+									className="flex items-start gap-4 relative z-1"
+								>
+									<div
+										className={cn(
+											"size-5 rounded-full ring-4 flex items-center justify-center shrink-0",
+											dotColor,
+										)}
+									>
+										{conv.status === "running" && (
+											<span className="size-2 rounded-full bg-white animate-ping" />
+										)}
+									</div>
+									<div className="min-w-0 flex-1">
+										<p className="text-xs font-semibold truncate">
+											{conv.trigger_type === "chat_message"
+												? "Direct Chat"
+												: conv.trigger_type === "description_write"
+													? "Write Description"
+													: "Task Assignment"}
+										</p>
+										<p className="text-[10px] text-muted-foreground mt-0.5">
+											ID: {conv.id.slice(0, 8)} · {conv.iteration_count} steps
+										</p>
+										<div className="flex items-center gap-2 mt-1.5">
+											<span
+												className={cn(
+													"text-[9px] font-medium uppercase tracking-wider",
+													conv.status === "finished"
+														? "text-emerald-500"
+														: conv.status === "failed"
+															? "text-destructive"
+															: conv.status === "running"
+																? "text-blue-500"
+																: "text-muted-foreground",
+												)}
+											>
+												{conv.status}
+											</span>
+											<span className="text-[9px] text-muted-foreground/50">
+												·
+											</span>
+											<span className="text-[9px] text-muted-foreground">
+												{new Date(conv.created_at).toLocaleDateString(
+													undefined,
+													{
+														month: "short",
+														day: "numeric",
+														hour: "2-digit",
+														minute: "2-digit",
+													},
+												)}
+											</span>
+										</div>
+									</div>
+								</div>
+							);
+						})}
+					</div>
+				</div>
 			</div>
 
 			{modalConvId && (
@@ -1147,7 +1384,15 @@ function AgentDetailPage() {
 	const canWrite = hasProjectPermission("agents.write");
 
 	const { data: agent } = useQuery(agentQueryOptions(projectId, agentId));
-	const [activeTab, setActiveTab] = useState<Tab>("overview");
+	const { tab } = Route.useSearch();
+	const [activeTab, setActiveTab] = useState<Tab>(
+		(tab as Tab) || "overview"
+	);
+
+	const { data: conversations = [] } = useQuery(
+		conversationsQueryOptions(projectId, agentId),
+	);
+	const isAgentWorking = conversations.some((c) => c.status === "running");
 
 	if (!agent) {
 		return (
@@ -1170,11 +1415,26 @@ function AgentDetailPage() {
 			{/* Agent header */}
 			<div className="border-b border-border/50 px-6 py-5 shrink-0">
 				<div className="flex items-center gap-4">
-					<Avatar className="size-12 rounded-xl bg-primary/10">
-						<AvatarFallback className="rounded-xl bg-primary/10 text-primary font-bold text-base">
-							{initials}
-						</AvatarFallback>
-					</Avatar>
+					<div className="relative shrink-0">
+						<Avatar className="size-12 rounded-xl bg-primary/10">
+							<AvatarFallback className="rounded-xl bg-primary/10 text-primary font-bold text-base">
+								{initials}
+							</AvatarFallback>
+						</Avatar>
+						<span
+							className={cn(
+								"absolute -bottom-0.5 -right-0.5 size-3 rounded-full border-2 border-background",
+								isAgentWorking
+									? "bg-violet-500 animate-pulse"
+									: "bg-emerald-500",
+							)}
+							title={
+								isAgentWorking
+									? "Agent is working..."
+									: "Agent is idle (online)"
+							}
+						/>
+					</div>
 					<div>
 						<h1 className="text-lg font-semibold">{agent.name}</h1>
 						<div className="flex items-center gap-2 mt-0.5">
@@ -1185,6 +1445,25 @@ function AgentDetailPage() {
 							<Badge variant="secondary" className="text-[10px]">
 								{agent.llm_provider}
 							</Badge>
+							<span className="text-muted-foreground/40">·</span>
+							<span
+								className={cn(
+									"text-[10px] font-medium px-2 py-0.5 rounded-full border flex items-center gap-1",
+									isAgentWorking
+										? "bg-violet-500/10 text-violet-500 border-violet-500/20"
+										: "bg-emerald-500/10 text-emerald-500 border-emerald-500/20",
+								)}
+							>
+								<span
+									className={cn(
+										"size-1 rounded-full",
+										isAgentWorking
+											? "bg-violet-500 animate-pulse"
+											: "bg-emerald-500",
+									)}
+								/>
+								{isAgentWorking ? "working" : "idle"}
+							</span>
 						</div>
 					</div>
 				</div>

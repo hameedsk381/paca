@@ -1,4 +1,13 @@
-import { Check, GripVertical, Layers, Link, User } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import {
+	Check,
+	GripVertical,
+	Layers,
+	Link,
+	MessageSquare,
+	Paperclip,
+	User,
+} from "lucide-react";
 import { useState } from "react";
 
 import { getTaskTypeIconComponent } from "@/components/projects/task-types/task-type-icons";
@@ -13,12 +22,19 @@ import {
 	PopoverContent,
 	PopoverTrigger,
 } from "@/components/ui/popover";
-import type { Task } from "@/lib/interaction-api";
-import type {
-	CustomFieldDefinition,
-	ProjectMember,
-	TaskStatus,
-	TaskType,
+import { conversationsQueryOptions } from "@/lib/agent-api";
+import { taskAttachmentsQueryOptions } from "@/lib/attachment-api";
+import {
+	epicChildTasksQueryOptions,
+	type Task,
+	taskActivitiesQueryOptions,
+} from "@/lib/interaction-api";
+import {
+	type CustomFieldDefinition,
+	isEpicType,
+	type ProjectMember,
+	type TaskStatus,
+	type TaskType,
 } from "@/lib/project-api";
 import { cn } from "@/lib/utils";
 
@@ -77,6 +93,52 @@ export function TaskCard({
 		? members.find((m) => m.id === task.assignee_id)
 		: undefined;
 	const status = statuses.find((s) => s.id === task.status_id);
+
+	const isEpic = isEpicType(taskType);
+
+	// Fetch child subtasks to calculate progress if this task is an Epic
+	const { data: subtasks = [] } = useQuery({
+		...epicChildTasksQueryOptions(task.project_id, task.id),
+		enabled: isEpic,
+	});
+
+	const isAgent = assignee?.member_type === "agent";
+	const { data: conversations = [] } = useQuery({
+		...conversationsQueryOptions(task.project_id),
+		enabled: isAgent,
+	});
+
+	const isAgentWorking =
+		isAgent &&
+		conversations.some(
+			(c) => c.agent_id === assignee?.agent_id && c.status === "running",
+		);
+
+	// Fetch activities and attachments for counts
+	const { data: activities = [] } = useQuery({
+		...taskActivitiesQueryOptions(task.project_id, task.id),
+		staleTime: 30_000,
+	});
+
+	const { data: attachments = [] } = useQuery({
+		...taskAttachmentsQueryOptions(task.project_id, task.id),
+		staleTime: 30_000,
+	});
+
+	const commentsCount = activities.filter(
+		(a) => a.activity_type === "comment",
+	).length;
+	const attachmentsCount = attachments.length;
+
+	const totalSubtasks = subtasks.length;
+	const completedSubtasks = subtasks.filter((st) => {
+		const stStatus = statuses.find((s) => s.id === st.status_id);
+		return stStatus?.category === "done";
+	}).length;
+	const subtaskProgressPercent =
+		totalSubtasks > 0
+			? Math.round((completedSubtasks / totalSubtasks) * 100)
+			: 0;
 
 	/** Renders the chip/indicator for a single field key. */
 	const renderField = (fieldKey: string) => {
@@ -144,16 +206,33 @@ export function TaskCard({
 					<div
 						key="assignee"
 						className={cn(
-							"flex size-5 items-center justify-center rounded-full text-[10px] font-bold ring-1",
+							"flex size-5 items-center justify-center rounded-full text-[10px] font-bold ring-1 relative",
 							task.assignee_id
 								? "bg-linear-to-br from-primary/20 to-primary/15 text-primary ring-primary/20"
 								: "bg-linear-to-br from-muted/80 to-muted/40 text-muted-foreground ring-border/25",
 						)}
 					>
 						{assignee ? (
-							(assignee.full_name || assignee.username)
-								.slice(0, 1)
-								.toUpperCase()
+							<>
+								{(assignee.full_name || assignee.username)
+									.slice(0, 1)
+									.toUpperCase()}
+								{assignee.member_type === "agent" && (
+									<span
+										className={cn(
+											"absolute -bottom-0.5 -right-0.5 size-1.5 rounded-full border border-background",
+											isAgentWorking
+												? "bg-violet-500 animate-pulse"
+												: "bg-emerald-500",
+										)}
+										title={
+											isAgentWorking
+												? "Agent is working..."
+												: "Agent is idle (online)"
+										}
+									/>
+								)}
+							</>
 						) : (
 							<User className="size-2.5" />
 						)}
@@ -608,12 +687,18 @@ export function TaskCard({
 			onDragEnd={onDragEnd}
 			onClick={onClick}
 			className={cn(
-				"group relative rounded-xl border border-border/30 bg-card p-3 shadow-xs cursor-pointer transition-all duration-150 select-none",
+				"group relative rounded-xl border border-border/30 bg-card p-3 shadow-xs cursor-pointer transition-all duration-150 select-none overflow-hidden",
 				"hover:border-border/50 hover:shadow-sm",
 				isDragging && "opacity-50 ring-2 ring-primary/30 shadow-lg rotate-1",
 				canEdit && "cursor-grab active:cursor-grabbing",
 			)}
 		>
+			{task.importance > 0 && (
+				<div
+					className="absolute left-0 top-0 bottom-0 w-1.25 z-10"
+					style={{ backgroundColor: getPriority(task.importance).color }}
+				/>
+			)}
 			{canEdit && (
 				<div className="absolute left-1.5 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
 					<GripVertical className="size-3.5 text-muted-foreground/60" />
@@ -634,9 +719,53 @@ export function TaskCard({
 				{task.title}
 			</span>
 
-			{fieldChips.length > 0 && (
-				<div className="mt-2 flex flex-wrap items-center gap-1.5">
-					{fieldChips}
+			{isEpic && totalSubtasks > 0 && (
+				<div className="mt-2.5 flex flex-col gap-1.5 rounded-lg border border-violet-500/10 bg-violet-500/5 p-2 dark:border-violet-500/20 dark:bg-violet-950/20">
+					<div className="flex items-center justify-between text-[10px] font-semibold text-violet-600 dark:text-violet-400">
+						<span className="flex items-center gap-1">
+							<Layers className="size-2.5 shrink-0 opacity-70" />
+							Subtasks
+						</span>
+						<span className="tabular-nums font-bold">
+							{completedSubtasks}/{totalSubtasks} ({subtaskProgressPercent}%)
+						</span>
+					</div>
+					<div className="h-1.5 w-full rounded-full bg-violet-100 dark:bg-violet-950/60 overflow-hidden">
+						<div
+							className="h-full rounded-full bg-violet-500 dark:bg-violet-400 transition-all duration-300"
+							style={{ width: `${subtaskProgressPercent}%` }}
+						/>
+					</div>
+				</div>
+			)}
+
+			{(fieldChips.length > 0 || commentsCount > 0 || attachmentsCount > 0) && (
+				<div className="mt-2.5 flex items-center justify-between gap-1.5">
+					<div className="flex flex-wrap items-center gap-1.5">
+						{fieldChips}
+					</div>
+					{(commentsCount > 0 || attachmentsCount > 0) && (
+						<div className="flex items-center gap-2 text-muted-foreground/60 shrink-0 ml-auto">
+							{attachmentsCount > 0 && (
+								<div
+									className="flex items-center gap-1 text-[11px] font-medium"
+									title={`${attachmentsCount} attachment${attachmentsCount === 1 ? "" : "s"}`}
+								>
+									<Paperclip className="size-3 shrink-0" />
+									<span className="tabular-nums">{attachmentsCount}</span>
+								</div>
+							)}
+							{commentsCount > 0 && (
+								<div
+									className="flex items-center gap-1 text-[11px] font-medium"
+									title={`${commentsCount} comment${commentsCount === 1 ? "" : "s"}`}
+								>
+									<MessageSquare className="size-3 shrink-0" />
+									<span className="tabular-nums">{commentsCount}</span>
+								</div>
+							)}
+						</div>
+					)}
 				</div>
 			)}
 		</div>

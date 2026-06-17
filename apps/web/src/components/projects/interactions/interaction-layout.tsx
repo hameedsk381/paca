@@ -19,10 +19,12 @@ import {
 	Plus,
 	Puzzle,
 	Search,
+	Sparkles,
 	X,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { InteractionEmptyState } from "@/components/shared/interaction-empty-state";
 
 import {
 	DropdownMenu,
@@ -71,7 +73,9 @@ import {
 	taskTypesQueryOptions,
 } from "@/lib/project-api";
 import { cn } from "@/lib/utils";
+import { toast } from "@/components/ui/sonner";
 import { BoardView } from "./board-view";
+import { SprintSummaryBar } from "./sprint-analytics";
 import { ListView } from "./list-view";
 import { NewViewPopover } from "./new-view-popover";
 import { RenameViewDialog } from "./rename-view-dialog";
@@ -273,6 +277,18 @@ export function InteractionLayout({
 }: InteractionLayoutProps) {
 	const qc = useQueryClient();
 	const navigate = useNavigate();
+
+	const [showOnboarding, setShowOnboarding] = useState(() => {
+		if (typeof window !== "undefined") {
+			return localStorage.getItem("paca-onboarding-dismissed") !== "true";
+		}
+		return false;
+	});
+
+	const dismissOnboarding = () => {
+		localStorage.setItem("paca-onboarding-dismissed", "true");
+		setShowOnboarding(false);
+	};
 
 	const { data: project } = useQuery(projectQueryOptions(projectId));
 	const taskIdPrefix = project?.task_id_prefix ?? "";
@@ -1034,7 +1050,13 @@ export function InteractionLayout({
 			}
 			return task;
 		},
-		onSuccess: () => qc.invalidateQueries({ queryKey: tasksListQueryKey }),
+		onSuccess: (task) => {
+			qc.invalidateQueries({ queryKey: tasksListQueryKey });
+			toast.success(`Task "${task.title}" created`);
+		},
+		onError: () => {
+			toast.error("Failed to create task");
+		},
 	});
 
 	const handleCreateTask = async (
@@ -1481,6 +1503,61 @@ export function InteractionLayout({
 
 			{/* View content */}
 			<div className="flex flex-1 flex-col overflow-hidden">
+				{context === "sprint" && sprintId && (
+					(() => {
+						const currentSprint = sprints.find((s) => s.id === sprintId);
+						if (!currentSprint) return null;
+						return (
+							<SprintSummaryBar
+								sprint={currentSprint}
+								tasks={tasks}
+								statuses={statuses}
+							/>
+						);
+					})()
+				)}
+				{showOnboarding && (
+					<div className="mx-6 mt-4 relative overflow-hidden rounded-xl border border-primary/20 bg-linear-to-r from-primary/5 via-secondary/5 to-transparent p-5 shrink-0">
+						<button
+							type="button"
+							onClick={dismissOnboarding}
+							className="absolute right-4 top-4 flex size-6 items-center justify-center rounded-md text-muted-foreground/60 hover:text-foreground hover:bg-muted/60 transition-all"
+						>
+							<X className="size-3.5" />
+						</button>
+						<div className="flex gap-4">
+							<div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+								<Sparkles className="size-4.5" />
+							</div>
+							<div className="space-y-1 pr-6">
+								<h3 className="font-[Syne] text-[14px] font-bold text-foreground">
+									Welcome to Paca Scrumban!
+								</h3>
+								<p className="text-[12.5px] text-muted-foreground leading-relaxed">
+									Here, humans and AI agents collaborate on a shared board using the **Plan → Act → Check → Adapt** cycle.
+								</p>
+								<div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-3 pt-3 border-t border-border/20">
+									<div>
+										<p className="text-[11.5px] font-bold text-foreground/80 mb-0.5">📋 Plan</p>
+										<p className="text-[11px] text-muted-foreground">Define backlog items, sprints, and priorities.</p>
+									</div>
+									<div>
+										<p className="text-[11.5px] font-bold text-foreground/80 mb-0.5">⚡ Act</p>
+										<p className="text-[11px] text-muted-foreground">Assign tasks to collaborators or trigger AI agents.</p>
+									</div>
+									<div>
+										<p className="text-[11.5px] font-bold text-foreground/80 mb-0.5">🔍 Check</p>
+										<p className="text-[11px] text-muted-foreground">Review comments, activity feed, and task statuses.</p>
+									</div>
+									<div>
+										<p className="text-[11.5px] font-bold text-foreground/80 mb-0.5">🌱 Adapt</p>
+										<p className="text-[11px] text-muted-foreground">Complete sprints, run retros, and refine flows.</p>
+									</div>
+								</div>
+							</div>
+						</div>
+					</div>
+				)}
 				{activePluginView ? (
 					<RemoteComponent
 						registration={activePluginView}
@@ -1506,6 +1583,14 @@ export function InteractionLayout({
 					) : (
 						<ListViewSkeleton />
 					)
+				) : !searchQuery && tasks.length === 0 ? (
+					<InteractionEmptyState
+						context={context}
+						canCreate={canCreate}
+						onCreateClick={() => {
+							window.dispatchEvent(new CustomEvent("trigger-create-task"));
+						}}
+					/>
 				) : activeView?.layout === "Board" ? (
 					<BoardView
 						projectId={projectId}

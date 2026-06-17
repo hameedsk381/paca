@@ -8,12 +8,24 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // ── Mock @/lib/interaction-api before any imports that pull it in ─────────────
 
-const { mockUpdateTask } = vi.hoisted(() => ({
+const { mockUpdateTask, mockToastSuccess } = vi.hoisted(() => ({
 	mockUpdateTask: vi.fn(),
+	mockToastSuccess: vi.fn(),
 }));
 
-vi.mock("@/lib/interaction-api", () => ({
-	updateTask: mockUpdateTask,
+vi.mock("@/lib/interaction-api", async (importOriginal) => {
+	const actual = await importOriginal() as any;
+	return {
+		...actual,
+		updateTask: mockUpdateTask,
+	};
+});
+
+vi.mock("@/components/ui/sonner", () => ({
+	toast: {
+		success: mockToastSuccess,
+		error: vi.fn(),
+	},
 }));
 
 import type { Task } from "@/lib/interaction-api";
@@ -119,6 +131,7 @@ function renderBoard(
 beforeEach(() => {
 	mockUpdateTask.mockClear();
 	mockUpdateTask.mockResolvedValue({ data: { data: {}, success: true } });
+	mockToastSuccess.mockClear();
 });
 
 describe("BoardView", () => {
@@ -329,6 +342,98 @@ describe("BoardView", () => {
 
 			await new Promise((r) => setTimeout(r, 50));
 			expect(mockUpdateTask).not.toHaveBeenCalled();
+		});
+
+		it("shows a toast with Undo/Redo options on drag and drop and allows reverting/reapplying", async () => {
+			const task = makeTask({
+				id: "task-undo-redo",
+				title: "Undo Redo Task",
+				status_id: "status-todo",
+				sprint_id: SPRINT_ID,
+			});
+			const { container } = renderBoard([task]);
+
+			const dt = createDt();
+			const card = container.querySelector(
+				"[data-task-id='task-undo-redo']",
+			) as Element;
+
+			// Drag and drop task from Todo to Done
+			fireEvent.dragStart(card, { dataTransfer: dt });
+			const doneHeader = screen
+				.getByText("Done")
+				.closest('[class*="flex-col"]');
+			const doneColumn =
+				(doneHeader as Element).querySelector('[class*="rounded-xl"]') ??
+				(doneHeader as Element);
+			fireEvent.dragOver(doneColumn, { dataTransfer: dt });
+			fireEvent.drop(doneColumn, { dataTransfer: dt });
+
+			// Verify updateTask is called
+			await waitFor(() => {
+				expect(mockUpdateTask).toHaveBeenCalledWith(PROJECT_ID, "task-undo-redo", {
+					status_id: "status-done",
+					sprint_id: SPRINT_ID,
+				});
+			});
+
+			// Verify toast.success is called with "Undo" action
+			expect(mockToastSuccess).toHaveBeenCalledWith(
+				'Task moved to "Done"',
+				expect.objectContaining({
+					action: expect.objectContaining({
+						label: "Undo",
+						onClick: expect.any(Function),
+					}),
+				}),
+			);
+
+			// Extract and execute the Undo onClick handler
+			const toastCall = mockToastSuccess.mock.calls[0];
+			const undoAction = toastCall[1].action;
+
+			// Clear mock call history to verify next steps clean
+			mockUpdateTask.mockClear();
+			mockToastSuccess.mockClear();
+
+			// Click Undo
+			undoAction.onClick();
+
+			// Verify updateTask is called with previous status "status-todo"
+			await waitFor(() => {
+				expect(mockUpdateTask).toHaveBeenCalledWith(PROJECT_ID, "task-undo-redo", {
+					status_id: "status-todo",
+					sprint_id: SPRINT_ID,
+				});
+			});
+
+			// Verify undo toast is shown with "Redo" action
+			expect(mockToastSuccess).toHaveBeenCalledWith(
+				"Task movement undone",
+				expect.objectContaining({
+					action: expect.objectContaining({
+						label: "Redo",
+						onClick: expect.any(Function),
+					}),
+				}),
+			);
+
+			// Extract and execute the Redo onClick handler
+			const redoToastCall = mockToastSuccess.mock.calls[0];
+			const redoAction = redoToastCall[1].action;
+
+			mockUpdateTask.mockClear();
+
+			// Click Redo
+			redoAction.onClick();
+
+			// Verify updateTask is called again with status "status-done"
+			await waitFor(() => {
+				expect(mockUpdateTask).toHaveBeenCalledWith(PROJECT_ID, "task-undo-redo", {
+					status_id: "status-done",
+					sprint_id: SPRINT_ID,
+				});
+			});
 		});
 	});
 

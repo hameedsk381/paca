@@ -27,7 +27,7 @@ import { type ComponentType, useState } from "react";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
 	Dialog,
 	DialogContent,
@@ -60,6 +60,7 @@ import {
 	AGENT_PRESETS,
 	type Agent,
 	agentsQueryOptions,
+	conversationsQueryOptions,
 	createAgent,
 	deleteAgent,
 	llmModelsQueryOptions,
@@ -629,6 +630,13 @@ function AgentCard({
 		},
 	});
 
+	const { data: conversations = [] } = useQuery(
+		conversationsQueryOptions(projectId),
+	);
+	const isAgentWorking = conversations.some(
+		(c) => c.agent_id === agent.id && c.status === "running",
+	);
+
 	const initials = agent.name
 		.split(" ")
 		.map((w) => w[0])
@@ -642,15 +650,42 @@ function AgentCard({
 				{/* Header */}
 				<div className="flex items-start justify-between gap-3">
 					<div className="flex items-center gap-3">
-						<Avatar className="size-10 rounded-lg bg-primary/10">
-							<AvatarFallback className="rounded-lg bg-primary/10 text-primary font-semibold text-sm">
-								{initials}
-							</AvatarFallback>
-						</Avatar>
+						<div className="relative">
+							<Avatar className="size-10 rounded-lg bg-primary/10">
+								<AvatarFallback className="rounded-lg bg-primary/10 text-primary font-semibold text-sm">
+									{initials}
+								</AvatarFallback>
+							</Avatar>
+							<span
+								className={cn(
+									"absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full border border-background",
+									isAgentWorking
+										? "bg-violet-500 animate-pulse"
+										: "bg-emerald-500",
+								)}
+								title={
+									isAgentWorking
+										? "Agent is working..."
+										: "Agent is idle (online)"
+								}
+							/>
+						</div>
 						<div className="min-w-0">
-							<p className="font-semibold text-sm leading-tight">
-								{agent.name}
-							</p>
+							<div className="flex items-center gap-1.5">
+								<p className="font-semibold text-sm leading-tight">
+									{agent.name}
+								</p>
+								<span
+									className={cn(
+										"text-[9px] font-medium px-1.5 py-0.5 rounded-full border",
+										isAgentWorking
+											? "bg-violet-500/10 text-violet-500 border-violet-500/20"
+											: "bg-emerald-500/10 text-emerald-500 border-emerald-500/20",
+									)}
+								>
+									{isAgentWorking ? "working" : "idle"}
+								</span>
+							</div>
 							<p className="text-xs text-muted-foreground mt-0.5">
 								@{agent.handle}
 							</p>
@@ -672,6 +707,7 @@ function AgentCard({
 											<Link
 												to="/projects/$projectId/agents/$agentId"
 												params={{ projectId, agentId: agent.id }}
+												search={{}}
 											/>
 										}
 									>
@@ -706,15 +742,33 @@ function AgentCard({
 					)}
 				</div>
 
-				{/* Footer link */}
-				<Link
-					to="/projects/$projectId/agents/$agentId"
-					params={{ projectId, agentId: agent.id }}
-					className="mt-1 flex items-center gap-1 text-xs font-medium text-primary hover:underline"
-				>
-					Configure & view activity
-					<ChevronRight className="size-3" />
-				</Link>
+				{/* Quick Actions Footer */}
+				<div className="mt-4 pt-3.5 border-t border-border/20 flex items-center justify-between">
+					<Link
+						to="/projects/$projectId/agents/$agentId"
+						params={{ projectId, agentId: agent.id }}
+						search={{}}
+						className={cn(
+							buttonVariants({ variant: "outline", size: "sm" }),
+							"text-xs font-semibold flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all text-muted-foreground/80 hover:text-foreground shrink-0",
+						)}
+					>
+						<Settings className="size-3.5" />
+						Configure
+					</Link>
+					<Link
+						to="/projects/$projectId/agents/$agentId"
+						params={{ projectId, agentId: agent.id }}
+						search={{ tab: "conversations" }}
+						className={cn(
+							buttonVariants({ variant: "outline", size: "sm" }),
+							"text-xs font-semibold flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all text-muted-foreground/80 hover:text-foreground shrink-0",
+						)}
+					>
+						<MessageSquare className="size-3.5" />
+						Chat &amp; Activity
+					</Link>
+				</div>
 			</div>
 
 			{/* Delete confirmation */}
