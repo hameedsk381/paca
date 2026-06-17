@@ -4,7 +4,7 @@ import "@blocknote/shadcn/style.css";
 import { SideMenuController, useCreateBlockNote } from "@blocknote/react";
 import { BlockNoteView } from "@blocknote/shadcn";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Bot, Sparkles } from "lucide-react";
+import { Bot, Sparkles, Wand2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CustomSideMenu } from "@/components/shared/blocknote-custom-side-menu";
 import { customSchema } from "@/components/shared/blocknote-schema";
@@ -21,6 +21,7 @@ import {
 import { useThemeMode } from "@/hooks/use-theme-mode";
 import {
 	agentsQueryOptions,
+	aiAssistTask,
 	writeTaskDescriptionWithAI,
 } from "@/lib/agent-api";
 import {
@@ -53,11 +54,12 @@ export function DescriptionSection({
 	const { resolvedMode } = useThemeMode();
 	const { teamMembers, tasks, documents } = useMentionData(projectId);
 	const [writeWithAIOpen, setWriteWithAIOpen] = useState(false);
+	const [aiAssistOpen, setAIAssistOpen] = useState(false);
 	const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
 
 	const { data: agents = [] } = useQuery({
 		...agentsQueryOptions(projectId ?? ""),
-		enabled: !!projectId && writeWithAIOpen,
+		enabled: !!projectId && (writeWithAIOpen || aiAssistOpen),
 	});
 
 	const writeWithAIMutation = useMutation({
@@ -69,6 +71,24 @@ export function DescriptionSection({
 		onSuccess: () => {
 			setWriteWithAIOpen(false);
 			setSelectedAgentId(null);
+		},
+	});
+
+	const aiAssistMutation = useMutation({
+		mutationFn: (title: string) => {
+			if (!projectId) throw new Error("missing context");
+			return aiAssistTask(projectId, title, selectedAgentId ?? undefined);
+		},
+		onSuccess: (result) => {
+			setAIAssistOpen(false);
+			setSelectedAgentId(null);
+			const desc = result.description;
+			if (desc && editor) {
+				const blocks = editor.tryParseMarkdownToBlocks(desc);
+				if (blocks) {
+					editor.replaceBlocks(editor.document, blocks);
+				}
+			}
 		},
 	});
 
@@ -192,14 +212,25 @@ export function DescriptionSection({
 					<div className="flex-1 h-px bg-linear-to-r from-border/40 to-transparent" />
 				</h3>
 				{canEdit && (
-					<button
-						type="button"
-						className="flex items-center gap-1.5 text-[11px] text-muted-foreground/60 hover:text-muted-foreground transition-colors duration-150 font-medium"
-						onClick={() => setWriteWithAIOpen(true)}
-					>
-						<Sparkles className="size-3" />
-						Write with AI
-					</button>
+					<div className="flex items-center gap-2">
+						<button
+							type="button"
+							className="flex items-center gap-1.5 text-[11px] text-muted-foreground/60 hover:text-muted-foreground transition-colors duration-150 font-medium"
+							onClick={() => setWriteWithAIOpen(true)}
+						>
+							<Sparkles className="size-3" />
+							Write with AI
+						</button>
+						<span className="text-[11px] text-muted-foreground/30">·</span>
+						<button
+							type="button"
+							className="flex items-center gap-1.5 text-[11px] text-muted-foreground/60 hover:text-muted-foreground transition-colors duration-150 font-medium"
+							onClick={() => setAIAssistOpen(true)}
+						>
+							<Wand2 className="size-3" />
+							AI Assist
+						</button>
+					</div>
 				)}
 			</div>
 
@@ -311,6 +342,166 @@ export function DescriptionSection({
 								<>
 									<Sparkles className="size-3 mr-1.5" />
 									Write description
+								</>
+							)}
+						</Button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
+
+			{/* AI Assist dialog — instant description generation */}
+			<Dialog
+				open={aiAssistOpen}
+				onOpenChange={(open) => {
+					setAIAssistOpen(open);
+					if (!open) setSelectedAgentId(null);
+				}}
+			>
+				<DialogContent className="sm:max-w-md">
+					<DialogHeader>
+						<DialogTitle className="flex items-center gap-2">
+							<Wand2 className="size-4 text-muted-foreground" />
+							AI Assist
+						</DialogTitle>
+						<DialogDescription>
+							Instantly generate a description, acceptance criteria, and
+							technical approach from the task title.
+						</DialogDescription>
+					</DialogHeader>
+
+					{agents.length > 0 && (
+						<div className="space-y-1.5 py-1">
+							<p className="text-[11px] font-medium text-muted-foreground/60 uppercase tracking-wider">
+								Agent (optional)
+							</p>
+							<div className="flex flex-wrap gap-1.5">
+								<button
+									type="button"
+									onClick={() => setSelectedAgentId(null)}
+									className={cn(
+										"rounded-md border px-2.5 py-1 text-xs transition-all duration-150",
+										!selectedAgentId
+											? "border-primary/60 bg-primary/5 text-foreground"
+											: "border-border/40 text-muted-foreground hover:border-border/70",
+									)}
+								>
+									Auto
+								</button>
+								{agents.slice(0, 4).map((agent) => (
+									<button
+										key={agent.id}
+										type="button"
+										onClick={() => setSelectedAgentId(agent.id)}
+										className={cn(
+											"rounded-md border px-2.5 py-1 text-xs transition-all duration-150",
+											selectedAgentId === agent.id
+												? "border-primary/60 bg-primary/5 text-foreground"
+												: "border-border/40 text-muted-foreground hover:border-border/70",
+										)}
+									>
+										{agent.name}
+									</button>
+								))}
+							</div>
+						</div>
+					)}
+
+					{aiAssistMutation.error && (
+						<p className="text-xs text-destructive">
+							{aiAssistMutation.error.message}
+						</p>
+					)}
+
+					{aiAssistMutation.data && (
+						<div className="space-y-3 py-2 max-h-60 overflow-y-auto">
+							{aiAssistMutation.data.acceptance_criteria.length > 0 && (
+								<div>
+									<p className="text-[11px] font-semibold text-muted-foreground/70 uppercase tracking-wider mb-1">
+										Acceptance Criteria
+									</p>
+									<ul className="space-y-0.5">
+										{aiAssistMutation.data.acceptance_criteria.map(
+											(c, i) => (
+												<li
+													key={i}
+													className="text-xs text-muted-foreground flex items-start gap-1.5"
+												>
+													<span className="text-primary/60 mt-0.5">•</span>
+													{c}
+												</li>
+											),
+										)}
+									</ul>
+								</div>
+							)}
+							{aiAssistMutation.data.technical_approach && (
+								<div>
+									<p className="text-[11px] font-semibold text-muted-foreground/70 uppercase tracking-wider mb-1">
+										Technical Approach
+									</p>
+									<p className="text-xs text-muted-foreground leading-relaxed">
+										{aiAssistMutation.data.technical_approach}
+									</p>
+								</div>
+							)}
+							{aiAssistMutation.data.suggested_labels.length > 0 && (
+								<div>
+									<p className="text-[11px] font-semibold text-muted-foreground/70 uppercase tracking-wider mb-1">
+										Suggested Labels
+									</p>
+									<div className="flex flex-wrap gap-1">
+										{aiAssistMutation.data.suggested_labels.map(
+											(label, i) => (
+												<span
+													key={i}
+													className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground"
+												>
+													{label}
+												</span>
+											),
+										)}
+									</div>
+								</div>
+							)}
+						</div>
+					)}
+
+					<DialogFooter>
+						<Button
+							variant="outline"
+							size="sm"
+							onClick={() => {
+								setAIAssistOpen(false);
+								setSelectedAgentId(null);
+							}}
+						>
+							Close
+						</Button>
+						<Button
+							size="sm"
+							disabled={aiAssistMutation.isPending}
+							onClick={() => {
+								const title =
+									document.querySelector<HTMLTextAreaElement>(
+										'[contenteditable]',
+									)?.textContent ?? "";
+								aiAssistMutation.mutate(title || "Task");
+							}}
+						>
+							{aiAssistMutation.isPending ? (
+								<>
+									<Wand2 className="size-3 mr-1.5 animate-pulse" />
+									Generating...
+								</>
+							) : aiAssistMutation.data ? (
+								<>
+									<Wand2 className="size-3 mr-1.5" />
+									Regenerate
+								</>
+							) : (
+								<>
+									<Wand2 className="size-3 mr-1.5" />
+									Generate
 								</>
 							)}
 						</Button>

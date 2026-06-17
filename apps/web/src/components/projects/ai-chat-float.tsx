@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bot, Loader2, Plus, Send, X } from "lucide-react";
+import { Bot, Loader2, Plus, Search, Send, X } from "lucide-react";
 import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -10,7 +10,15 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { agentsQueryOptions, conversationsQueryOptions, startChatSession, type Agent, type AgentConversation } from "@/lib/agent-api";
+import {
+	agentsQueryOptions,
+	conversationsQueryOptions,
+	nlQuery,
+	startChatSession,
+	type Agent,
+	type AgentConversation,
+	type NLQueryResult,
+} from "@/lib/agent-api";
 import { cn } from "@/lib/utils";
 import { ConversationView } from "./agents/conversation-view";
 
@@ -31,6 +39,8 @@ export function AIChatFloat({ projectId }: AIChatFloatProps) {
 	const [phase, setPhase] = useState<ChatPhase>({ kind: "compose" });
 	const [agentId, setAgentId] = useState<string>("");
 	const [message, setMessage] = useState("");
+	const [queryMode, setQueryMode] = useState(false);
+	const [nlQueryResult, setNLQueryResult] = useState<NLQueryResult | null>(null);
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
 
 	const qc = useQueryClient();
@@ -57,16 +67,29 @@ export function AIChatFloat({ projectId }: AIChatFloatProps) {
 		},
 	});
 
+	const nlQueryMut = useMutation({
+		mutationFn: () => nlQuery(projectId, message.trim()),
+		onSuccess: (result) => {
+			setNLQueryResult(result);
+		},
+	});
+
 	function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
 		if (e.key === "Enter" && !e.shiftKey) {
 			e.preventDefault();
-			if (canSend) sendMut.mutate();
+			if (queryMode) {
+				if (message.trim()) nlQueryMut.mutate();
+			} else if (canSend) {
+				sendMut.mutate();
+			}
 		}
 	}
 
 	function handleNewConversation() {
 		setPhase({ kind: "compose" });
 		setMessage("");
+		setNLQueryResult(null);
+		setQueryMode(false);
 		setTimeout(() => textareaRef.current?.focus(), 50);
 	}
 
@@ -96,37 +119,108 @@ export function AIChatFloat({ projectId }: AIChatFloatProps) {
 					<div className="flex shrink-0 items-center justify-between border-b border-border/40 bg-muted/30 px-4 py-3">
 						<div className="flex items-center gap-2">
 							<Bot className="size-4 text-primary" />
-							<span className="text-sm font-semibold">Chat with AI Agent</span>
+							<span className="text-sm font-semibold">
+								{queryMode ? "Search Tasks" : "Chat with AI Agent"}
+							</span>
 						</div>
-						{phase.kind === "conversation" && (
-							<Button
-								size="sm"
-								variant="outline"
-								className="h-7 gap-1.5 text-xs"
-								onClick={handleNewConversation}
-							>
-								<Plus className="size-3" />
-								New conversation
-							</Button>
-						)}
+						<div className="flex items-center gap-1">
+							{phase.kind === "compose" && (
+								<button
+									type="button"
+									onClick={() => {
+										setQueryMode((m) => !m);
+										setNLQueryResult(null);
+									}}
+									className={cn(
+										"flex size-7 items-center justify-center rounded-md transition-all duration-150",
+										queryMode
+											? "bg-primary/10 text-primary"
+											: "text-muted-foreground/60 hover:text-foreground hover:bg-muted/60",
+									)}
+									title={queryMode ? "Switch to chat" : "Search tasks with natural language"}
+								>
+									<Search className="size-3.5" />
+								</button>
+							)}
+							{phase.kind === "conversation" && (
+								<Button
+									size="sm"
+									variant="outline"
+									className="h-7 gap-1.5 text-xs"
+									onClick={handleNewConversation}
+								>
+									<Plus className="size-3" />
+									New conversation
+								</Button>
+							)}
+						</div>
 					</div>
 
 					{phase.kind === "compose" ? (
-						<ComposeForm
-							agents={agents}
-							conversations={conversations}
-							agentsLoading={agentsLoading}
-							agentId={agentId}
-							onAgentChange={setAgentId}
-							message={message}
-							onMessageChange={setMessage}
-							onKeyDown={handleKeyDown}
-							textareaRef={textareaRef}
-							canSend={canSend}
-							isPending={sendMut.isPending}
-							onSend={() => sendMut.mutate()}
-							error={sendMut.error}
+					<>
+							{queryMode && nlQueryResult && (
+								<NLQueryResultPanel result={nlQueryResult} />
+							)}
+							{queryMode ? (
+								<div className="flex flex-col gap-3 p-4">
+									<div className="space-y-1.5">
+										<p className="text-xs font-medium text-muted-foreground">
+											Ask in plain English
+											<span className="ml-1.5 font-normal opacity-50">
+												(Enter to search, Shift+Enter for newline)
+											</span>
+										</p>
+										<Textarea
+											ref={textareaRef}
+											placeholder='e.g. "Show high priority tasks without assignee"'
+											value={message}
+											onChange={(e) => setMessage(e.target.value)}
+											onKeyDown={(e) => {
+												if (e.key === "Enter" && !e.shiftKey) {
+													e.preventDefault();
+													if (message.trim()) nlQueryMut.mutate();
+												}
+											}}
+											rows={3}
+											className="resize-none text-sm"
+										/>
+									</div>
+									{nlQueryMut.error && (
+										<p className="text-xs text-destructive">{nlQueryMut.error.message}</p>
+									)}
+									<Button
+										className="w-full"
+										onClick={() => nlQueryMut.mutate()}
+										disabled={!message.trim() || nlQueryMut.isPending}
+									>
+										{nlQueryMut.isPending ? (
+											<Loader2 className="size-4 animate-spin" />
+										) : (
+											<Search className="size-4" />
+										)}
+										Search
+									</Button>
+								</div>
+							) : (
+								<ComposeForm
+									agents={agents}
+									conversations={conversations}
+									agentsLoading={agentsLoading}
+									agentId={agentId}
+									onAgentChange={setAgentId}
+									message={message}
+									onMessageChange={setMessage}
+									onKeyDown={handleKeyDown}
+									textareaRef={textareaRef}
+									canSend={canSend}
+									isPending={sendMut.isPending}
+									onSend={() => sendMut.mutate()}
+									error={sendMut.error}
+								/>
+							)}
 						/>
+							)}
+						</>
 					) : (
 						<div className="h-110">
 							<ConversationView
@@ -138,6 +232,67 @@ export function AIChatFloat({ projectId }: AIChatFloatProps) {
 				</div>
 			)}
 		</>
+	);
+}
+
+// ── NL Query Result Panel ──────────────────────────────────────────────────────
+
+function NLQueryResultPanel({ result }: { result: NLQueryResult }) {
+	return (
+		<div className="p-4 space-y-3">
+			<div className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2">
+				<p className="text-[11px] font-semibold text-muted-foreground/70 uppercase tracking-wider mb-0.5">
+					Interpretation
+				</p>
+				<p className="text-[13px] text-foreground leading-relaxed">
+					{result.interpretation}
+				</p>
+			</div>
+
+			{result.filters.length > 0 && (
+				<div>
+					<p className="text-[11px] font-semibold text-muted-foreground/70 uppercase tracking-wider mb-1.5">
+						Filters
+					</p>
+					<div className="space-y-1">
+						{result.filters.map((f, i) => (
+							<div
+								key={i}
+								className="flex items-center gap-2 rounded-md border border-border/30 bg-card/50 px-2.5 py-1.5"
+							>
+								<span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-mono font-medium text-muted-foreground">
+									{f.field}
+								</span>
+								<span className="text-[11px] text-muted-foreground">{f.operator}</span>
+								<span className="text-[11px] font-medium text-foreground">
+									{Array.isArray(f.value) ? f.value.join(", ") : String(f.value ?? "")}
+								</span>
+							</div>
+						))}
+					</div>
+				</div>
+			)}
+
+			{result.sort_by && (
+				<div className="flex items-center gap-2 text-xs text-muted-foreground">
+					<span className="text-[11px] font-semibold text-muted-foreground/70 uppercase">
+						Sort
+					</span>
+					<span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px]">
+						{result.sort_by}
+					</span>
+					<span>{result.sort_order === "desc" ? "↓" : "↑"}</span>
+				</div>
+			)}
+
+			{result.summary && (
+				<div className="rounded-lg border border-border/30 bg-card/50 px-3 py-2">
+					<p className="text-[12px] text-muted-foreground leading-relaxed">
+						{result.summary}
+					</p>
+				</div>
+			)}
+		</div>
 	);
 }
 

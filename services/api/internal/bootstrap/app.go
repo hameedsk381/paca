@@ -250,7 +250,9 @@ func New(cfg *config.Config) (*App, error) {
 		WithMarketplace(marketplaceClient, pluginInstaller, pluginMigrationRunner)
 
 	agentHandler := handler.NewAgentHandler(agentService, cfg.AIAgentURL).
-		WithActivityRecorder(activityService)
+		WithActivityRecorder(activityService).
+		WithInternalAPIKey(cfg.Security.AgentAPIKey).
+		WithProjectFetchService(projectService)
 	convHandler := handler.NewConversationHandler(agentService)
 
 	// --- Handlers -----------------------------------------------------------

@@ -3,12 +3,15 @@ import {
 	Bot,
 	ChevronDown,
 	ChevronRight,
+	Code,
+	FileText,
 	GitBranch,
 	GitPullRequest,
 	Loader2,
 	Square,
 	Terminal,
 	User,
+	Wand2,
 	Zap,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -23,6 +26,9 @@ import {
 	CONVERSATION_STATUS_LABELS,
 	conversationEventsQueryOptions,
 	conversationQueryOptions,
+	getConversationSummary,
+	reviewConversationPR,
+	analyzeConversationError,
 	stopConversation,
 } from "@/lib/agent-api";
 import { cn } from "@/lib/utils";
@@ -431,6 +437,323 @@ function ConversationControls({
 	);
 }
 
+// ── Summary ────────────────────────────────────────────────────────────────────
+
+function ConversationSummary({
+	projectId,
+	conversationId,
+}: {
+	projectId: string;
+	conversationId: string;
+}) {
+	const { data, isLoading, error, refetch } = useQuery({
+		queryKey: ["projects", projectId, "conversations", conversationId, "summary"],
+		queryFn: () => getConversationSummary(projectId, conversationId),
+		staleTime: 5 * 60 * 1000,
+		retry: false,
+	});
+
+	if (isLoading) {
+		return (
+			<div className="px-5 py-3 border-b border-border/40 bg-muted/20 animate-pulse">
+				<div className="h-4 w-48 rounded bg-muted-foreground/10" />
+			</div>
+		);
+	}
+
+	if (error || !data) {
+		return (
+			<div className="px-5 py-3 border-b border-border/40 bg-muted/20">
+				<p className="text-xs text-muted-foreground">
+					Failed to load summary.{" "}
+					<button
+						type="button"
+						onClick={() => refetch()}
+						className="underline hover:text-foreground"
+					>
+						Retry
+					</button>
+				</p>
+			</div>
+		);
+	}
+
+	return (
+		<div className="border-b border-border/40 bg-muted/20 px-5 py-3 space-y-2.5 animate-rise-in">
+			<p className="text-xs text-muted-foreground leading-relaxed">
+				{data.summary}
+			</p>
+			{data.key_decisions.length > 0 && (
+				<div>
+					<p className="text-[11px] font-semibold text-muted-foreground/70 uppercase tracking-wider mb-1">
+						Key Decisions
+					</p>
+					<ul className="space-y-0.5">
+						{data.key_decisions.map((d, i) => (
+							<li
+								key={i}
+								className="text-xs text-muted-foreground flex items-start gap-1.5"
+							>
+								<span className="text-primary/60 mt-0.5">•</span>
+								{d}
+							</li>
+						))}
+					</ul>
+				</div>
+			)}
+			{data.files_changed.length > 0 && (
+				<div>
+					<p className="text-[11px] font-semibold text-muted-foreground/70 uppercase tracking-wider mb-1">
+						Files Changed
+					</p>
+					<div className="flex flex-wrap gap-1">
+						{data.files_changed.map((f, i) => (
+							<span
+								key={i}
+								className="rounded-md bg-muted/80 px-2 py-0.5 text-[11px] font-mono text-muted-foreground"
+							>
+								{f}
+							</span>
+						))}
+					</div>
+				</div>
+			)}
+			{data.status && (
+				<p className="text-[11px] text-muted-foreground/60">
+					Status: {data.status}
+				</p>
+			)}
+		</div>
+	);
+}
+
+// ── Code Review ────────────────────────────────────────────────────────────────
+
+function CodeReviewPanel({
+	projectId,
+	conversationId,
+}: {
+	projectId: string;
+	conversationId: string;
+}) {
+	const { data, isLoading, error, refetch } = useQuery({
+		queryKey: ["projects", projectId, "conversations", conversationId, "review"],
+		queryFn: () => reviewConversationPR(projectId, conversationId),
+		staleTime: 5 * 60 * 1000,
+		retry: false,
+	});
+
+	if (isLoading) {
+		return (
+			<div className="px-5 py-3 border-b border-border/40 bg-muted/20 animate-pulse">
+				<div className="h-4 w-48 rounded bg-muted-foreground/10" />
+			</div>
+		);
+	}
+
+	if (error || !data) {
+		return (
+			<div className="px-5 py-3 border-b border-border/40 bg-muted/20">
+				<p className="text-xs text-muted-foreground">
+					Failed to load code review.{" "}
+					<button
+						type="button"
+						onClick={() => refetch()}
+						className="underline hover:text-foreground"
+					>
+						Retry
+					</button>
+				</p>
+			</div>
+		);
+	}
+
+	const scoreColor =
+		data.overall_score === "pass"
+			? "text-emerald-500 border-emerald-500/30 bg-emerald-500/10"
+			: data.overall_score === "pass_with_suggestions"
+				? "text-amber-500 border-amber-500/30 bg-amber-500/10"
+				: "text-destructive border-destructive/30 bg-destructive/10";
+
+	return (
+		<div className="border-b border-border/40 bg-muted/20 px-5 py-3 space-y-3 animate-rise-in">
+			<div className="flex items-center gap-2">
+				<p className="text-xs text-muted-foreground leading-relaxed flex-1">
+					{data.summary}
+				</p>
+				{data.overall_score && (
+					<span
+						className={cn(
+							"shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold",
+							scoreColor,
+						)}
+					>
+						{data.overall_score.replace(/_/g, " ")}
+					</span>
+				)}
+			</div>
+
+			{data.issues.length > 0 && (
+				<div className="space-y-1.5">
+					{data.issues.map((issue, i) => (
+						<div key={i} className="rounded-lg border border-border/30 bg-card/50 px-3 py-2 space-y-1">
+							<div className="flex items-center gap-2">
+								<span
+									className={cn(
+										"text-[10px] font-semibold uppercase shrink-0",
+										issue.severity === "critical" && "text-destructive",
+										issue.severity === "major" && "text-amber-500",
+										issue.severity === "minor" && "text-blue-500",
+										issue.severity === "suggestion" && "text-muted-foreground",
+									)}
+								>
+									{issue.severity}
+								</span>
+								<span className="text-[11px] font-mono text-muted-foreground/70 truncate">
+									{issue.file}
+									{issue.line != null && `:${issue.line}`}
+								</span>
+							</div>
+							<p className="text-[12px] text-muted-foreground leading-relaxed pl-1">
+								{issue.description}
+							</p>
+							{issue.suggestion && (
+								<p className="text-[11px] text-muted-foreground/70 pl-1 italic">
+									Suggestion: {issue.suggestion}
+								</p>
+							)}
+						</div>
+					))}
+				</div>
+			)}
+
+			{data.positive_feedback.length > 0 && (
+				<div>
+					<p className="text-[11px] font-semibold text-muted-foreground/70 uppercase tracking-wider mb-1">
+						Positive Feedback
+					</p>
+					<ul className="space-y-0.5">
+						{data.positive_feedback.map((fb, i) => (
+							<li
+								key={i}
+								className="text-xs text-emerald-600 dark:text-emerald-400 flex items-start gap-1.5"
+							>
+								<span className="mt-0.5">✓</span>
+								{fb}
+							</li>
+						))}
+					</ul>
+				</div>
+			)}
+		</div>
+	);
+}
+
+// ── Error Analysis ────────────────────────────────────────────────────────────
+
+function ErrorAnalysisPanel({
+	projectId,
+	conversationId,
+}: {
+	projectId: string;
+	conversationId: string;
+}) {
+	const { data, isLoading, error, refetch } = useQuery({
+		queryKey: ["projects", projectId, "conversations", conversationId, "error-analysis"],
+		queryFn: () => analyzeConversationError(projectId, conversationId),
+		staleTime: 5 * 60 * 1000,
+		retry: false,
+	});
+
+	if (isLoading) {
+		return (
+			<div className="px-5 py-3 border-b border-border/40 bg-destructive/5 animate-pulse">
+				<div className="h-4 w-48 rounded bg-muted-foreground/10" />
+			</div>
+		);
+	}
+
+	if (error || !data) {
+		return (
+			<div className="px-5 py-3 border-b border-border/40 bg-destructive/5">
+				<p className="text-xs text-muted-foreground">
+					Failed to analyze error.{" "}
+					<button
+						type="button"
+						onClick={() => refetch()}
+						className="underline hover:text-foreground"
+					>
+						Retry
+					</button>
+				</p>
+			</div>
+		);
+	}
+
+	const errorTypeColors: Record<string, string> = {
+		timeout: "text-amber-500 border-amber-500/30 bg-amber-500/10",
+		permission: "text-orange-500 border-orange-500/30 bg-orange-500/10",
+		code_error: "text-destructive border-destructive/30 bg-destructive/10",
+		infrastructure: "text-purple-500 border-purple-500/30 bg-purple-500/10",
+		unknown: "text-muted-foreground border-border/40 bg-muted/30",
+	};
+
+	return (
+		<div className="border-b border-border/40 bg-destructive/5 px-5 py-3 space-y-3 animate-rise-in">
+			<div className="flex items-center gap-2">
+				<span
+					className={cn(
+						"rounded-full border px-2 py-0.5 text-[10px] font-semibold",
+						errorTypeColors[data.error_type] || errorTypeColors.unknown,
+					)}
+				>
+					{data.error_type.replace(/_/g, " ")}
+				</span>
+				<p className="text-xs text-muted-foreground leading-relaxed flex-1">
+					{data.error_summary}
+				</p>
+			</div>
+
+			{data.root_cause && (
+				<div className="rounded-lg border border-border/30 bg-card/50 px-3 py-2">
+					<p className="text-[11px] font-semibold text-muted-foreground/70 uppercase tracking-wider mb-0.5">
+						Root Cause
+					</p>
+					<p className="text-[12px] text-muted-foreground leading-relaxed">
+						{data.root_cause}
+					</p>
+				</div>
+			)}
+
+			{data.suggested_actions.length > 0 && (
+				<div className="space-y-1.5">
+					<p className="text-[11px] font-semibold text-muted-foreground/70 uppercase tracking-wider">
+						Suggested Actions
+					</p>
+					{data.suggested_actions.map((action, i) => (
+						<div
+							key={i}
+							className="rounded-lg border border-border/30 bg-card/50 px-3 py-2 flex items-center gap-3"
+						>
+							<div className="flex-1 min-w-0">
+								<p className="text-[12px] font-medium text-foreground leading-snug">
+									{action.label}
+								</p>
+								<p className="text-[11px] text-muted-foreground leading-relaxed mt-0.5">
+									{action.description}
+								</p>
+							</div>
+							<span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground shrink-0">
+								{action.type.replace(/_/g, " ")}
+							</span>
+						</div>
+					))}
+				</div>
+			)}
+		</div>
+	);
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 interface ConversationViewProps {
@@ -486,6 +809,10 @@ export function ConversationView({
 			cost,
 		};
 	}, [events]);
+
+	const [summaryOpen, setSummaryOpen] = useState(false);
+	const [reviewOpen, setReviewOpen] = useState(false);
+	const [errorAnalysisOpen, setErrorAnalysisOpen] = useState(false);
 
 	// Scroll to bottom when new messages arrive
 	// biome-ignore lint/correctness/useExhaustiveDependencies: events is needed to trigger scroll
@@ -559,7 +886,65 @@ export function ConversationView({
 					)}
 				</div>
 
-				<div className="flex items-center gap-3 shrink-0">
+				<div className="flex items-center gap-1.5 shrink-0">
+					<button
+						type="button"
+						onClick={() => setSummaryOpen((o) => !o)}
+						className={cn(
+							"flex items-center gap-1 rounded-md border px-2 py-1 text-xs transition-all duration-150",
+							summaryOpen
+								? "border-primary/40 bg-primary/5 text-foreground"
+								: "border-border/40 text-muted-foreground hover:border-border/70",
+						)}
+					>
+						<FileText className="size-3" />
+						Summary
+						{summaryOpen ? (
+							<ChevronDown className="size-3" />
+						) : (
+							<ChevronRight className="size-3" />
+						)}
+					</button>
+					{conversation.pr_url && (
+						<button
+							type="button"
+							onClick={() => setReviewOpen((o) => !o)}
+							className={cn(
+								"flex items-center gap-1 rounded-md border px-2 py-1 text-xs transition-all duration-150",
+								reviewOpen
+									? "border-primary/40 bg-primary/5 text-foreground"
+									: "border-border/40 text-muted-foreground hover:border-border/70",
+							)}
+						>
+							<Code className="size-3" />
+							Review
+							{reviewOpen ? (
+								<ChevronDown className="size-3" />
+							) : (
+								<ChevronRight className="size-3" />
+							)}
+						</button>
+					)}
+					{conversation.status === "failed" && (
+						<button
+							type="button"
+							onClick={() => setErrorAnalysisOpen((o) => !o)}
+							className={cn(
+								"flex items-center gap-1 rounded-md border px-2 py-1 text-xs transition-all duration-150",
+								errorAnalysisOpen
+									? "border-destructive/40 bg-destructive/5 text-destructive"
+									: "border-border/40 text-muted-foreground hover:border-destructive/30 hover:text-destructive",
+							)}
+						>
+							<Wand2 className="size-3" />
+							Analyze
+							{errorAnalysisOpen ? (
+								<ChevronDown className="size-3" />
+							) : (
+								<ChevronRight className="size-3" />
+							)}
+						</button>
+					)}
 					{conversation.branch_name && (
 						<span className="flex items-center gap-1 text-xs text-muted-foreground">
 							<GitBranch className="size-3" />
@@ -583,6 +968,30 @@ export function ConversationView({
 					/>
 				</div>
 			</div>
+
+			{/* Summary */}
+			{summaryOpen && (
+				<ConversationSummary
+					projectId={projectId}
+					conversationId={conversationId}
+				/>
+			)}
+
+			{/* Code Review */}
+			{reviewOpen && conversation?.pr_url && (
+				<CodeReviewPanel
+					projectId={projectId}
+					conversationId={conversationId}
+				/>
+			)}
+
+			{/* Error Analysis */}
+			{errorAnalysisOpen && conversation?.status === "failed" && (
+				<ErrorAnalysisPanel
+					projectId={projectId}
+					conversationId={conversationId}
+				/>
+			)}
 
 			{/* Messages */}
 			<ScrollArea ref={scrollRef} className="flex-1 min-h-0">

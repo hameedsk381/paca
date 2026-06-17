@@ -66,40 +66,40 @@ def _wait_for_done_or_stop(
     stop_event: threading.Event,
     poll_interval: float = 2.0,
     timeout: float = 3600.0,
-) -> tuple[bool, bool]:
+) -> tuple[bool, bool, str | None]:
     """Poll the remote conversation until it finishes or a stop is signaled.
 
-    Returns (stopped, errored):
-      stopped  — True if the loop exited because a stop was requested.
-      errored  — True if the conversation ended with ERROR or STUCK status.
+    Returns (stopped, errored, error_detail):
+      stopped       — True if the loop exited because a stop was requested.
+      errored       — True if the conversation ended with ERROR or STUCK status.
+      error_detail  — Extracted error detail if errored, else None.
     """
     start = time.monotonic()
     while True:
-        # stop_event.wait() blocks for up to poll_interval seconds, returning
-        # True immediately if the event is already set.
         if stop_event.wait(timeout=poll_interval):
             try:
                 conversation.pause()
             except Exception as exc:
                 logger.warning("Failed to pause conversation on stop request: %s", exc)
-            return True, False
+            return True, False, None
 
         if time.monotonic() - start > timeout:
             logger.warning("Conversation polling timed out after %.0f seconds", timeout)
-            return False, False
+            return False, False, None
 
         try:
             status = conversation.state.execution_status
             if status in _DONE_STATUSES:
                 errored = status in _ERROR_STATUSES
+                error_detail = None
                 if errored:
-                    detail = _get_conversation_error_detail(conversation)
+                    error_detail = _get_conversation_error_detail(conversation)
                     logger.error(
                         "Conversation ended with status %s — %s",
                         status.value,
-                        detail or "no detail available",
+                        error_detail or "no detail available",
                     )
-                return False, errored
+                return False, errored, error_detail
         except Exception as exc:
             logger.debug("Failed to read conversation execution status: %s", exc)
 
@@ -446,8 +446,8 @@ async def run_conversation(trigger: TriggerMessage, agent_config: AgentConfig) -
 
         agent_context = AgentContext(skills=skills, system_message_suffix=system_suffix)
 
-        def _run_sync() -> bool:
-            """Returns True if the run was stopped, False if it finished naturally."""
+        def _run_sync() -> tuple[bool, bool, str | None]:
+            """Returns (stopped, errored, error_detail)."""
             with docker_sandbox(
                 trigger.conversation_id,
                 git_committer_name=agent_config.git_committer_name,
@@ -526,11 +526,11 @@ async def run_conversation(trigger: TriggerMessage, agent_config: AgentConfig) -
                     except Exception as exc:
                         logger.debug("Failed to close conversation: %s", exc)
 
-        stopped, errored = await asyncio.get_event_loop().run_in_executor(None, _run_sync)
+        stopped, errored, error_detail = await asyncio.get_event_loop().run_in_executor(None, _run_sync)
         if not stopped:
             if errored:
                 await conversation_repository.update_conversation_status(
-                    trigger.conversation_id, "failed"
+                    trigger.conversation_id, "failed", error_message=error_detail
                 )
                 await stream_store.publish_realtime(
                     project_id=trigger.project_id,

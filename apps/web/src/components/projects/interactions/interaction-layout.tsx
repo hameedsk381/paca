@@ -20,6 +20,7 @@ import {
 	Puzzle,
 	Search,
 	Sparkles,
+	Wand2,
 	X,
 } from "lucide-react";
 import type { ReactNode } from "react";
@@ -35,6 +36,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
+	aiGenerateTasks,
 	allTasksQueryOptions,
 	bulkMoveViewTaskPositions,
 	createSprint,
@@ -78,6 +80,15 @@ import { BoardView } from "./board-view";
 import { SprintSummaryBar } from "./sprint-analytics";
 import { ListView } from "./list-view";
 import { NewViewPopover } from "./new-view-popover";
+import { Button } from "@/components/ui/button";
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from "@/components/ui/dialog";
 import { RenameViewDialog } from "./rename-view-dialog";
 import { RoadmapView } from "./roadmap-view";
 import { TaskDetailModal } from "./task-detail-modal";
@@ -520,10 +531,19 @@ export function InteractionLayout({
 	const isManualSort =
 		!activeViewConfig?.sort_by ||
 		activeViewConfig?.sort_by?.toLowerCase() === "manual";
+	const [generateTasksOpen, setGenerateTasksOpen] = useState(false);
+	const [generateTasksPrompt, setGenerateTasksPrompt] = useState("");
 	const [searchQuery, setSearchQuery] = useState("");
 	const [searchOpen, setSearchOpen] = useState(false);
 	const searchRef = useRef<HTMLInputElement>(null);
 	const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+
+	const generateTasksMutation = useMutation({
+		mutationFn: () => aiGenerateTasks(projectId, generateTasksPrompt),
+		onSuccess: () => {
+			qc.invalidateQueries({ queryKey: ["projects", projectId, "tasks"] });
+		},
+	});
 
 	const { data: members = [] } = useQuery(
 		projectMembersQueryOptions(projectId),
@@ -1498,6 +1518,18 @@ export function InteractionLayout({
 							isPending={updateViewConfigMutation.isPending}
 						/>
 					)}
+
+					<button
+						type="button"
+						onClick={() => {
+							setGenerateTasksPrompt("");
+							setGenerateTasksOpen(true);
+						}}
+						className="flex size-7 items-center justify-center rounded-md text-muted-foreground/60 hover:text-foreground hover:bg-muted/60 transition-all duration-150"
+						title="Generate tasks with AI"
+					>
+						<Wand2 className="size-3.5" />
+					</button>
 				</div>
 			</div>
 
@@ -1714,6 +1746,118 @@ export function InteractionLayout({
 				}
 				isPending={renameViewMutation.isPending}
 			/>
+
+			<Dialog
+				open={generateTasksOpen}
+				onOpenChange={setGenerateTasksOpen}
+			>
+				<DialogContent className="sm:max-w-lg">
+					<DialogHeader>
+						<DialogTitle className="flex items-center gap-2">
+							<Wand2 className="size-4 text-muted-foreground" />
+							Generate Tasks
+						</DialogTitle>
+						<DialogDescription>
+							Describe what you want to build and AI will break it down into
+							tasks.
+						</DialogDescription>
+					</DialogHeader>
+
+					<div className="py-2 space-y-3">
+						<textarea
+							value={generateTasksPrompt}
+							onChange={(e) => setGenerateTasksPrompt(e.target.value)}
+							placeholder="e.g. Build a user authentication system with login, signup, and password reset"
+							className="w-full rounded-lg border border-border/40 bg-muted/15 px-3 py-2.5 text-[13px] outline-none placeholder:text-muted-foreground/50 focus:border-primary/40 focus:ring-2 focus:ring-primary/15 transition-all duration-150 resize-none"
+							rows={3}
+						/>
+
+						{generateTasksMutation.isPending && (
+							<div className="flex items-center gap-2 text-xs text-muted-foreground">
+								<div className="size-3 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
+								Generating tasks...
+							</div>
+						)}
+
+						{generateTasksMutation.error && (
+							<p className="text-xs text-destructive">
+								{generateTasksMutation.error.message}
+							</p>
+						)}
+
+						{generateTasksMutation.data?.tasks &&
+							generateTasksMutation.data.tasks.length > 0 && (
+								<div className="space-y-2 max-h-60 overflow-y-auto">
+									{generateTasksMutation.data.tasks.map((task, i) => (
+										<div
+											key={i}
+											className="rounded-lg border border-border/30 bg-card/50 px-3 py-2 space-y-1"
+										>
+											<div className="flex items-center gap-2">
+												<span className="text-[10px] font-mono text-muted-foreground/50">
+													{i + 1}
+												</span>
+												<p className="text-[13px] font-medium leading-snug">
+													{task.title}
+												</p>
+											</div>
+											{task.description && (
+												<p className="text-[12px] text-muted-foreground leading-relaxed pl-5">
+													{task.description}
+												</p>
+											)}
+											<div className="flex items-center gap-2 pl-5">
+												{task.priority && (
+													<span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+														{task.priority}
+													</span>
+												)}
+												{task.labels.map((label) => (
+													<span
+														key={label}
+														className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground"
+													>
+														{label}
+													</span>
+												))}
+											</div>
+										</div>
+									))}
+								</div>
+							)}
+					</div>
+
+					<DialogFooter>
+						<Button
+							variant="outline"
+							size="sm"
+							onClick={() => setGenerateTasksOpen(false)}
+						>
+							Close
+						</Button>
+						<Button
+							size="sm"
+							disabled={
+								!generateTasksPrompt.trim() ||
+								generateTasksMutation.isPending
+							}
+							onClick={() => generateTasksMutation.mutate()}
+						>
+							{generateTasksMutation.isPending ? (
+								<>
+									<Wand2 className="size-3 mr-1.5 animate-pulse" />
+									Generating...
+								</>
+							) : (
+								<>
+									<Wand2 className="size-3 mr-1.5" />
+									Generate
+								</>
+							)}
+						</Button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
 
 			<TaskDetailModal
 				task={selectedTask}

@@ -581,6 +581,74 @@ export const llmModelsQueryOptions = queryOptions({
 	staleTime: 10 * 60 * 1000, // 10 min — provider list rarely changes
 });
 
+// ── AI-powered features (Phase 1) ──────────────────────────────────────────
+
+export interface AIAssistTaskResult {
+	description: string;
+	acceptance_criteria: string[];
+	technical_approach: string | null;
+	suggested_labels: string[];
+}
+
+/** Smart Task Descriptions — generate description, AC, and approach from a title. */
+export async function aiAssistTask(
+	projectId: string,
+	title: string,
+	agentId?: string,
+): Promise<AIAssistTaskResult> {
+	const { data } = await apiClient.instance.post<
+		SuccessEnvelope<AIAssistTaskResult>
+	>(`/projects/${projectId}/ai/assist-task`, {
+		title,
+		...(agentId ? { agent_id: agentId } : {}),
+	});
+	return data.data;
+}
+
+export interface GeneratedTask {
+	title: string;
+	description?: string | null;
+	priority?: string | null;
+	labels: string[];
+}
+
+export interface AIGenerateTasksResult {
+	tasks: GeneratedTask[];
+}
+
+/** Task Auto-Generation — break down a natural language prompt into tasks. */
+export async function aiGenerateTasks(
+	projectId: string,
+	prompt: string,
+	agentId?: string,
+): Promise<AIGenerateTasksResult> {
+	const { data } = await apiClient.instance.post<
+		SuccessEnvelope<AIGenerateTasksResult>
+	>(`/projects/${projectId}/ai/generate-tasks`, {
+		prompt,
+		...(agentId ? { agent_id: agentId } : {}),
+	});
+	return data.data;
+}
+
+export interface ConversationSummaryResult {
+	summary: string;
+	key_decisions: string[];
+	files_changed: string[];
+	status: string | null;
+}
+
+/** Conversation Summaries — summarize an agent conversation. */
+export async function getConversationSummary(
+	projectId: string,
+	conversationId: string,
+): Promise<ConversationSummaryResult> {
+	const { data } = await apiClient.instance.get<
+		SuccessEnvelope<ConversationSummaryResult>
+	>(`/projects/${projectId}/conversations/${conversationId}/summary`);
+	return data.data;
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 export const CONVERSATION_STATUS_LABELS: Record<ConversationStatus, string> = {
@@ -598,3 +666,84 @@ export const CONVERSATION_STATUS_COLORS: Record<ConversationStatus, string> = {
 	failed: "text-destructive",
 	stopped: "text-muted-foreground",
 };
+
+// -- Phase 2: AI Code Review --------------------------------------------
+
+export interface CodeReviewIssue {
+	severity: "critical" | "major" | "minor" | "suggestion";
+	file: string;
+	line: number | null;
+	description: string;
+	suggestion: string | null;
+}
+
+export interface CodeReviewResult {
+	summary: string;
+	issues: CodeReviewIssue[];
+	positive_feedback: string[];
+	overall_score: string | null;
+}
+
+export async function reviewConversationPR(
+	projectId: string,
+	conversationId: string,
+): Promise<CodeReviewResult> {
+	const { data } = await apiClient.instance.post<
+		SuccessEnvelope<CodeReviewResult>
+	>(`/projects/${projectId}/conversations/${conversationId}/review`);
+	return data.data;
+}
+
+// -- Phase 2: Natural Language Queries -----------------------------------
+
+export interface NLQueryFilter {
+	field: string;
+	operator: string;
+	value: string | string[] | number | null;
+}
+
+export interface NLQueryResult {
+	interpretation: string;
+	filters: NLQueryFilter[];
+	sort_by: string | null;
+	sort_order: string | null;
+	summary: string | null;
+}
+
+export async function nlQuery(
+	projectId: string,
+	query: string,
+): Promise<NLQueryResult> {
+	const { data } = await apiClient.instance.post<
+		SuccessEnvelope<NLQueryResult>
+	>(`/projects/${projectId}/ai/nl-query`, { query });
+	return data.data;
+}
+
+// -- Phase 2: Intelligent Error Recovery ---------------------------------
+
+export interface SuggestedAction {
+	type: string;
+	description: string;
+	label: string;
+	params: Record<string, unknown>;
+}
+
+export interface ErrorAnalysisResult {
+	error_type: string;
+	error_summary: string;
+	root_cause: string | null;
+	suggested_actions: SuggestedAction[];
+	can_auto_retry: boolean;
+}
+
+export async function analyzeConversationError(
+	projectId: string,
+	conversationId: string,
+): Promise<ErrorAnalysisResult> {
+	const { data } = await apiClient.instance.post<
+		SuccessEnvelope<ErrorAnalysisResult>
+	>(`/projects/${projectId}/conversations/${conversationId}/error-analysis`);
+	return data.data;
+}
+

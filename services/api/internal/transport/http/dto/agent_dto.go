@@ -285,6 +285,7 @@ type AgentConversationResponse struct {
 	IterationCount      int        `json:"iteration_count"`
 	BranchName          *string    `json:"branch_name,omitempty"`
 	PRUrl               *string    `json:"pr_url,omitempty"`
+	ErrorMessage        *string    `json:"error_message,omitempty"`
 	StartedAt           *time.Time `json:"started_at,omitempty"`
 	FinishedAt          *time.Time `json:"finished_at,omitempty"`
 	CreatedAt           time.Time  `json:"created_at"`
@@ -322,6 +323,7 @@ func ConversationFromEntity(c *agentdom.AgentConversation) AgentConversationResp
 		IterationCount:      c.IterationCount,
 		BranchName:          c.BranchName,
 		PRUrl:               c.PRUrl,
+		ErrorMessage:        c.ErrorMessage,
 		StartedAt:           c.StartedAt,
 		FinishedAt:          c.FinishedAt,
 		CreatedAt:           c.CreatedAt,

@@ -761,6 +761,43 @@ func New(deps Deps) *gin.Engine {
 					httpmw.RequirePermissions(deps.Authorizer, httpmw.ProjectScopeFromParam("projectId"), authz.PermissionAgentsRead),
 					deps.Conversation.SendConversationMessage,
 				)
+				// Conversation summary — AI-powered
+				if deps.Agent != nil {
+					conversations.GET("/:conversationId/summary",
+						httpmw.RequirePermissions(deps.Authorizer, httpmw.ProjectScopeFromParam("projectId"), authz.PermissionAgentsRead),
+						deps.Agent.GetConversationSummary,
+					)
+					// AI Code Review — review PR created during conversation
+					conversations.POST("/:conversationId/review",
+						httpmw.RequirePermissions(deps.Authorizer, httpmw.ProjectScopeFromParam("projectId"), authz.PermissionAgentsRead),
+						deps.Agent.AIReviewConversation,
+					)
+					// Intelligent Error Recovery — analyze failed conversation
+					conversations.POST("/:conversationId/error-analysis",
+						httpmw.RequirePermissions(deps.Authorizer, httpmw.ProjectScopeFromParam("projectId"), authz.PermissionAgentsRead),
+						deps.Agent.AIErrorAnalysis,
+					)
+				}
+			}
+		}
+
+		// AI-powered features — available when an agent is configured
+		if deps.Agent != nil {
+			ai := project.Group("/ai")
+			{
+				ai.POST("/assist-task",
+					httpmw.RequirePermissions(deps.Authorizer, httpmw.ProjectScopeFromParam("projectId"), authz.PermissionTasksWrite),
+					deps.Agent.AIAssistTask,
+				)
+				ai.POST("/generate-tasks",
+					httpmw.RequirePermissions(deps.Authorizer, httpmw.ProjectScopeFromParam("projectId"), authz.PermissionTasksWrite),
+					deps.Agent.AIGenerateTasks,
+				)
+				// Natural Language Queries
+				ai.POST("/nl-query",
+					httpmw.RequirePermissions(deps.Authorizer, httpmw.ProjectScopeFromParam("projectId"), authz.PermissionTasksRead),
+					deps.Agent.AINLQuery,
+				)
 			}
 		}
 

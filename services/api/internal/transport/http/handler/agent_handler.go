@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -25,19 +26,77 @@ type agentActivityRecorder interface {
 
 // AgentHandler handles AI agent management endpoints.
 type AgentHandler struct {
-	svc         agentdom.Service
-	aiAgentURL  string
-	httpClient  *http.Client
-	activityRec agentActivityRecorder
+	svc              agentdom.Service
+	aiAgentURL       string
+	aiAgentAPIKey    string
+	httpClient       *http.Client
+	activityRec      agentActivityRecorder
+	projectFetchSvc  projectFetchService
+}
+
+// projectFetchService is the minimal interface for fetching project data.
+type projectFetchService interface {
+	GetProjectByID(ctx context.Context, projectID uuid.UUID) (any, error)
 }
 
 // NewAgentHandler returns an AgentHandler wired to the agent service.
 func NewAgentHandler(svc agentdom.Service, aiAgentURL string) *AgentHandler {
 	return &AgentHandler{
-		svc:        svc,
-		aiAgentURL: aiAgentURL,
-		httpClient: &http.Client{},
+		svc:         svc,
+		aiAgentURL:  aiAgentURL,
+		httpClient:  &http.Client{},
 	}
+}
+
+// WithInternalAPIKey sets the internal API key for authenticating with the ai-agent service.
+func (h *AgentHandler) WithInternalAPIKey(key string) *AgentHandler {
+	h.aiAgentAPIKey = key
+	return h
+}
+
+// WithProjectFetchService sets the service used to fetch project data for AI features.
+func (h *AgentHandler) WithProjectFetchService(svc projectFetchService) *AgentHandler {
+	h.projectFetchSvc = svc
+	return h
+}
+
+// proxyToAIAgent forwards a request to the Python AI agent service and returns the response.
+func (h *AgentHandler) proxyToAIAgent(c *gin.Context, method, path string, body io.Reader) {
+	if h.aiAgentURL == "" {
+		presenter.Error(c, apierr.New(apierr.CodeInternalError, "ai-agent service URL not configured"))
+		return
+	}
+
+	req, err := http.NewRequestWithContext(c.Request.Context(), method, h.aiAgentURL+path, body)
+	if err != nil {
+		presenter.Error(c, apierr.New(apierr.CodeInternalError, "failed to create request"))
+		return
+	}
+
+	if h.aiAgentAPIKey != "" {
+		req.Header.Set("X-Internal-Token", h.aiAgentAPIKey)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := h.httpClient.Do(req)
+	if err != nil {
+		presenter.Error(c, apierr.New(apierr.CodeInternalError, "failed to reach ai-agent service"))
+		return
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		presenter.Error(c, apierr.New(apierr.CodeInternalError, "failed to read ai-agent response"))
+		return
+	}
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		presenter.Error(c, apierr.New(apierr.CodeInternalError, "ai-agent service returned an error: "+string(respBody)))
+		return
+	}
+
+	c.Data(resp.StatusCode, "application/json", respBody)
 }
 
 // WithActivityRecorder attaches an activity recorder so that an
@@ -540,6 +599,150 @@ func (h *AgentHandler) WriteTaskDescriptionWithAI(c *gin.Context) {
 	}
 
 	presenter.Created(c, gin.H{"conversation": dto.ConversationFromEntity(conv)})
+}
+
+// --- AI-powered features ----------------------------------------------------
+
+// AIAssistTask handles POST /projects/:projectId/ai/assist-task.
+// Proxies to the Python AI agent service for smart task description generation.
+func (h *AgentHandler) AIAssistTask(c *gin.Context) {
+	projectID, err := parseProjectID(c)
+	if err != nil {
+		presenter.Error(c, err)
+		return
+	}
+
+	body := map[string]any{
+		"project_id": projectID.String(),
+	}
+
+	// Parse the incoming JSON body to extract title and optional agent_id.
+	var req struct {
+		Title   string     `json:"title"`
+		AgentID *uuid.UUID `json:"agent_id"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		presenter.Error(c, err)
+		return
+	}
+	body["title"] = req.Title
+	if req.AgentID != nil {
+		body["agent_id"] = req.AgentID.String()
+	}
+
+	jsonBody, _ := json.Marshal(body)
+	h.proxyToAIAgent(c, http.MethodPost, "/ai/assist-task", bytes.NewReader(jsonBody))
+}
+
+// AIGenerateTasks handles POST /projects/:projectId/ai/generate-tasks.
+// Proxies to the Python AI agent service for task generation from natural language.
+func (h *AgentHandler) AIGenerateTasks(c *gin.Context) {
+	projectID, err := parseProjectID(c)
+	if err != nil {
+		presenter.Error(c, err)
+		return
+	}
+
+	var req struct {
+		Prompt  string     `json:"prompt"`
+		AgentID *uuid.UUID `json:"agent_id"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		presenter.Error(c, err)
+		return
+	}
+
+	body := map[string]any{
+		"project_id": projectID.String(),
+		"prompt":     req.Prompt,
+	}
+	if req.AgentID != nil {
+		body["agent_id"] = req.AgentID.String()
+	}
+
+	jsonBody, _ := json.Marshal(body)
+	h.proxyToAIAgent(c, http.MethodPost, "/ai/generate-tasks", bytes.NewReader(jsonBody))
+}
+
+// GetConversationSummary handles GET /projects/:projectId/conversations/:conversationId/summary.
+// Proxies to the Python AI agent service for conversation summaries.
+func (h *AgentHandler) GetConversationSummary(c *gin.Context) {
+	conversationID, err := parseParamUUID(c, "conversationId")
+	if err != nil {
+		presenter.Error(c, err)
+		return
+	}
+
+	h.proxyToAIAgent(c, http.MethodGet, "/ai/conversations/"+conversationID.String()+"/summary", nil)
+}
+
+// AIReviewConversation handles POST /projects/:projectId/ai/conversations/:conversationId/review.
+// Proxies to the Python AI agent service for AI code review on PRs.
+func (h *AgentHandler) AIReviewConversation(c *gin.Context) {
+	projectID, err := parseProjectID(c)
+	if err != nil {
+		presenter.Error(c, err)
+		return
+	}
+	conversationID, err := parseParamUUID(c, "conversationId")
+	if err != nil {
+		presenter.Error(c, err)
+		return
+	}
+
+	body := map[string]any{
+		"project_id":      projectID.String(),
+		"conversation_id": conversationID.String(),
+	}
+	jsonBody, _ := json.Marshal(body)
+	h.proxyToAIAgent(c, http.MethodPost, "/ai/conversations/"+conversationID.String()+"/review", bytes.NewReader(jsonBody))
+}
+
+// AINLQuery handles POST /projects/:projectId/ai/nl-query.
+// Proxies to the Python AI agent service for natural language queries.
+func (h *AgentHandler) AINLQuery(c *gin.Context) {
+	projectID, err := parseProjectID(c)
+	if err != nil {
+		presenter.Error(c, err)
+		return
+	}
+
+	var req struct {
+		Query string `json:"query"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		presenter.Error(c, err)
+		return
+	}
+
+	body := map[string]any{
+		"project_id": projectID.String(),
+		"query":      req.Query,
+	}
+	jsonBody, _ := json.Marshal(body)
+	h.proxyToAIAgent(c, http.MethodPost, "/ai/nl-query", bytes.NewReader(jsonBody))
+}
+
+// AIErrorAnalysis handles POST /projects/:projectId/ai/conversations/:conversationId/error-analysis.
+// Proxies to the Python AI agent service for intelligent error analysis.
+func (h *AgentHandler) AIErrorAnalysis(c *gin.Context) {
+	projectID, err := parseProjectID(c)
+	if err != nil {
+		presenter.Error(c, err)
+		return
+	}
+	conversationID, err := parseParamUUID(c, "conversationId")
+	if err != nil {
+		presenter.Error(c, err)
+		return
+	}
+
+	body := map[string]any{
+		"project_id":      projectID.String(),
+		"conversation_id": conversationID.String(),
+	}
+	jsonBody, _ := json.Marshal(body)
+	h.proxyToAIAgent(c, http.MethodPost, "/ai/conversations/"+conversationID.String()+"/error-analysis", bytes.NewReader(jsonBody))
 }
 
 // --- helpers ----------------------------------------------------------------
