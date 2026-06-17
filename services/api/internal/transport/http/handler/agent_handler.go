@@ -67,7 +67,12 @@ func (h *AgentHandler) proxyToAIAgent(c *gin.Context, method, path string, body 
 		return
 	}
 
-	req, err := http.NewRequestWithContext(c.Request.Context(), method, h.aiAgentURL+path, body)
+	targetURL := h.aiAgentURL + path
+	if c.Request.URL.RawQuery != "" {
+		targetURL += "?" + c.Request.URL.RawQuery
+	}
+
+	req, err := http.NewRequestWithContext(c.Request.Context(), method, targetURL, body)
 	if err != nil {
 		presenter.Error(c, apierr.New(apierr.CodeInternalError, "failed to create request"))
 		return
@@ -91,8 +96,8 @@ func (h *AgentHandler) proxyToAIAgent(c *gin.Context, method, path string, body 
 		return
 	}
 
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		presenter.Error(c, apierr.New(apierr.CodeInternalError, "ai-agent service returned an error: "+string(respBody)))
+	if resp.StatusCode >= 400 {
+		presenter.Error(c, apierr.New(apierr.CodeInternalError, fmt.Sprintf("ai-agent service returned HTTP %d: %s", resp.StatusCode, string(respBody))))
 		return
 	}
 
@@ -681,6 +686,14 @@ func (h *AgentHandler) GetConversationSummary(c *gin.Context) {
 func (h *AgentHandler) GetConversationEventsCompat(c *gin.Context) {
 	conversationID := c.Param("conversationId")
 	h.proxyToAIAgent(c, http.MethodGet, "/conversations/"+conversationID+"/events", nil)
+}
+
+// PostConversationEventsCompat handles POST /api/conversations/:conversationId/events.
+// The OpenHands SDK agent-server writes events (including user messages) via POST to
+// /events. Proxies to the Python internal /message endpoint.
+func (h *AgentHandler) PostConversationEventsCompat(c *gin.Context) {
+	conversationID := c.Param("conversationId")
+	h.proxyToAIAgent(c, http.MethodPost, "/conversations/"+conversationID+"/message", c.Request.Body)
 }
 
 // GetConversationCompat handles GET /api/conversations/:conversationId.

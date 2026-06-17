@@ -61,6 +61,7 @@ func New(deps Deps) *gin.Engine {
 	// handler's proxy so they reach the Python ai-agent internal endpoint.
 	if deps.Agent != nil {
 		api.GET("/conversations/:conversationId/events", deps.Agent.GetConversationEventsCompat)
+		api.POST("/conversations/:conversationId/events", deps.Agent.PostConversationEventsCompat)
 		api.GET("/conversations/:conversationId", deps.Agent.GetConversationCompat)
 	}
 
