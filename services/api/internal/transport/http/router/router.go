@@ -55,6 +55,15 @@ func New(deps Deps) *gin.Engine {
 	// Public routes
 	api.GET("/healthz", deps.Health.Check)
 
+	// OpenHands SDK agent-server compatibility routes.
+	// The agent-server inside the sandbox calls back to the API using unscoped
+	// paths like /api/conversations/{id}/events. Wire them through the agent
+	// handler's proxy so they reach the Python ai-agent internal endpoint.
+	if deps.Agent != nil {
+		api.GET("/conversations/:conversationId/events", deps.Agent.GetConversationEventsCompat)
+		api.GET("/conversations/:conversationId", deps.Agent.GetConversationCompat)
+	}
+
 	v1 := api.Group("/v1")
 	{
 		auth := v1.Group("/auth")

@@ -676,6 +676,20 @@ func (h *AgentHandler) GetConversationSummary(c *gin.Context) {
 	h.proxyToAIAgent(c, http.MethodGet, "/ai/conversations/"+conversationID.String()+"/summary", nil)
 }
 
+// GetConversationEventsCompat handles GET /api/conversations/:conversationId/events.
+// OpenHands SDK agent-server compatibility — proxies to the Python internal endpoint.
+func (h *AgentHandler) GetConversationEventsCompat(c *gin.Context) {
+	conversationID := c.Param("conversationId")
+	h.proxyToAIAgent(c, http.MethodGet, "/conversations/"+conversationID+"/events", nil)
+}
+
+// GetConversationCompat handles GET /api/conversations/:conversationId.
+// OpenHands SDK agent-server compatibility — proxies to the Python internal endpoint.
+func (h *AgentHandler) GetConversationCompat(c *gin.Context) {
+	conversationID := c.Param("conversationId")
+	h.proxyToAIAgent(c, http.MethodGet, "/conversations/"+conversationID, nil)
+}
+
 // AIReviewConversation handles POST /projects/:projectId/ai/conversations/:conversationId/review.
 // Proxies to the Python AI agent service for AI code review on PRs.
 func (h *AgentHandler) AIReviewConversation(c *gin.Context) {
