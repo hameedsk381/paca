@@ -259,6 +259,10 @@ def docker_sandbox(
             # server can run importlib.import_module("src.agent.repo_tools").
             # Value depends on whether we share via bind-mount or file injection.
             "OH_EXTRA_PYTHON_PATH": "/app" if app_host_path else _REPO_TOOLS_DEST,
+            # Forward the API base URL and PACA API URL to the sandbox environment
+            # so the agent-server and tool integrations know where the API resides.
+            "API_BASE_URL": settings.api_base_url,
+            "PACA_API_URL": settings.api_base_url,
         }
 
         run_kwargs: dict = {
