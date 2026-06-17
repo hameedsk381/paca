@@ -1,4 +1,6 @@
 import { Check, GripVertical, Layers, Link, User } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { conversationsQueryOptions } from "@/lib/agent-api";
 
 import { getTaskTypeIconComponent } from "@/components/projects/task-types/task-type-icons";
 import {
@@ -132,6 +134,9 @@ interface TaskRowProps {
 	isDragging?: boolean;
 	canEdit?: boolean;
 	onUpdateTaskField?: (taskId: string, update: TaskFieldUpdate) => void;
+	selected?: boolean;
+	onSelectChange?: (selected: boolean) => void;
+	showCheckbox?: boolean;
 }
 
 export function TaskRow({
@@ -148,9 +153,26 @@ export function TaskRow({
 	isDragging,
 	canEdit,
 	onUpdateTaskField,
+	selected = false,
+	onSelectChange,
+	showCheckbox = false,
 }: TaskRowProps) {
 	const taskType = taskTypes.find((t) => t.id === task.task_type_id);
 	const status = statuses.find((s) => s.id === task.status_id);
+	const assignee = task.assignee_id
+		? members.find((m) => m.id === task.assignee_id)
+		: undefined;
+	const isAgent = assignee?.member_type === "agent";
+	const { data: conversations = [] } = useQuery({
+		...conversationsQueryOptions(task.project_id),
+		enabled: isAgent,
+	});
+
+	const isAgentWorking =
+		isAgent &&
+		conversations.some(
+			(c) => c.agent_id === assignee?.agent_id && c.status === "running",
+		);
 
 	/** Renders a single cell value for the given field key. */
 	const renderCell = (fieldKey: string) => {
@@ -426,16 +448,33 @@ export function TaskRow({
 							>
 								<div
 									className={cn(
-										"flex size-6 items-center justify-center rounded-full text-[10px] font-bold ring-1",
+										"flex size-6 items-center justify-center rounded-full text-[10px] font-bold ring-1 relative",
 										assignee
 											? "bg-linear-to-br from-primary/20 to-primary/10 text-primary ring-primary/20"
 											: "bg-linear-to-br from-muted/80 to-muted/40 text-muted-foreground ring-border/25",
 									)}
 								>
 									{assignee ? (
-										(assignee.full_name || assignee.username)
-											.slice(0, 1)
-											.toUpperCase()
+										<div className="relative flex items-center justify-center size-full">
+											{(assignee.full_name || assignee.username)
+												.slice(0, 1)
+												.toUpperCase()}
+											{assignee.member_type === "agent" && (
+												<span
+													className={cn(
+														"absolute -bottom-0.5 -right-0.5 size-1.5 rounded-full border border-background",
+														isAgentWorking
+															? "bg-violet-500 animate-pulse"
+															: "bg-emerald-500",
+													)}
+													title={
+														isAgentWorking
+															? "Agent is working..."
+															: "Agent is idle (online)"
+													}
+												/>
+											)}
+										</div>
 									) : (
 										<User className="size-3" />
 									)}
@@ -486,16 +525,33 @@ export function TaskRow({
 					>
 						<div
 							className={cn(
-								"flex size-6 items-center justify-center rounded-full text-[10px] font-bold ring-1",
+								"flex size-6 items-center justify-center rounded-full text-[10px] font-bold ring-1 relative",
 								assignee
 									? "bg-linear-to-br from-primary/20 to-primary/10 text-primary ring-primary/20"
 									: "bg-linear-to-br from-muted/80 to-muted/40 text-muted-foreground ring-border/25",
 							)}
 						>
 							{assignee ? (
-								(assignee.full_name || assignee.username)
-									.slice(0, 1)
-									.toUpperCase()
+								<div className="relative flex items-center justify-center size-full">
+									{(assignee.full_name || assignee.username)
+										.slice(0, 1)
+										.toUpperCase()}
+									{assignee.member_type === "agent" && (
+										<span
+											className={cn(
+												"absolute -bottom-0.5 -right-0.5 size-1.5 rounded-full border border-background",
+												isAgentWorking
+													? "bg-violet-500 animate-pulse"
+													: "bg-emerald-500",
+											)}
+											title={
+												isAgentWorking
+													? "Agent is working..."
+													: "Agent is idle (online)"
+											}
+										/>
+									)}
+								</div>
 							) : (
 								<User className="size-3" />
 							)}
@@ -749,8 +805,26 @@ export function TaskRow({
 				"group flex items-center gap-3 px-4 py-2.5 cursor-pointer",
 				"hover:bg-muted/30 transition-colors duration-150 border-b border-border/20 last:border-0",
 				isDragging && "opacity-40 bg-muted/20",
+				selected && "bg-primary/5 hover:bg-primary/10 border-primary/20",
 			)}
 		>
+			{showCheckbox && (
+				// biome-ignore lint/a11y/noStaticElementInteractions: click checkbox
+				<div
+					onClick={(e) => e.stopPropagation()}
+					className={cn(
+						"flex items-center shrink-0 transition-opacity duration-150 mr-0.5",
+						selected ? "opacity-100" : "opacity-0 group-hover:opacity-100 focus-within:opacity-100",
+					)}
+				>
+					<input
+						type="checkbox"
+						checked={selected}
+						onChange={(e) => onSelectChange?.(e.target.checked)}
+						className="size-3.5 rounded border-border/70 accent-primary cursor-pointer"
+					/>
+				</div>
+			)}
 			{showDragHandle && (
 				<GripVertical className="size-3.5 shrink-0 -ml-1.5 text-muted-foreground/30 group-hover:text-muted-foreground/70 cursor-grab opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
 			)}

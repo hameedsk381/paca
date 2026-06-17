@@ -1120,6 +1120,262 @@ function ConversationModal({
 	);
 }
 
+function AgentGanttChart({
+	conversations,
+	onSelectConversation,
+}: {
+	conversations: AgentConversation[];
+	onSelectConversation: (id: string) => void;
+}) {
+	const [timeRange, setTimeRange] = useState<"24h" | "7d">("24h");
+
+	const { startTime, endTime } = useMemo(() => {
+		const end = Date.now();
+		const start = end - (timeRange === "24h" ? 24 : 7 * 24) * 60 * 60 * 1000;
+		return { startTime: start, endTime: end };
+	}, [timeRange]);
+
+	const formatDuration = (ms: number) => {
+		if (ms < 1000) return `${ms}ms`;
+		const sec = Math.floor(ms / 1000);
+		if (sec < 60) return `${sec}s`;
+		const min = Math.floor(sec / 60);
+		const hrs = Math.floor(min / 60);
+		if (hrs === 0) return `${min}m ${sec % 60}s`;
+		return `${hrs}h ${min % 60}m`;
+	};
+
+	const activeConversations = useMemo(() => {
+		return conversations.filter((c) => {
+			const cStart = new Date(c.started_at || c.created_at).getTime();
+			const cEnd =
+				c.status === "running"
+					? Date.now()
+					: new Date(c.finished_at || c.updated_at).getTime();
+			return cStart <= endTime && cEnd >= startTime;
+		});
+	}, [conversations, startTime, endTime]);
+
+	const ticks = useMemo(() => {
+		const result = [];
+		const steps = timeRange === "24h" ? 6 : 7;
+		const stepMs = (timeRange === "24h" ? 4 : 24) * 60 * 60 * 1000;
+		for (let i = 0; i <= steps; i++) {
+			const time = startTime + i * stepMs;
+			let label = "";
+			if (timeRange === "24h") {
+				if (i === steps) label = "Now";
+				else {
+					const date = new Date(time);
+					label = date.toLocaleTimeString(undefined, {
+						hour: "numeric",
+						hour12: true,
+					});
+				}
+			} else {
+				if (i === steps) label = "Now";
+				else {
+					const date = new Date(time);
+					label = date.toLocaleDateString(undefined, { weekday: "short" });
+				}
+			}
+			result.push({ time, label, pct: (i / steps) * 100 });
+		}
+		return result;
+	}, [startTime, timeRange]);
+
+	return (
+		<div className="rounded-xl border border-border/60 bg-card p-5 mb-6">
+			<div className="flex items-center justify-between mb-4">
+				<div>
+					<h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+						Agent Work Timeline
+					</h3>
+					<p className="text-[10px] text-muted-foreground mt-0.5">
+						Visual timeline of the agent's work duration (running vs idle)
+					</p>
+				</div>
+				<div className="flex items-center gap-1 border border-border/40 rounded-lg bg-muted/30 p-0.5">
+					<button
+						type="button"
+						onClick={() => setTimeRange("24h")}
+						className={cn(
+							"px-2.5 py-1 text-[10px] font-semibold rounded-md transition-all cursor-pointer",
+							timeRange === "24h"
+								? "bg-background text-foreground shadow-xs"
+								: "text-muted-foreground hover:text-foreground"
+						)}
+					>
+						Last 24 Hours
+					</button>
+					<button
+						type="button"
+						onClick={() => setTimeRange("7d")}
+						className={cn(
+							"px-2.5 py-1 text-[10px] font-semibold rounded-md transition-all cursor-pointer",
+							timeRange === "7d"
+								? "bg-background text-foreground shadow-xs"
+								: "text-muted-foreground hover:text-foreground"
+						)}
+					>
+						Last 7 Days
+					</button>
+				</div>
+			</div>
+
+			{activeConversations.length === 0 ? (
+				<div className="flex flex-col items-center justify-center py-10 border border-dashed border-border/40 rounded-lg text-center bg-muted/5">
+					<Clock className="size-6 text-muted-foreground/30 mb-2" />
+					<p className="text-xs font-medium text-muted-foreground">No activities recorded</p>
+					<p className="text-[10px] text-muted-foreground/75 mt-0.5">
+						No conversation sessions took place during the selected period.
+					</p>
+				</div>
+			) : (
+				<div className="space-y-2.5 relative">
+					{/* The timeline bars */}
+					<div className="relative">
+						{/* Vertical gridlines */}
+						<div className="absolute inset-0 pointer-events-none flex justify-between z-0">
+							{ticks.map((tick, idx) => (
+								<div
+									key={idx}
+									className="border-l border-dashed border-border/25 h-full relative"
+									style={{ left: `${tick.pct}%` }}
+								/>
+							))}
+						</div>
+
+						{/* Gantt Rows */}
+						<div className="space-y-1.5 relative z-10 max-h-56 overflow-y-auto pr-1">
+							{activeConversations.map((conv) => {
+								const convStart = new Date(conv.started_at || conv.created_at).getTime();
+								const convEnd =
+									conv.status === "running"
+										? Date.now()
+										: new Date(conv.finished_at || conv.updated_at).getTime();
+
+								const durationMs = convEnd - convStart;
+
+								const leftStart = Math.max(convStart, startTime);
+								const rightEnd = Math.min(convEnd, endTime);
+
+								const leftPercent = ((leftStart - startTime) / (endTime - startTime)) * 100;
+								const widthPercent = Math.max(
+									((rightEnd - leftStart) / (endTime - startTime)) * 100,
+									1.5 // Ensure thin bars are still clickable
+								);
+
+								return (
+									<div
+										key={conv.id}
+										className="flex items-center text-[11px] group/row py-0.5"
+									>
+										{/* Row Label */}
+										<button
+											type="button"
+											onClick={() => onSelectConversation(conv.id)}
+											className="w-40 shrink-0 text-left font-medium truncate pr-4 hover:text-primary transition-colors cursor-pointer text-muted-foreground/90"
+										>
+											{conv.trigger_type === "chat_message"
+												? "Direct Chat"
+												: conv.trigger_type === "description_write"
+													? "Write Description"
+													: "Task Assignment"}{" "}
+											· <span className="font-[JetBrains_Mono,monospace] text-[10px] text-muted-foreground/50 font-semibold">#{conv.id.slice(0, 8)}</span>
+										</button>
+
+										{/* Row Bar Track */}
+										<div className="flex-1 h-5 rounded-md relative bg-muted/15 border border-border/10 overflow-visible">
+											{/* Gantt Bar */}
+											<div
+												onClick={() => onSelectConversation(conv.id)}
+												style={{ left: `${leftPercent}%`, width: `${widthPercent}%` }}
+												className={cn(
+													"group/bar absolute h-full rounded-md shadow-xs opacity-90 hover:opacity-100 hover:scale-y-105 transition-all cursor-pointer z-10",
+													conv.status === "finished"
+														? "bg-emerald-500/80 hover:bg-emerald-500 border border-emerald-500/30"
+														: conv.status === "failed"
+															? "bg-destructive/80 hover:bg-destructive border border-destructive/30"
+															: conv.status === "running"
+																? "bg-blue-500/80 hover:bg-blue-500 border border-blue-500/30 animate-pulse"
+																: "bg-muted-foreground/30 hover:bg-muted-foreground/45 border border-muted-foreground/20"
+												)}
+											>
+												{/* CSS Tooltip */}
+												<div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2.5 w-60 p-3 rounded-xl border border-border/40 bg-popover/95 text-popover-foreground shadow-lg opacity-0 group-hover/bar:opacity-100 pointer-events-none transition-all duration-150 z-50 text-[11px] space-y-1.5 backdrop-blur-md">
+													<div className="flex items-center justify-between border-b border-border/15 pb-1">
+														<span className="font-semibold text-xs text-foreground">
+															{conv.trigger_type === "chat_message"
+																? "Direct Chat"
+																: conv.trigger_type === "description_write"
+																	? "Write Description"
+																	: "Task Assignment"}
+														</span>
+														<Badge
+															variant="outline"
+															className={cn("text-[9px] px-1.5 py-0 font-semibold", CONVERSATION_STATUS_COLORS[conv.status])}
+														>
+															{CONVERSATION_STATUS_LABELS[conv.status] || conv.status}
+														</Badge>
+													</div>
+													<div className="grid grid-cols-3 gap-x-1 gap-y-0.5">
+														<span className="text-muted-foreground">Session:</span>
+														<span className="col-span-2 font-mono text-[10px] text-foreground font-semibold">{conv.id}</span>
+														
+														<span className="text-muted-foreground">Duration:</span>
+														<span className="col-span-2 text-foreground font-medium">{formatDuration(durationMs)}</span>
+														
+														<span className="text-muted-foreground">Steps:</span>
+														<span className="col-span-2 text-foreground font-medium">{conv.iteration_count} iterations</span>
+														
+														<span className="text-muted-foreground">Started:</span>
+														<span className="col-span-2 text-foreground font-medium">
+															{new Date(convStart).toLocaleString(undefined, {
+																month: "short",
+																day: "numeric",
+																hour: "2-digit",
+																minute: "2-digit",
+																second: "2-digit",
+															})}
+														</span>
+													</div>
+													<div className="border-t border-border/15 pt-1.5 text-[9.5px] text-muted-foreground text-center font-medium">
+														Click to open session chat logs
+													</div>
+												</div>
+											</div>
+										</div>
+									</div>
+								);
+							})}
+						</div>
+					</div>
+
+					{/* Timeline X Axis */}
+					<div className="relative h-6 mt-2 border-t border-border/15 pt-1.5">
+						<div className="absolute inset-0 flex justify-between">
+							{ticks.map((tick, idx) => (
+								<div
+									key={idx}
+									className="text-[9.5px] font-bold text-muted-foreground/60 tabular-nums flex flex-col items-center select-none"
+									style={{
+										position: "absolute",
+										left: `${tick.pct}%`,
+										transform: idx === 0 ? "none" : idx === ticks.length - 1 ? "translateX(-100%)" : "translateX(-50%)",
+									}}
+								>
+									{tick.label}
+								</div>
+							))}
+						</div>
+					</div>
+				</div>
+			)}
+		</div>
+	);
+}
+
 function ConversationsTab({
 	projectId,
 	agentId,
@@ -1249,6 +1505,11 @@ function ConversationsTab({
 					</div>
 				</div>
 			)}
+
+			<AgentGanttChart
+				conversations={conversations}
+				onSelectConversation={setModalConvId}
+			/>
 
 			<div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 				{/* Recent History List */}

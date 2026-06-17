@@ -10,7 +10,7 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { agentsQueryOptions, startChatSession } from "@/lib/agent-api";
+import { agentsQueryOptions, conversationsQueryOptions, startChatSession, type Agent, type AgentConversation } from "@/lib/agent-api";
 import { cn } from "@/lib/utils";
 import { ConversationView } from "./agents/conversation-view";
 
@@ -36,6 +36,10 @@ export function AIChatFloat({ projectId }: AIChatFloatProps) {
 	const qc = useQueryClient();
 	const { data: agents = [], isLoading: agentsLoading } = useQuery(
 		agentsQueryOptions(projectId),
+	);
+
+	const { data: conversations = [] } = useQuery(
+		conversationsQueryOptions(projectId),
 	);
 
 	const sendMut = useMutation({
@@ -110,6 +114,7 @@ export function AIChatFloat({ projectId }: AIChatFloatProps) {
 					{phase.kind === "compose" ? (
 						<ComposeForm
 							agents={agents}
+							conversations={conversations}
 							agentsLoading={agentsLoading}
 							agentId={agentId}
 							onAgentChange={setAgentId}
@@ -139,7 +144,8 @@ export function AIChatFloat({ projectId }: AIChatFloatProps) {
 // ── ComposeForm ───────────────────────────────────────────────────────────────
 
 interface ComposeFormProps {
-	agents: { id: string; name: string }[];
+	agents: Agent[];
+	conversations: AgentConversation[];
 	agentsLoading: boolean;
 	agentId: string;
 	onAgentChange: (id: string) => void;
@@ -155,6 +161,7 @@ interface ComposeFormProps {
 
 function ComposeForm({
 	agents,
+	conversations,
 	agentsLoading,
 	agentId,
 	onAgentChange,
@@ -167,6 +174,13 @@ function ComposeForm({
 	onSend,
 	error,
 }: ComposeFormProps) {
+	const getAgentStatus = (aId: string) => {
+		const working = conversations.some(
+			(c) => c.agent_id === aId && c.status === "running",
+		);
+		return working ? "working" : "idle";
+	};
+
 	return (
 		<div className="flex flex-col gap-3 p-4">
 			{/* Agent selector */}
@@ -185,14 +199,46 @@ function ComposeForm({
 						items={agents.map((a) => ({ value: a.id, label: a.name }))}
 					>
 						<SelectTrigger className="h-9 text-sm">
-							<SelectValue placeholder="Select an agent…" />
+							<SelectValue placeholder="Select an agent…">
+								{agentId && (() => {
+									const selectedAgent = agents.find((a) => a.id === agentId);
+									if (!selectedAgent) return undefined;
+									const status = getAgentStatus(selectedAgent.id);
+									return (
+										<div className="flex items-center gap-2">
+											<span
+												className={cn(
+													"size-1.5 rounded-full shrink-0",
+													status === "working"
+														? "bg-violet-500 animate-pulse"
+														: "bg-emerald-500",
+												)}
+											/>
+											<span>{selectedAgent.name}</span>
+										</div>
+									);
+								})()}
+							</SelectValue>
 						</SelectTrigger>
 						<SelectContent>
-							{agents.map((agent) => (
-								<SelectItem key={agent.id} value={agent.id}>
-									{agent.name}
-								</SelectItem>
-							))}
+							{agents.map((agent) => {
+								const status = getAgentStatus(agent.id);
+								return (
+									<SelectItem key={agent.id} value={agent.id}>
+										<div className="flex items-center gap-2">
+											<span
+												className={cn(
+													"size-1.5 rounded-full",
+													status === "working"
+														? "bg-violet-500 animate-pulse"
+														: "bg-emerald-500",
+												)}
+											/>
+											{agent.name}
+										</div>
+									</SelectItem>
+								);
+							})}
 						</SelectContent>
 					</Select>
 				)}

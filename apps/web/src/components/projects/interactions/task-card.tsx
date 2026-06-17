@@ -62,6 +62,11 @@ interface TaskCardProps {
 	isDragging?: boolean;
 	canEdit?: boolean;
 	onUpdate?: (taskId: string, payload: UpdatePayload) => void;
+	selected?: boolean;
+	onSelectChange?: (selected: boolean) => void;
+	showCheckbox?: boolean;
+	isKeyboardDragging?: boolean;
+	onKeyDown?: (e: React.KeyboardEvent) => void;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -86,6 +91,11 @@ export function TaskCard({
 	isDragging,
 	canEdit,
 	onUpdate,
+	selected = false,
+	onSelectChange,
+	showCheckbox = false,
+	isKeyboardDragging = false,
+	onKeyDown,
 }: TaskCardProps) {
 	const [typePopoverOpen, setTypePopoverOpen] = useState(false);
 	const taskType = taskTypes.find((t) => t.id === task.task_type_id);
@@ -686,13 +696,34 @@ export function TaskCard({
 			onDragStart={onDragStart}
 			onDragEnd={onDragEnd}
 			onClick={onClick}
+			onKeyDown={onKeyDown}
+			tabIndex={canEdit ? 0 : -1}
 			className={cn(
-				"group relative rounded-xl border border-border/30 bg-card p-3 shadow-xs cursor-pointer transition-all duration-150 select-none overflow-hidden",
+				"group relative rounded-xl border border-border/30 bg-card p-3 shadow-xs cursor-pointer transition-all duration-150 select-none overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
 				"hover:border-border/50 hover:shadow-sm",
 				isDragging && "opacity-50 ring-2 ring-primary/30 shadow-lg rotate-1",
+				isKeyboardDragging && "ring-2 ring-primary bg-primary/5 border-primary/50 shadow-md scale-102",
+				selected && "border-primary/50 bg-primary/2 dark:bg-primary/5 shadow-xs",
 				canEdit && "cursor-grab active:cursor-grabbing",
 			)}
 		>
+			{showCheckbox && (
+				// biome-ignore lint/a11y/noStaticElementInteractions: click checkbox
+				<div
+					className={cn(
+						"absolute top-2 right-2 z-20 transition-opacity duration-150",
+						selected ? "opacity-100" : "opacity-0 group-hover:opacity-100 focus-within:opacity-100",
+					)}
+					onClick={(e) => e.stopPropagation()}
+				>
+					<input
+						type="checkbox"
+						checked={selected}
+						onChange={(e) => onSelectChange?.(e.target.checked)}
+						className="size-3.5 rounded border-border/70 accent-primary cursor-pointer"
+					/>
+				</div>
+			)}
 			{task.importance > 0 && (
 				<div
 					className="absolute left-0 top-0 bottom-0 w-1.25 z-10"

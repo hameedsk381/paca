@@ -1646,6 +1646,8 @@ export function InteractionLayout({
 					/>
 				) : (
 					<ListView
+						projectId={projectId}
+						tasksQueryKey={tasksListQueryKey}
 						tasks={tasks}
 						taskIdPrefix={taskIdPrefix}
 						statuses={statuses}

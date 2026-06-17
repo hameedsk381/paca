@@ -77,6 +77,9 @@ export interface ListGroupProps {
 	totalCount?: number;
 	/** Field sum from the API, used in place of the front-end computed sum in the header badge */
 	apiFieldSum?: number;
+	selectedTaskIds?: Set<string>;
+	onSelectTask?: (taskId: string, selected: boolean) => void;
+	onSelectGroupTasks?: (taskIds: string[], selected: boolean) => void;
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
@@ -113,6 +116,9 @@ export function ListGroup({
 	groupPagination,
 	totalCount,
 	apiFieldSum,
+	selectedTaskIds,
+	onSelectTask,
+	onSelectGroupTasks,
 }: ListGroupProps) {
 	const [collapsed, setCollapsed] = useState(defaultCollapsed ?? false);
 	const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -401,6 +407,9 @@ export function ListGroup({
 				isDragging={draggingId === task.id}
 				canEdit={canEdit}
 				onUpdateTaskField={onUpdateTaskField}
+				selected={selectedTaskIds?.has(task.id) ?? false}
+				onSelectChange={(checked) => onSelectTask?.(task.id, checked)}
+				showCheckbox={canEdit}
 			/>
 		</div>
 	);
@@ -457,6 +466,27 @@ export function ListGroup({
 					<ChevronRight className="size-3.5 text-muted-foreground/60 shrink-0" />
 				) : (
 					<ChevronDown className="size-3.5 text-muted-foreground/60 shrink-0" />
+				)}
+				{canEdit && selectedTaskIds && onSelectGroupTasks && (
+					<input
+						type="checkbox"
+						checked={tasks.length > 0 && tasks.every((t) => selectedTaskIds.has(t.id))}
+						ref={(el) => {
+							if (el) {
+								const hasSome = tasks.some((t) => selectedTaskIds.has(t.id));
+								const hasAll = tasks.every((t) => selectedTaskIds.has(t.id));
+								el.indeterminate = hasSome && !hasAll;
+							}
+						}}
+						onChange={(e) => {
+							onSelectGroupTasks(
+								tasks.map((t) => t.id),
+								e.target.checked,
+							);
+						}}
+						onClick={(e) => e.stopPropagation()}
+						className="size-3.5 rounded border-border/70 accent-primary cursor-pointer mr-1.5 shrink-0"
+					/>
 				)}
 				{groupDef.color && (
 					<span

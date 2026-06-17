@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ChevronLeft, ChevronRight, Check, Trash2, Users, Layers } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
 import { useIsMobile } from "@/hooks/use-mobile";
 import {
@@ -19,6 +19,11 @@ import { cn } from "@/lib/utils";
 
 import { AddTaskRow } from "./add-task-row";
 import { TaskCard } from "./task-card";
+import {
+	getPriority,
+	IMPORTANCE_BUCKET_VALUES,
+	PRIORITY_LEVELS,
+} from "./priority";
 import {
 	applyStatusFilterToColumnDefs,
 	buildColumnDropUpdate,
@@ -126,6 +131,21 @@ export function BoardView({
 	columnPagination,
 }: BoardViewProps) {
 	const qc = useQueryClient();
+	const columnBy = viewConfig?.column_by ?? "status";
+	const swimlaneBy = viewConfig?.swimlanes;
+	const fieldSum = viewConfig?.field_sum;
+	const isStatusGrouping =
+		!viewConfig?.column_by || viewConfig.column_by === "status";
+	const visibleFields: string[] =
+		viewConfig?.fields && viewConfig.fields.length > 0
+			? viewConfig.fields
+			: DEFAULT_VISIBLE_FIELDS;
+
+	const viewCtx = useMemo(
+		() => ({ statuses, taskTypes, members, customFields, sprints }),
+		[statuses, taskTypes, members, customFields, sprints],
+	);
+
 	const [draggingId, setDraggingId] = useState<string | null>(null);
 	const [overColumnKey, setOverColumnKey] = useState<string | null>(null);
 	const [overCardId, setOverCardId] = useState<string | null>(null);
@@ -161,6 +181,123 @@ export function BoardView({
 		}) => updateTask(projectId, taskId, update),
 		onSuccess: () => qc.invalidateQueries({ queryKey: tasksQueryKey }),
 	});
+
+	const [keyboardDraggingId, setKeyboardDraggingId] = useState<string | null>(null);
+	const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set());
+	const [contextMenu, setContextMenu] = useState<{ x: number; y: number; task: Task } | null>(null);
+
+	const focusTaskIdRef = useRef<string | null>(null);
+
+	// Focus restoration after keyboard drag moves
+	useEffect(() => {
+		if (focusTaskIdRef.current) {
+			const taskId = focusTaskIdRef.current;
+			focusTaskIdRef.current = null;
+			setTimeout(() => {
+				const el = document.querySelector(`[data-task-id="${taskId}"]`) as HTMLElement;
+				if (el) el.focus();
+			}, 50);
+		}
+	});
+
+	// Close context menu on click elsewhere
+	useEffect(() => {
+		const handleWindowClick = () => {
+			setContextMenu(null);
+		};
+		window.addEventListener("click", handleWindowClick);
+		return () => window.removeEventListener("click", handleWindowClick);
+	}, []);
+
+	// Bulk Update Mutation
+	const bulkUpdateMutation = useMutation({
+		mutationFn: async ({ taskIds, update }: { taskIds: string[]; update: TaskFieldUpdate }) => {
+			await Promise.all(taskIds.map((id) => updateTask(projectId, id, update)));
+		},
+		onSuccess: () => {
+			qc.invalidateQueries({ queryKey: tasksQueryKey });
+			setSelectedTaskIds(new Set());
+			toast.success("Tasks updated successfully");
+		},
+		onError: () => {
+			toast.error("Failed to update some tasks");
+		},
+	});
+
+	// Bulk Delete Mutation
+	const bulkDeleteMutation = useMutation({
+		mutationFn: async (taskIds: string[]) => {
+			const { deleteTask } = await import("@/lib/interaction-api");
+			await Promise.all(taskIds.map((id) => deleteTask(projectId, id)));
+		},
+		onSuccess: () => {
+			qc.invalidateQueries({ queryKey: tasksQueryKey });
+			setSelectedTaskIds(new Set());
+			toast.success("Tasks deleted successfully");
+		},
+		onError: () => {
+			toast.error("Failed to delete some tasks");
+		},
+	});
+
+	const handleKeyDownOnCard = (e: React.KeyboardEvent, task: Task) => {
+		const activeEl = document.activeElement;
+		if (
+			activeEl &&
+			(activeEl.tagName === "INPUT" ||
+				activeEl.tagName === "TEXTAREA" ||
+				activeEl.getAttribute("contenteditable") === "true")
+		) {
+			return;
+		}
+
+		if (e.key === "Enter") {
+			e.preventDefault();
+			onTaskClick(task);
+		} else if (e.key === " ") {
+			e.preventDefault();
+			if (keyboardDraggingId === task.id) {
+				setKeyboardDraggingId(null);
+				toast.success("Task dropped");
+			} else {
+				setKeyboardDraggingId(task.id);
+				toast.info(
+					`Task picked up. Use ArrowLeft/Right to move columns, Space to drop, Escape to cancel.`,
+				);
+			}
+		} else if (e.key === "Escape" && keyboardDraggingId === task.id) {
+			e.preventDefault();
+			setKeyboardDraggingId(null);
+			toast.info("Task movement cancelled");
+		} else if (
+			keyboardDraggingId === task.id &&
+			(e.key === "ArrowLeft" || e.key === "ArrowRight")
+		) {
+			e.preventDefault();
+			const currentColKey = getTaskColumnKeys(task, columnBy, viewCtx)[0] || "__none";
+			const currentIdx = effectiveColumnDefs.findIndex(
+				(c) => c.key === currentColKey,
+			);
+			if (currentIdx !== -1) {
+				let newIdx = currentIdx;
+				if (e.key === "ArrowLeft") {
+					newIdx = Math.max(0, currentIdx - 1);
+				} else {
+					newIdx = Math.min(effectiveColumnDefs.length - 1, currentIdx + 1);
+				}
+				if (newIdx !== currentIdx) {
+					const targetCol = effectiveColumnDefs[newIdx];
+					const update = buildColumnDropUpdate(
+						columnBy,
+						targetCol.fieldValue,
+						customFields,
+					);
+					focusTaskIdRef.current = task.id;
+					executeMoveWithUndo(task.id, update, task, targetCol.label);
+				}
+			}
+		}
+	};
 
 	const executeMoveWithUndo = (
 		taskId: string,
@@ -218,21 +355,6 @@ export function BoardView({
 	};
 
 	// ── View context ──────────────────────────────────────────────────────────
-
-	const columnBy = viewConfig?.column_by ?? "status";
-	const swimlaneBy = viewConfig?.swimlanes;
-	const fieldSum = viewConfig?.field_sum;
-	const isStatusGrouping =
-		!viewConfig?.column_by || viewConfig.column_by === "status";
-	const visibleFields: string[] =
-		viewConfig?.fields && viewConfig.fields.length > 0
-			? viewConfig.fields
-			: DEFAULT_VISIBLE_FIELDS;
-
-	const viewCtx = useMemo(
-		() => ({ statuses, taskTypes, members, customFields, sprints }),
-		[statuses, taskTypes, members, customFields, sprints],
-	);
 
 	// Static column definitions (all possible values)
 	const columnDefs = useMemo(
@@ -662,6 +784,15 @@ export function BoardView({
 								draggingId !== task.id &&
 								"border-t-2 border-primary/60",
 						)}
+						onContextMenu={(e) => {
+							if (!canEdit) return;
+							e.preventDefault();
+							setContextMenu({
+								x: e.clientX,
+								y: e.clientY,
+								task,
+							});
+						}}
 						onDragOver={(e) => {
 							e.preventDefault();
 							e.stopPropagation();
@@ -694,6 +825,18 @@ export function BoardView({
 							onDragEnd={handleDragEnd}
 							onClick={() => onTaskClick(task)}
 							onUpdate={canEdit ? handleInlineUpdate : undefined}
+							selected={selectedTaskIds.has(task.id)}
+							onSelectChange={(val) => {
+								setSelectedTaskIds((prev) => {
+									const next = new Set(prev);
+									if (val) next.add(task.id);
+									else next.delete(task.id);
+									return next;
+								});
+							}}
+							showCheckbox={canEdit}
+							isKeyboardDragging={keyboardDraggingId === task.id}
+							onKeyDown={(e) => handleKeyDownOnCard(e, task)}
 						/>
 					</div>
 				))}
@@ -994,6 +1137,264 @@ export function BoardView({
 		);
 	})();
 
+	const overlayElements = (
+		<>
+			{contextMenu && (
+				<div
+					className="fixed z-50 bg-popover/95 border border-border/40 rounded-xl shadow-xl p-1.5 w-44 backdrop-blur-md text-[13px] text-foreground select-none"
+					style={{
+						top: `${contextMenu.y}px`,
+						left: `${contextMenu.x}px`,
+					}}
+					onClick={(e) => e.stopPropagation()}
+				>
+					<div className="px-2.5 py-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider border-b border-border/15 mb-1">
+						Task Actions
+					</div>
+					
+					{/* Status Submenu */}
+					<div className="group/status relative flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-muted/60 cursor-pointer transition-colors duration-100 font-medium">
+						<span>Change Status</span>
+						<span className="text-muted-foreground/60 text-[10px]">&gt;</span>
+						<div className="absolute left-full top-0 ml-1 hidden group-hover/status:block bg-popover/95 border border-border/40 rounded-xl shadow-xl p-1 w-44 backdrop-blur-md">
+							{statuses.map((s) => (
+								<button
+									key={s.id}
+									type="button"
+									onClick={() => {
+										handleInlineUpdate(contextMenu.task.id, { status_id: s.id });
+										setContextMenu(null);
+									}}
+									className="flex items-center gap-2 w-full px-2.5 py-1.5 rounded-lg hover:bg-muted/60 text-left transition-colors font-medium text-[12px] cursor-pointer"
+								>
+									<span className="size-1.5 rounded-full" style={{ background: s.color ?? undefined }} />
+									<span className="flex-1 truncate text-left">{s.name}</span>
+									{s.id === contextMenu.task.status_id && <Check className="size-3 text-primary ml-auto" />}
+								</button>
+							))}
+						</div>
+					</div>
+
+					{/* Priority Submenu */}
+					<div className="group/priority relative flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-muted/60 cursor-pointer transition-colors duration-100 font-medium">
+						<span>Change Priority</span>
+						<span className="text-muted-foreground/60 text-[10px]">&gt;</span>
+						<div className="absolute left-full top-0 ml-1 hidden group-hover/priority:block bg-popover/95 border border-border/40 rounded-xl shadow-xl p-1 w-40 backdrop-blur-md">
+							{PRIORITY_LEVELS.map((level) => (
+								<button
+									key={level.value}
+									type="button"
+									onClick={() => {
+										handleInlineUpdate(contextMenu.task.id, {
+											importance: IMPORTANCE_BUCKET_VALUES[level.value] ?? 0,
+										});
+										setContextMenu(null);
+									}}
+									className="flex items-center gap-2 w-full px-2.5 py-1.5 rounded-lg hover:bg-muted/60 text-left transition-colors font-medium text-[12px] cursor-pointer"
+								>
+									<span className="size-1.5 rounded-full" style={{ background: level.color }} />
+									<span className="flex-1 text-left" style={{ color: level.color }}>{level.label}</span>
+									{getPriority(contextMenu.task.importance).label === level.label &&
+										contextMenu.task.importance > 0 === level.value > 0 && (
+											<Check className="size-3 text-primary ml-auto" />
+										)}
+								</button>
+							))}
+						</div>
+					</div>
+
+					{/* Move to Sprint Submenu */}
+					{(sprints || []).length > 0 && (
+						<div className="group/sprint relative flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-muted/60 cursor-pointer transition-colors duration-100 font-medium">
+							<span>Move to Sprint</span>
+							<span className="text-muted-foreground/60 text-[10px]">&gt;</span>
+							<div className="absolute left-full top-0 ml-1 hidden group-hover/sprint:block bg-popover/95 border border-border/40 rounded-xl shadow-xl p-1 w-48 backdrop-blur-md">
+								<button
+									type="button"
+									onClick={() => {
+										handleInlineUpdate(contextMenu.task.id, { sprint_id: null });
+										setContextMenu(null);
+									}}
+									className="flex items-center w-full px-2.5 py-1.5 rounded-lg hover:bg-muted/60 text-left transition-colors text-[12px] cursor-pointer font-medium"
+								>
+									<span className="flex-1 text-muted-foreground">Product Backlog</span>
+									{!contextMenu.task.sprint_id && <Check className="size-3 text-primary ml-auto" />}
+								</button>
+								{(sprints || []).map((s) => (
+									<button
+										key={s.id}
+										type="button"
+										onClick={() => {
+											handleInlineUpdate(contextMenu.task.id, { sprint_id: s.id });
+											setContextMenu(null);
+										}}
+										className="flex items-center gap-2 w-full px-2.5 py-1.5 rounded-lg hover:bg-muted/60 text-left transition-colors text-[12px] cursor-pointer font-medium"
+									>
+										<Layers className="size-3 text-violet-500 opacity-70" />
+										<span className="flex-1 truncate text-left">{s.name}</span>
+										{s.id === contextMenu.task.sprint_id && <Check className="size-3 text-primary ml-auto" />}
+									</button>
+								))}
+							</div>
+						</div>
+					)}
+
+					{/* Assign to Me / Unassign Option */}
+					{(members || []).length > 0 && (
+						<button
+							type="button"
+							onClick={() => {
+								const myId = (members || []).find((m) => m.member_type === "human")?.id;
+								const isAssignedToMe = contextMenu.task.assignee_id === myId;
+								handleInlineUpdate(contextMenu.task.id, {
+									assignee_id: isAssignedToMe ? null : (myId ?? null),
+								});
+								setContextMenu(null);
+							}}
+							className="flex items-center gap-2 w-full px-2.5 py-1.5 rounded-lg hover:bg-muted/60 text-left transition-colors font-medium cursor-pointer"
+						>
+							<Users className="size-3.5 text-muted-foreground/75" />
+							<span>{contextMenu.task.assignee_id ? "Unassign" : "Assign to me"}</span>
+						</button>
+					)}
+
+					<div className="border-t border-border/15 my-1" />
+
+					{/* Delete Option */}
+					<button
+						type="button"
+						onClick={async () => {
+							const taskId = contextMenu.task.id;
+							setContextMenu(null);
+							if (confirm(`Are you sure you want to delete this task?`)) {
+								const { deleteTask } = await import("@/lib/interaction-api");
+								await deleteTask(projectId, taskId);
+								qc.invalidateQueries({ queryKey: tasksQueryKey });
+								toast.success("Task deleted");
+							}
+						}}
+						className="flex items-center gap-2 w-full px-2.5 py-1.5 rounded-lg hover:bg-destructive/10 text-destructive text-left transition-colors font-semibold cursor-pointer"
+					>
+						<Trash2 className="size-3.5" />
+						<span>Delete</span>
+					</button>
+				</div>
+			)}
+
+			{selectedTaskIds.size > 0 && (
+				<div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-popover/90 backdrop-blur-md border border-border/40 rounded-2xl shadow-2xl px-5 py-3.5 flex items-center gap-5 transition-all duration-300 animate-in fade-in slide-in-from-bottom-4 text-xs font-semibold select-none ring-1 ring-black/5">
+					<div className="flex items-center gap-2 pr-3 border-r border-border/20 text-foreground font-bold">
+						<span className="flex size-5 items-center justify-center rounded-full bg-primary text-primary-foreground text-[10px] tabular-nums font-extrabold">
+							{selectedTaskIds.size}
+						</span>
+						<span>selected</span>
+					</div>
+
+					{/* Bulk Status Select */}
+					<div className="flex items-center gap-1.5">
+						<span className="text-muted-foreground text-[10.5px]">Status:</span>
+						<select
+							onChange={(e) => {
+								const statusId = e.target.value;
+								if (statusId) {
+									bulkUpdateMutation.mutate({
+										taskIds: Array.from(selectedTaskIds),
+										update: { status_id: statusId },
+									});
+								}
+								e.target.value = "";
+							}}
+							className="bg-muted/60 hover:bg-muted border border-border/40 rounded-lg px-2.5 py-1.5 text-foreground cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary"
+						>
+							<option value="">Choose...</option>
+							{statuses.map((s) => (
+								<option key={s.id} value={s.id}>
+									{s.name}
+								</option>
+							))}
+						</select>
+					</div>
+
+					{/* Bulk Assignee Select */}
+					{(members || []).length > 0 && (
+						<div className="flex items-center gap-1.5">
+							<span className="text-muted-foreground text-[10.5px]">Assignee:</span>
+							<select
+								onChange={(e) => {
+									const assigneeId = e.target.value;
+									bulkUpdateMutation.mutate({
+										taskIds: Array.from(selectedTaskIds),
+										update: { assignee_id: assigneeId === "unassigned" ? null : assigneeId },
+									});
+									e.target.value = "";
+								}}
+								className="bg-muted/60 hover:bg-muted border border-border/40 rounded-lg px-2.5 py-1.5 text-foreground cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary max-w-28 truncate"
+							>
+								<option value="">Choose...</option>
+								<option value="unassigned">Unassigned</option>
+								{(members || []).map((m) => (
+									<option key={m.id} value={m.id}>
+										{m.full_name || m.username}
+									</option>
+								))}
+							</select>
+						</div>
+					)}
+
+					{/* Bulk Sprint Select */}
+					{(sprints || []).length > 0 && (
+						<div className="flex items-center gap-1.5">
+							<span className="text-muted-foreground text-[10.5px]">Sprint:</span>
+							<select
+								onChange={(e) => {
+									const sprintId = e.target.value;
+									bulkUpdateMutation.mutate({
+										taskIds: Array.from(selectedTaskIds),
+										update: { sprint_id: sprintId === "backlog" ? null : sprintId },
+									});
+									e.target.value = "";
+								}}
+								className="bg-muted/60 hover:bg-muted border border-border/40 rounded-lg px-2.5 py-1.5 text-foreground cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary max-w-28 truncate"
+							>
+								<option value="">Choose...</option>
+								<option value="backlog">Backlog</option>
+								{(sprints || []).map((s) => (
+									<option key={s.id} value={s.id}>
+										{s.name}
+									</option>
+								))}
+							</select>
+						</div>
+					)}
+
+					{/* Bulk Delete */}
+					<button
+						type="button"
+						onClick={() => {
+							if (confirm(`Delete ${selectedTaskIds.size} tasks permanently?`)) {
+								bulkDeleteMutation.mutate(Array.from(selectedTaskIds));
+							}
+						}}
+						disabled={bulkDeleteMutation.isPending}
+						className="inline-flex items-center gap-1.5 rounded-lg bg-destructive/10 hover:bg-destructive text-destructive hover:text-destructive-foreground px-3 py-1.5 text-xs transition-colors duration-150 cursor-pointer active:scale-95 disabled:opacity-50"
+					>
+						<Trash2 className="size-3.5" />
+						Delete
+					</button>
+
+					{/* Cancel / Clear Selection */}
+					<button
+						type="button"
+						onClick={() => setSelectedTaskIds(new Set())}
+						className="text-muted-foreground hover:text-foreground text-[10.5px] cursor-pointer hover:underline pl-1"
+					>
+						Cancel
+					</button>
+				</div>
+			)}
+		</>
+	);
+
 	if (isMobile) {
 		return (
 			<div className="flex flex-1 flex-col min-h-0">
@@ -1057,9 +1458,15 @@ export function BoardView({
 						</button>
 					)}
 				</div>
+				{overlayElements}
 			</div>
 		);
 	}
 
-	return boardContent;
+	return (
+		<>
+			{boardContent}
+			{overlayElements}
+		</>
+	);
 }
