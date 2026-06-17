@@ -44,7 +44,7 @@ func NewAgentHandler(svc agentdom.Service, aiAgentURL string) *AgentHandler {
 	return &AgentHandler{
 		svc:         svc,
 		aiAgentURL:  aiAgentURL,
-		httpClient:  &http.Client{},
+		httpClient:  &http.Client{Timeout: 290 * time.Second},
 	}
 }
 

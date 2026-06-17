@@ -296,9 +296,9 @@ func New(cfg *config.Config) (*App, error) {
 	srv := &http.Server{
 		Addr:         ":" + cfg.Server.Port,
 		Handler:      engine,
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 15 * time.Second,
-		IdleTimeout:  60 * time.Second,
+		ReadTimeout:  300 * time.Second,
+		WriteTimeout: 300 * time.Second,
+		IdleTimeout:  120 * time.Second,
 	}
 
 	return &App{server: srv, publisher: publisher, activityConsumer: activityConsumer, docActivityConsumer: docActivityConsumer, notificationConsumer: notificationConsumer, log: log}, nil
