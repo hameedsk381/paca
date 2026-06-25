@@ -51,7 +51,7 @@ services:
   # ── PostgreSQL ──────────────────────────────────────────────────────────────
   # Suppress with --scale postgres=0 when using an external managed database.
   postgres:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-paca}
