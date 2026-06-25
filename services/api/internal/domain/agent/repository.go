@@ -13,6 +13,8 @@ type Repository interface {
 	SkillRepository
 	ConversationRepository
 	ChatSessionRepository
+	MemoryRepository
+	ApprovalRepository
 }
 
 // AgentRepository defines storage operations for agents.
@@ -78,4 +80,18 @@ type ListConversationsFilter struct {
 	Status    *string
 	Limit     int
 	Offset    int
+}
+
+// MemoryRepository defines storage for agent semantic memory.
+type MemoryRepository interface {
+	CreateMemory(ctx context.Context, m *AgentMemory) error
+	SearchMemories(ctx context.Context, agentID uuid.UUID, embedding []float32, limit int) ([]*AgentMemory, error)
+}
+
+// ApprovalRepository defines storage for human-in-the-loop approval requests.
+type ApprovalRepository interface {
+	CreateApprovalRequest(ctx context.Context, a *ApprovalRequest) error
+	FindApprovalRequestByID(ctx context.Context, id uuid.UUID) (*ApprovalRequest, error)
+	ListApprovalRequests(ctx context.Context, projectID uuid.UUID, status *ApprovalStatus) ([]*ApprovalRequest, error)
+	UpdateApprovalRequest(ctx context.Context, a *ApprovalRequest) error
 }

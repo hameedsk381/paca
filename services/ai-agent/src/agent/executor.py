@@ -24,6 +24,7 @@ from .builder import build_llm, build_mcp_config, build_skills
 from .docker_workspace import docker_sandbox
 from .prompt import build_initial_prompt
 from .repo_tools import make_repository_tool_specs
+from .memory_tools import make_memory_tool_specs
 
 logger = logging.getLogger(__name__)
 
@@ -464,7 +465,17 @@ async def run_conversation(trigger: TriggerMessage, agent_config: AgentConfig) -
                         trigger.task_id,
                         api_base_url=settings.api_base_url,
                         api_key=settings.paca_api_key,
+                        conversation_id=trigger.conversation_id,
+                        agent_id=trigger.agent_id,
                     )
+
+                # Add memory tools unconditionally
+                agent_kwargs["tools"] = agent_kwargs.get("tools", get_default_tools()) + make_memory_tool_specs(
+                    project_id=trigger.project_id,
+                    agent_id=trigger.agent_id,
+                    api_base_url=settings.api_base_url,
+                    api_key=settings.paca_api_key,
+                )
 
                 agent = Agent(**agent_kwargs)
                 # RemoteWorkspace → RemoteConversation; persistence_dir is not

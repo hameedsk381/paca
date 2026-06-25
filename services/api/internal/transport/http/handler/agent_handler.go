@@ -843,3 +843,346 @@ func (h *AgentHandler) GetLLMModels(c *gin.Context) {
 
 	c.Data(http.StatusOK, "application/json", body)
 }
+
+// --- Agent Memory -----------------------------------------------------------
+
+func (h *AgentHandler) StoreMemory(c *gin.Context) {
+	var req dto.AgentMemoryRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		presenter.Error(c, apierr.New(apierr.CodeBadRequest, err.Error()))
+		return
+	}
+	projID, agentID, err := h.parseAgentForProject(c)
+	if err != nil {
+		presenter.Error(c, err)
+		return
+	}
+	mem := &agentdom.AgentMemory{
+		ID:        uuid.New(),
+		ProjectID: projID,
+		AgentID:   agentID,
+		Content:   req.Content,
+		Embedding: req.Embedding,
+		CreatedAt: time.Now(),
+	}
+	if err := h.svc.CreateMemory(c.Request.Context(), mem); err != nil {
+		presenter.Error(c, apierr.New(apierr.CodeInternalError, "failed to create memory"))
+		return
+	}
+	presenter.Created(c, mem)
+}
+
+func (h *AgentHandler) SearchMemories(c *gin.Context) {
+	var req dto.AgentMemorySearchRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		presenter.Error(c, apierr.New(apierr.CodeBadRequest, err.Error()))
+		return
+	}
+	_, agentID, err := h.parseAgentForProject(c)
+	if err != nil {
+		presenter.Error(c, err)
+		return
+	}
+	limit := req.Limit
+	if limit == 0 {
+		limit = 10
+	}
+	mems, err := h.svc.SearchMemories(c.Request.Context(), agentID, req.Embedding, limit)
+	if err != nil {
+		presenter.Error(c, apierr.New(apierr.CodeInternalError, "failed to search memories"))
+		return
+	}
+	presenter.OK(c, mems)
+}
+
+// --- HITL Approval Requests -------------------------------------------------
+
+func (h *AgentHandler) CreateApprovalRequest(c *gin.Context) {
+	var req dto.ApprovalRequestCreate
+	if err := c.ShouldBindJSON(&req); err != nil {
+		presenter.Error(c, apierr.New(apierr.CodeBadRequest, err.Error()))
+		return
+	}
+	projID, agentID, err := h.parseAgentForProject(c)
+	if err != nil {
+		presenter.Error(c, err)
+		return
+	}
+	convID, err := uuid.Parse(req.ConversationID)
+	if err != nil {
+		presenter.Error(c, apierr.New(apierr.CodeBadRequest, "invalid conversation_id"))
+		return
+	}
+	ar := &agentdom.ApprovalRequest{
+		ID:              uuid.New(),
+		ProjectID:       projID,
+		AgentID:         agentID,
+		ConversationID:  convID,
+		RequestedAction: req.RequestedAction,
+		ActionDetails:   req.ActionDetails,
+		Status:          agentdom.ApprovalStatusPending,
+		CreatedAt:       time.Now(),
+	}
+	if err := h.svc.CreateApprovalRequest(c.Request.Context(), ar); err != nil {
+		presenter.Error(c, apierr.New(apierr.CodeInternalError, "failed to create approval request"))
+		return
+	}
+	presenter.Created(c, ar)
+}
+
+func (h *AgentHandler) ListApprovalRequests(c *gin.Context) {
+	projID, err := uuid.Parse(c.Param("projectId"))
+	if err != nil {
+		presenter.Error(c, apierr.New(apierr.CodeBadRequest, "invalid project id"))
+		return
+	}
+	statusQuery := c.Query("status")
+	var statusFilter *agentdom.ApprovalStatus
+	if statusQuery != "" {
+		st := agentdom.ApprovalStatus(statusQuery)
+		statusFilter = &st
+	}
+	reqs, err := h.svc.ListApprovalRequests(c.Request.Context(), projID, statusFilter)
+	if err != nil {
+		presenter.Error(c, apierr.New(apierr.CodeInternalError, "failed to list approval requests"))
+		return
+	}
+	presenter.OK(c, reqs)
+}
+
+func (h *AgentHandler) ResolveApprovalRequest(c *gin.Context) {
+	reqID, err := uuid.Parse(c.Param("requestId"))
+	if err != nil {
+		presenter.Error(c, apierr.New(apierr.CodeBadRequest, "invalid request id"))
+		return
+	}
+	var req dto.ApprovalRequestResolve
+	if err := c.ShouldBindJSON(&req); err != nil {
+		presenter.Error(c, apierr.New(apierr.CodeBadRequest, err.Error()))
+		return
+	}
+	
+	// Ensure the action is valid.
+	if req.Status != "approved" && req.Status != "rejected" {
+		presenter.Error(c, apierr.New(apierr.CodeBadRequest, "status must be approved or rejected"))
+		return
+	}
+
+	actorID, _ := httpmw.GetUserID(c)
+
+	ar, err := h.svc.FindApprovalRequestByID(c.Request.Context(), reqID)
+	if err != nil {
+		if err == agentdom.ErrNotFound {
+			presenter.Error(c, apierr.New(apierr.CodeNotFound, "approval request not found"))
+			return
+		}
+		presenter.Error(c, apierr.New(apierr.CodeInternalError, "failed to find approval request"))
+		return
+	}
+
+	if offset < 0 {
+		offset = 0
+	}
+	if limit < 1 || limit > 500 {
+		limit = 50
+	}
+	return offset, limit
+}
+
+// --- Skill templates --------------------------------------------------------
+
+// ListSkillTemplates handles GET /agents/skill-templates.
+// Returns the hardcoded built-in skill template catalog.
+func (h *AgentHandler) ListSkillTemplates(c *gin.Context) {
+	templates := agentsvc.ListSkillTemplates()
+	resp := make([]dto.SkillTemplateResponse, 0, len(templates))
+	for _, t := range templates {
+		resp = append(resp, dto.SkillTemplateFromEntity(t))
+	}
+	presenter.OK(c, resp)
+}
+
+// --- LLM models proxy -------------------------------------------------------
+
+// GetLLMModels handles GET /agents/llm-models.
+// It proxies the request to the ai-agent service and returns the verified
+// LLM models grouped by provider.
+func (h *AgentHandler) GetLLMModels(c *gin.Context) {
+	if h.aiAgentURL == "" {
+		presenter.Error(c, apierr.New(apierr.CodeInternalError, "ai-agent service URL not configured"))
+		return
+	}
+
+	req, err := http.NewRequestWithContext(c.Request.Context(), http.MethodGet, h.aiAgentURL+"/llm/models", nil)
+	if err != nil {
+		presenter.Error(c, apierr.New(apierr.CodeInternalError, "failed to create request"))
+		return
+	}
+	resp, err := h.httpClient.Do(req)
+	if err != nil {
+		presenter.Error(c, apierr.New(apierr.CodeInternalError, "failed to reach ai-agent service"))
+		return
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		presenter.Error(c, apierr.New(apierr.CodeInternalError, "failed to read ai-agent response"))
+		return
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		presenter.Error(c, apierr.New(apierr.CodeInternalError, "ai-agent service returned an error"))
+		return
+	}
+
+	c.Data(http.StatusOK, "application/json", body)
+}
+
+// --- Agent Memory -----------------------------------------------------------
+
+func (h *AgentHandler) StoreMemory(c *gin.Context) {
+	var req dto.AgentMemoryRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		presenter.Error(c, apierr.New(apierr.CodeBadRequest, err.Error()))
+		return
+	}
+	projID, agentID, err := h.parseAgentForProject(c)
+	if err != nil {
+		presenter.Error(c, err)
+		return
+	}
+	mem := &agentdom.AgentMemory{
+		ID:        uuid.New(),
+		ProjectID: projID,
+		AgentID:   agentID,
+		Content:   req.Content,
+		Embedding: req.Embedding,
+		CreatedAt: time.Now(),
+	}
+	if err := h.svc.CreateMemory(c.Request.Context(), mem); err != nil {
+		presenter.Error(c, apierr.New(apierr.CodeInternalError, "failed to create memory"))
+		return
+	}
+	presenter.Created(c, mem)
+}
+
+func (h *AgentHandler) SearchMemories(c *gin.Context) {
+	var req dto.AgentMemorySearchRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		presenter.Error(c, apierr.New(apierr.CodeBadRequest, err.Error()))
+		return
+	}
+	_, agentID, err := h.parseAgentForProject(c)
+	if err != nil {
+		presenter.Error(c, err)
+		return
+	}
+	limit := req.Limit
+	if limit == 0 {
+		limit = 10
+	}
+	mems, err := h.svc.SearchMemories(c.Request.Context(), agentID, req.Embedding, limit)
+	if err != nil {
+		presenter.Error(c, apierr.New(apierr.CodeInternalError, "failed to search memories"))
+		return
+	}
+	presenter.OK(c, mems)
+}
+
+// --- HITL Approval Requests -------------------------------------------------
+
+func (h *AgentHandler) CreateApprovalRequest(c *gin.Context) {
+	var req dto.ApprovalRequestCreate
+	if err := c.ShouldBindJSON(&req); err != nil {
+		presenter.Error(c, apierr.New(apierr.CodeBadRequest, err.Error()))
+		return
+	}
+	projID, agentID, err := h.parseAgentForProject(c)
+	if err != nil {
+		presenter.Error(c, err)
+		return
+	}
+	convID, err := uuid.Parse(req.ConversationID)
+	if err != nil {
+		presenter.Error(c, apierr.New(apierr.CodeBadRequest, "invalid conversation_id"))
+		return
+	}
+	ar := &agentdom.ApprovalRequest{
+		ID:              uuid.New(),
+		ProjectID:       projID,
+		AgentID:         agentID,
+		ConversationID:  convID,
+		RequestedAction: req.RequestedAction,
+		ActionDetails:   req.ActionDetails,
+		Status:          agentdom.ApprovalStatusPending,
+		CreatedAt:       time.Now(),
+	}
+	if err := h.svc.CreateApprovalRequest(c.Request.Context(), ar); err != nil {
+		presenter.Error(c, apierr.New(apierr.CodeInternalError, "failed to create approval request"))
+		return
+	}
+	presenter.Created(c, ar)
+}
+
+func (h *AgentHandler) ListApprovalRequests(c *gin.Context) {
+	projID, err := uuid.Parse(c.Param("projectId"))
+	if err != nil {
+		presenter.Error(c, apierr.New(apierr.CodeBadRequest, "invalid project id"))
+		return
+	}
+	statusQuery := c.Query("status")
+	var statusFilter *agentdom.ApprovalStatus
+	if statusQuery != "" {
+		st := agentdom.ApprovalStatus(statusQuery)
+		statusFilter = &st
+	}
+	reqs, err := h.svc.ListApprovalRequests(c.Request.Context(), projID, statusFilter)
+	if err != nil {
+		presenter.Error(c, apierr.New(apierr.CodeInternalError, "failed to list approval requests"))
+		return
+	}
+	presenter.OK(c, reqs)
+}
+
+func (h *AgentHandler) ResolveApprovalRequest(c *gin.Context) {
+	reqID, err := uuid.Parse(c.Param("requestId"))
+	if err != nil {
+		presenter.Error(c, apierr.New(apierr.CodeBadRequest, "invalid request id"))
+		return
+	}
+	var req dto.ApprovalRequestResolve
+	if err := c.ShouldBindJSON(&req); err != nil {
+		presenter.Error(c, apierr.New(apierr.CodeBadRequest, err.Error()))
+		return
+	}
+	
+	// Ensure the action is valid.
+	if req.Status != "approved" && req.Status != "rejected" {
+		presenter.Error(c, apierr.New(apierr.CodeBadRequest, "status must be approved or rejected"))
+		return
+	}
+
+	actorID, _ := httpmw.GetUserID(c)
+
+	ar, err := h.svc.FindApprovalRequestByID(c.Request.Context(), reqID)
+	if err != nil {
+		if err == agentdom.ErrNotFound {
+			presenter.Error(c, apierr.New(apierr.CodeNotFound, "approval request not found"))
+			return
+		}
+		presenter.Error(c, apierr.New(apierr.CodeInternalError, "failed to find approval request"))
+		return
+	}
+
+	ar.Status = agentdom.ApprovalStatus(req.Status)
+	now := time.Now()
+	ar.ResolvedAt = &now
+	ar.ResolvedBy = &actorID
+
+	if err := h.svc.ResolveApprovalRequest(c.Request.Context(), ar); err != nil {
+		presenter.Error(c, apierr.New(apierr.CodeInternalError, "failed to update approval request"))
+		return
+	}
+	presenter.OK(c, ar)
+}

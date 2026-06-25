@@ -86,6 +86,7 @@ _TRIGGER_TYPES = {
     "agent.task_assigned",
     "agent.comment_mention",
     "agent.chat_message",
+    "agent.approval.resolved",
 }
 
 # Control message types that direct an *existing* conversation.
@@ -196,3 +197,46 @@ async def read_triggers(
 async def ack_trigger(stream_id: str) -> None:
     client = get_client()
     await client.xack(TRIGGER_STREAM, CONSUMER_GROUP, stream_id)
+
+
+async def recover_orphaned_triggers(min_idle_time_ms: int = 3600000) -> int:
+    """Reclaim and acknowledge trigger messages that have been stuck in PEL.
+    
+    This handles the case where a worker crashes or is restarted while processing
+    a conversation. The un-acked message remains in the Pending Entries List (PEL).
+    Since conversations are not safely resumable mid-flight, we simply acknowledge
+    stuck messages to clear the stream queue. The UI/database will have treated
+    these timed-out runs as failed.
+    """
+    client = get_client()
+    recovered_count = 0
+    start_id = "0-0"
+    while True:
+        try:
+            result = await client.xautoclaim(
+                TRIGGER_STREAM,
+                CONSUMER_GROUP,
+                CONSUMER_NAME,
+                min_idle_time=min_idle_time_ms,
+                start_id=start_id,
+                count=100,
+            )
+            next_id = result[0]
+            messages = result[1]
+            
+            for msg in messages:
+                # Handle both (msg_id, fields) and msg_id formats across redis-py versions
+                msg_id = msg[0] if isinstance(msg, (list, tuple)) else msg
+                await ack_trigger(msg_id)
+                recovered_count += 1
+                
+            if next_id == "0-0" or next_id == b"0-0" or not messages:
+                break
+            start_id = next_id
+        except Exception as exc:
+            logger.error("Failed to recover orphaned triggers: %s", exc)
+            break
+            
+    if recovered_count > 0:
+        logger.info("Recovered and acknowledged %d orphaned triggers", recovered_count)
+    return recovered_count

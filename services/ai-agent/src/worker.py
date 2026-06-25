@@ -14,6 +14,7 @@ from .core.streams import (
     ack_trigger,
     ensure_consumer_group,
     read_triggers,
+    recover_orphaned_triggers,
 )
 from .repositories.agent_repository import load_agent_config
 
@@ -34,6 +35,19 @@ async def _handle_control(msg: ControlMessage) -> None:
         else:
             logger.warning(
                 "Received stop for conversation %s but no active run found on this replica", cid
+            )
+    elif msg.control_type == "agent.approval.resolved":
+        from .core.registry import approval_events, approval_results
+        status = msg.payload.get("status")
+        if status:
+            approval_results[cid] = status
+        app_event = approval_events.get(cid)
+        if app_event is not None:
+            logger.info("Resuming conversation %s after approval resolved", cid)
+            app_event.set()
+        else:
+            logger.warning(
+                "Received approval resolution for conversation %s but no active run waiting on this replica", cid
             )
     else:
         logger.warning("Unknown control type %r for conversation %s", msg.control_type, cid)
@@ -60,6 +74,17 @@ async def run_worker() -> None:
     await ensure_consumer_group()
     logger.info("AI-agent worker started (concurrency=%d)", settings.worker_concurrency)
 
+    async def _pel_recovery_loop():
+        """Periodically cleans up stuck triggers from dead workers."""
+        while not _shutdown_event.is_set():
+            await recover_orphaned_triggers()
+            try:
+                await asyncio.wait_for(_shutdown_event.wait(), timeout=300.0)
+            except asyncio.TimeoutError:
+                pass
+                
+    pel_task = asyncio.create_task(_pel_recovery_loop())
+
     semaphore = asyncio.Semaphore(settings.worker_concurrency)
     tasks: set[asyncio.Task] = set()
 
@@ -71,10 +96,13 @@ async def run_worker() -> None:
             async def _guarded(m=msg):
                 try:
                     await _process_trigger(m)
-                    await ack_trigger(m.stream_id)
                 except Exception as exc:
                     logger.exception("Unhandled error processing trigger %s: %s", m.stream_id, exc)
                 finally:
+                    try:
+                        await ack_trigger(m.stream_id)
+                    except Exception as e:
+                        logger.error("Failed to ack trigger %s: %s", m.stream_id, e)
                     semaphore.release()
 
             task = asyncio.create_task(_guarded())
@@ -82,6 +110,7 @@ async def run_worker() -> None:
             task.add_done_callback(tasks.discard)
 
     # Drain pending tasks on shutdown
+    pel_task.cancel()
     if tasks:
         await asyncio.gather(*tasks, return_exceptions=True)
 

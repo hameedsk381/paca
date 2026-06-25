@@ -895,6 +895,182 @@ func chatSessionToRecord(s *agentdom.AgentChatSession) agentChatSessionRecord {
 		Title:         s.Title,
 		LastMessageAt: s.LastMessageAt,
 		CreatedAt:     s.CreatedAt,
+		CreatedAt:     s.CreatedAt,
 		UpdatedAt:     s.UpdatedAt,
+	}
+}
+
+// -------------------------------------------------------------------------
+// Agent Memory Repository
+// -------------------------------------------------------------------------
+
+type agentMemoryRecord struct {
+	ID        string `gorm:"primarykey;type:uuid"`
+	ProjectID string `gorm:"type:uuid;not null"`
+	AgentID   string `gorm:"type:uuid;not null"`
+	Content   string
+	Embedding string `gorm:"type:vector(1536)"`
+	CreatedAt time.Time
+}
+
+func (agentMemoryRecord) TableName() string { return "agent_memories" }
+
+func float32SliceToString(f []float32) string {
+	b, _ := json.Marshal(f)
+	return string(b)
+}
+
+func stringToFloat32Slice(s string) []float32 {
+	var f []float32
+	_ = json.Unmarshal([]byte(s), &f)
+	return f
+}
+
+func (r *AgentRepo) CreateMemory(ctx context.Context, m *agentdom.AgentMemory) error {
+	rec := agentMemoryRecord{
+		ID:        m.ID.String(),
+		ProjectID: m.ProjectID.String(),
+		AgentID:   m.AgentID.String(),
+		Content:   m.Content,
+		Embedding: float32SliceToString(m.Embedding),
+		CreatedAt: m.CreatedAt,
+	}
+	return r.db.WithContext(ctx).Create(&rec).Error
+}
+
+func (r *AgentRepo) SearchMemories(ctx context.Context, agentID uuid.UUID, embedding []float32, limit int) ([]*agentdom.AgentMemory, error) {
+	var recs []agentMemoryRecord
+	embStr := float32SliceToString(embedding)
+	err := r.db.WithContext(ctx).
+		Where("agent_id = ?", agentID.String()).
+		Order(gorm.Expr("embedding <-> ?::vector", embStr)).
+		Limit(limit).
+		Find(&recs).Error
+	if err != nil {
+		return nil, err
+	}
+	var res []*agentdom.AgentMemory
+	for _, rec := range recs {
+		res = append(res, &agentdom.AgentMemory{
+			ID:        mustParseUUID(rec.ID),
+			ProjectID: mustParseUUID(rec.ProjectID),
+			AgentID:   mustParseUUID(rec.AgentID),
+			Content:   rec.Content,
+			Embedding: stringToFloat32Slice(rec.Embedding),
+			CreatedAt: rec.CreatedAt,
+		})
+	}
+	return res, nil
+}
+
+// -------------------------------------------------------------------------
+// Approval Request Repository
+// -------------------------------------------------------------------------
+
+type approvalRequestRecord struct {
+	ID              string `gorm:"primarykey;type:uuid"`
+	ProjectID       string `gorm:"type:uuid;not null"`
+	AgentID         string `gorm:"type:uuid;not null"`
+	ConversationID  string `gorm:"type:uuid;not null"`
+	RequestedAction string
+	ActionDetails   []byte `gorm:"type:jsonb"`
+	Status          string
+	CreatedAt       time.Time
+	ResolvedAt      *time.Time
+	ResolvedBy      *string `gorm:"type:uuid"`
+}
+
+func (approvalRequestRecord) TableName() string { return "approval_requests" }
+
+func (r *AgentRepo) CreateApprovalRequest(ctx context.Context, a *agentdom.ApprovalRequest) error {
+	details, _ := json.Marshal(a.ActionDetails)
+	var resolvedBy *string
+	if a.ResolvedBy != nil {
+		v := a.ResolvedBy.String()
+		resolvedBy = &v
+	}
+	rec := approvalRequestRecord{
+		ID:              a.ID.String(),
+		ProjectID:       a.ProjectID.String(),
+		AgentID:         a.AgentID.String(),
+		ConversationID:  a.ConversationID.String(),
+		RequestedAction: a.RequestedAction,
+		ActionDetails:   details,
+		Status:          string(a.Status),
+		CreatedAt:       a.CreatedAt,
+		ResolvedAt:      a.ResolvedAt,
+		ResolvedBy:      resolvedBy,
+	}
+	return r.db.WithContext(ctx).Create(&rec).Error
+}
+
+func (r *AgentRepo) FindApprovalRequestByID(ctx context.Context, id uuid.UUID) (*agentdom.ApprovalRequest, error) {
+	var rec approvalRequestRecord
+	if err := r.db.WithContext(ctx).First(&rec, "id = ?", id.String()).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, agentdom.ErrNotFound
+		}
+		return nil, err
+	}
+	return approvalRequestFromRecord(&rec), nil
+}
+
+func (r *AgentRepo) ListApprovalRequests(ctx context.Context, projectID uuid.UUID, status *agentdom.ApprovalStatus) ([]*agentdom.ApprovalRequest, error) {
+	var recs []approvalRequestRecord
+	q := r.db.WithContext(ctx).Where("project_id = ?", projectID.String())
+	if status != nil {
+		q = q.Where("status = ?", string(*status))
+	}
+	if err := q.Order("created_at desc").Find(&recs).Error; err != nil {
+		return nil, err
+	}
+	var res []*agentdom.ApprovalRequest
+	for _, rec := range recs {
+		res = append(res, approvalRequestFromRecord(&rec))
+	}
+	return res, nil
+}
+
+func (r *AgentRepo) UpdateApprovalRequest(ctx context.Context, a *agentdom.ApprovalRequest) error {
+	details, _ := json.Marshal(a.ActionDetails)
+	var resolvedBy *string
+	if a.ResolvedBy != nil {
+		v := a.ResolvedBy.String()
+		resolvedBy = &v
+	}
+	rec := approvalRequestRecord{
+		ID:              a.ID.String(),
+		ProjectID:       a.ProjectID.String(),
+		AgentID:         a.AgentID.String(),
+		ConversationID:  a.ConversationID.String(),
+		RequestedAction: a.RequestedAction,
+		ActionDetails:   details,
+		Status:          string(a.Status),
+		CreatedAt:       a.CreatedAt,
+		ResolvedAt:      a.ResolvedAt,
+		ResolvedBy:      resolvedBy,
+	}
+	return r.db.WithContext(ctx).Save(&rec).Error
+}
+
+func approvalRequestFromRecord(rec *approvalRequestRecord) *agentdom.ApprovalRequest {
+	var details map[string]any
+	_ = json.Unmarshal(rec.ActionDetails, &details)
+	var resolvedBy *uuid.UUID
+	if rec.ResolvedBy != nil {
+		u := mustParseUUID(*rec.ResolvedBy)
+		resolvedBy = &u
+	}
+	return &agentdom.ApprovalRequest{
+		ID:              mustParseUUID(rec.ID),
+		ProjectID:       mustParseUUID(rec.ProjectID),
+		AgentID:         mustParseUUID(rec.AgentID),
+		ConversationID:  mustParseUUID(rec.ConversationID),
+		RequestedAction: rec.RequestedAction,
+		ActionDetails:   details,
+		Status:          agentdom.ApprovalStatus(rec.Status),
+		CreatedAt:       rec.CreatedAt,
+		ResolvedAt:      rec.ResolvedAt,
+		ResolvedBy:      resolvedBy,
 	}
 }

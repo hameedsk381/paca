@@ -752,3 +752,52 @@ func (s *Service) publishChatTrigger(ctx context.Context, agentID, convID, sessi
 	}
 	return s.publishTrigger(ctx, events.TopicAgentChatMessage, payload)
 }
+
+// -------------------------------------------------------------------------
+// Agent Memory
+// -------------------------------------------------------------------------
+
+func (s *Service) CreateMemory(ctx context.Context, m *agentdom.AgentMemory) error {
+	return s.repo.CreateMemory(ctx, m)
+}
+
+func (s *Service) SearchMemories(ctx context.Context, agentID uuid.UUID, embedding []float32, limit int) ([]*agentdom.AgentMemory, error) {
+	return s.repo.SearchMemories(ctx, agentID, embedding, limit)
+}
+
+// -------------------------------------------------------------------------
+// Human-in-the-Loop Approvals
+// -------------------------------------------------------------------------
+
+func (s *Service) CreateApprovalRequest(ctx context.Context, a *agentdom.ApprovalRequest) error {
+	return s.repo.CreateApprovalRequest(ctx, a)
+}
+
+func (s *Service) FindApprovalRequestByID(ctx context.Context, id uuid.UUID) (*agentdom.ApprovalRequest, error) {
+	return s.repo.FindApprovalRequestByID(ctx, id)
+}
+
+func (s *Service) ListApprovalRequests(ctx context.Context, projectID uuid.UUID, status *agentdom.ApprovalStatus) ([]*agentdom.ApprovalRequest, error) {
+	return s.repo.ListApprovalRequests(ctx, projectID, status)
+}
+
+func (s *Service) ResolveApprovalRequest(ctx context.Context, a *agentdom.ApprovalRequest) error {
+	if err := s.repo.UpdateApprovalRequest(ctx, a); err != nil {
+		return err
+	}
+	// Publish an event to the Redis Stream so the python worker can wake up
+	if s.publisher != nil {
+		payload := map[string]any{
+			"type":             "agent.approval.resolved",
+			"conversation_id":  a.ConversationID.String(),
+			"project_id":       a.ProjectID.String(),
+			"agent_id":         a.AgentID.String(),
+			"request_id":       a.ID.String(),
+			"requested_action": a.RequestedAction,
+			"status":           string(a.Status),
+			"resolved_by":      a.ResolvedBy.String(),
+		}
+		_ = s.publisher.AppendFlat(ctx, events.StreamAgentTriggers, payload)
+	}
+	return nil
+}

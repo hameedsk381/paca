@@ -132,3 +132,36 @@ type AgentChatSession struct {
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
 }
+
+// AgentMemory represents a long-term semantic memory for an agent.
+type AgentMemory struct {
+	ID        uuid.UUID
+	ProjectID uuid.UUID
+	AgentID   uuid.UUID
+	Content   string
+	Embedding []float32 // represents vector(1536)
+	CreatedAt time.Time
+}
+
+// ApprovalStatus represents the state of a human-in-the-loop approval request.
+type ApprovalStatus string
+
+const (
+	ApprovalStatusPending  ApprovalStatus = "pending"
+	ApprovalStatusApproved ApprovalStatus = "approved"
+	ApprovalStatusRejected ApprovalStatus = "rejected"
+)
+
+// ApprovalRequest represents a pending destructive action that requires human confirmation.
+type ApprovalRequest struct {
+	ID             uuid.UUID
+	ProjectID      uuid.UUID
+	AgentID        uuid.UUID
+	ConversationID uuid.UUID
+	RequestedAction string
+	ActionDetails  map[string]any
+	Status         ApprovalStatus
+	CreatedAt      time.Time
+	ResolvedAt     *time.Time
+	ResolvedBy     *uuid.UUID
+}

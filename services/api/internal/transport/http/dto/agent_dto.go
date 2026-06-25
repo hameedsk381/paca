@@ -414,3 +414,31 @@ func SkillTemplateFromEntity(t *agentdom.SkillTemplate) SkillTemplateResponse {
 		Triggers:    triggers,
 	}
 }
+
+// =========================================================================
+// Agent Memory DTOs
+// =========================================================================
+
+type AgentMemoryRequest struct {
+	Content   string    `json:"content" binding:"required"`
+	Embedding []float32 `json:"embedding" binding:"required"`
+}
+
+type AgentMemorySearchRequest struct {
+	Embedding []float32 `json:"embedding" binding:"required"`
+	Limit     int       `json:"limit"`
+}
+
+// =========================================================================
+// Approval Request DTOs
+// =========================================================================
+
+type ApprovalRequestCreate struct {
+	ConversationID  string         `json:"conversation_id" binding:"required,uuid"`
+	RequestedAction string         `json:"requested_action" binding:"required"`
+	ActionDetails   map[string]any `json:"action_details"`
+}
+
+type ApprovalRequestResolve struct {
+	Status string `json:"status" binding:"required"`
+}

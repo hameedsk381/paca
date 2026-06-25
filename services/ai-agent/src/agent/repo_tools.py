@@ -270,11 +270,15 @@ class PushBranchExecutor(ToolExecutor[PushBranchAction, PushBranchObservation]):
         terminal: TerminalExecutor,
         api_base_url: str,
         api_key: str,
+        conversation_id: str = "",
+        agent_id: str = "",
     ) -> None:
         self.project_id = project_id
         self.terminal = terminal
         self.api_base_url = api_base_url
         self.api_key = api_key
+        self.conversation_id = conversation_id
+        self.agent_id = agent_id
 
     def __call__(self, action: PushBranchAction, conversation=None) -> PushBranchObservation:
         try:
@@ -308,6 +312,46 @@ class PushBranchExecutor(ToolExecutor[PushBranchAction, PushBranchObservation]):
                     success=False,
                     message="Could not determine current branch. Specify branch_name explicitly.",
                 )
+
+            # Create an approval request via the API
+            if self.conversation_id and self.agent_id:
+                # The backend router binds this at /projects/:projectId/agents/:agentId/approvals
+                approval_url = f"{self.api_base_url}/api/v1/projects/{self.project_id}/agents/{self.agent_id}/approvals"
+                approval_payload = {
+                    "conversation_id": self.conversation_id,
+                    "requested_action": f"git push origin {branch}",
+                    "action_details": {
+                        "plugin_id": action.plugin_id,
+                        "repo_id": action.repo_id,
+                        "branch_name": branch
+                    }
+                }
+                resp = httpx.post(
+                    approval_url,
+                    headers={"X-API-Key": self.api_key, "Content-Type": "application/json"},
+                    json=approval_payload,
+                    timeout=10,
+                )
+                resp.raise_for_status()
+
+                # Block and wait for approval
+                # Defer the import to avoid sandbox side-effects
+                from ..core.registry import approval_events, approval_results
+                import threading
+                event = threading.Event()
+                approval_events[self.conversation_id] = event
+                
+                # Wait for the worker to receive the agent.approval.resolved stream event
+                event.wait()
+                
+                # Retrieve the result
+                status = approval_results.pop(self.conversation_id, "rejected")
+                approval_events.pop(self.conversation_id, None)
+                
+                if status != "approved":
+                    return PushBranchObservation(
+                        success=False, branch=branch, message=f"Push branch was {status} by human."
+                    )
 
             # Build an authenticated push URL (token is not exposed in logs).
             parsed = urlparse(clone_url_str)
@@ -536,7 +580,14 @@ class PushBranchTool(ToolDefinition[PushBranchAction, PushBranchObservation]):
                 description=_PUSH_BRANCH_DESC,
                 action_type=PushBranchAction,
                 observation_type=PushBranchObservation,
-                executor=PushBranchExecutor(project_id, terminal, api_base_url, api_key),
+                executor=PushBranchExecutor(
+                    project_id, 
+                    terminal, 
+                    api_base_url, 
+                    api_key,
+                    conversation_id=conv_state.conversation_id if conv_state and hasattr(conv_state, "conversation_id") else "",
+                    agent_id="" # Note: we pass conversation_id and agent_id through params in make_repository_tool_specs
+                ),
             )
         ]
 
@@ -576,6 +627,8 @@ def make_repository_tool_specs(
     *,
     api_base_url: str,
     api_key: str,
+    conversation_id: str = "",
+    agent_id: str = "",
 ) -> list[Tool]:
     """Return Tool specs (name references) for Agent instantiation.
 
@@ -594,7 +647,15 @@ def make_repository_tool_specs(
             },
         ),
         Tool(name="clone_repository", params={"project_id": project_id, **common}),
-        Tool(name="push_branch", params={"project_id": project_id, **common}),
+        Tool(
+            name="push_branch", 
+            params={
+                "project_id": project_id, 
+                "conversation_id": conversation_id,
+                "agent_id": agent_id,
+                **common
+            }
+        ),
         Tool(
             name="create_pull_request",
             params={"project_id": project_id, "task_id": task_id, **common},

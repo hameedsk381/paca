@@ -195,7 +195,9 @@ def docker_sandbox(
 
     try:
         # ── Volumes ───────────────────────────────────────────────────────────
-        volumes: dict = {}
+        volumes: dict = {
+            f"paca_workspace_{conversation_id}": {"bind": "/workspace", "mode": "rw"}
+        }
 
         # Share the ai-agent source tree so the remote server can import
         # src.agent.repo_tools to register the custom repository tools.
@@ -269,8 +271,6 @@ def docker_sandbox(
             "image": settings.agent_server_image,
             "detach": True,
             "platform": _detect_platform(),
-            # Automatically deleted when stopped — no manual cleanup needed.
-            "remove": True,
             "labels": {
                 "paca.conversation_id": conversation_id,
                 "paca.managed": "true",

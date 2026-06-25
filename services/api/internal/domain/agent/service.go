@@ -13,6 +13,8 @@ type Service interface {
 	SkillService
 	ConversationService
 	ChatSessionService
+	MemoryService
+	ApprovalService
 }
 
 // AgentService defines agent CRUD use cases.
@@ -137,4 +139,18 @@ type UpdateSkillInput struct {
 	SkillContent *string
 	Triggers     []string
 	IsEnabled    *bool
+}
+
+// MemoryService defines use cases for agent semantic memory.
+type MemoryService interface {
+	CreateMemory(ctx context.Context, m *AgentMemory) error
+	SearchMemories(ctx context.Context, agentID uuid.UUID, embedding []float32, limit int) ([]*AgentMemory, error)
+}
+
+// ApprovalService defines use cases for human-in-the-loop approvals.
+type ApprovalService interface {
+	CreateApprovalRequest(ctx context.Context, a *ApprovalRequest) error
+	FindApprovalRequestByID(ctx context.Context, id uuid.UUID) (*ApprovalRequest, error)
+	ListApprovalRequests(ctx context.Context, projectID uuid.UUID, status *ApprovalStatus) ([]*ApprovalRequest, error)
+	ResolveApprovalRequest(ctx context.Context, a *ApprovalRequest) error
 }

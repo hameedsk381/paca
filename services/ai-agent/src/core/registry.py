@@ -11,3 +11,8 @@ active_conversations: dict[str, object] = {}
 
 # threading.Event per conversation_id; set() to signal the polling loop to stop.
 stop_events: dict[str, threading.Event] = {}
+
+# threading.Event per conversation_id; set() to signal human approval.
+approval_events: dict[str, threading.Event] = {}
+# Result of approval (approved/rejected) per conversation_id.
+approval_results: dict[str, str] = {}

@@ -745,6 +745,30 @@ func New(deps Deps) *gin.Engine {
 					httpmw.RequirePermissions(deps.Authorizer, httpmw.ProjectScopeFromParam("projectId"), authz.PermissionAgentsRead),
 					deps.Agent.SendChatMessage,
 				)
+
+				// Memories (Vector DB)
+				agents.POST("/:agentId/memories",
+					httpmw.RequirePermissions(deps.Authorizer, httpmw.ProjectScopeFromParam("projectId"), authz.PermissionAgentsWrite),
+					deps.Agent.StoreMemory,
+				)
+				agents.POST("/:agentId/memories/search",
+					httpmw.RequirePermissions(deps.Authorizer, httpmw.ProjectScopeFromParam("projectId"), authz.PermissionAgentsRead),
+					deps.Agent.SearchMemories,
+				)
+
+				// Approvals (Human in the loop)
+				agents.GET("/:agentId/approvals",
+					httpmw.RequirePermissions(deps.Authorizer, httpmw.ProjectScopeFromParam("projectId"), authz.PermissionAgentsRead),
+					deps.Agent.ListApprovalRequests,
+				)
+				agents.POST("/:agentId/approvals",
+					httpmw.RequirePermissions(deps.Authorizer, httpmw.ProjectScopeFromParam("projectId"), authz.PermissionAgentsWrite),
+					deps.Agent.CreateApprovalRequest,
+				)
+				agents.POST("/:agentId/approvals/:requestId/resolve",
+					httpmw.RequirePermissions(deps.Authorizer, httpmw.ProjectScopeFromParam("projectId"), authz.PermissionAgentsWrite),
+					deps.Agent.ResolveApprovalRequest,
+				)
 			}
 		}
 
