@@ -86,12 +86,15 @@ _TRIGGER_TYPES = {
     "agent.task_assigned",
     "agent.comment_mention",
     "agent.chat_message",
-    "agent.approval.resolved",
 }
 
 # Control message types that direct an *existing* conversation.
+# agent.approval.resolved is a control directive (it carries no run request and
+# has none of the trigger fields like agent_id/actor_member_id), so it must be
+# routed to the worker's control handler rather than parsed as a TriggerMessage.
 _CONTROL_TYPES = {
     "agent.stop",
+    "agent.approval.resolved",
 }
 
 
@@ -130,12 +133,19 @@ class TriggerMessage:
 
 @dataclass
 class ControlMessage:
-    """A stop directive for an already-running conversation."""
+    """A control directive for an already-running conversation.
+
+    Covers ``agent.stop`` and ``agent.approval.resolved``.  The api service
+    publishes these as flat stream fields, so ``status`` is read from the
+    top-level entry (not a nested payload) and is only present for approval
+    resolutions.
+    """
 
     stream_id: str
-    control_type: str  # e.g. "agent.stop"
+    control_type: str  # e.g. "agent.stop", "agent.approval.resolved"
     conversation_id: str
     project_id: str
+    status: str | None = None  # set for "agent.approval.resolved"
 
     @classmethod
     def from_stream_entry(cls, stream_id: str, fields: dict[str, str]) -> ControlMessage:
@@ -144,6 +154,7 @@ class ControlMessage:
             control_type=fields["type"],
             conversation_id=fields["conversation_id"],
             project_id=fields["project_id"],
+            status=fields.get("status") or None,
         )
 
 

@@ -475,6 +475,9 @@ async def run_conversation(trigger: TriggerMessage, agent_config: AgentConfig) -
                     agent_id=trigger.agent_id,
                     api_base_url=settings.api_base_url,
                     api_key=settings.paca_api_key,
+                    embedding_model=settings.embedding_model,
+                    embedding_api_key=settings.embedding_api_key,
+                    embedding_base_url=settings.embedding_base_url,
                 )
 
                 agent = Agent(**agent_kwargs)

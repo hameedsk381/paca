@@ -222,6 +222,13 @@ services:
       PORT_POOL_SIZE: "100"
       WORKER_CONCURRENCY: "5"
       LOG_LEVEL: INFO
+      # Embeddings for agent semantic memory (store_memory / search_memory).
+      # Must yield 1536-dim vectors to match the agent_memories pgvector column.
+      # Set EMBEDDING_API_KEY to a real key for hosted providers (e.g. OpenAI);
+      # when empty, litellm falls back to provider keys from the environment.
+      EMBEDDING_MODEL: text-embedding-3-small
+      EMBEDDING_API_KEY: ""
+      EMBEDDING_BASE_URL: ""
       # Use the local MCP source build instead of the published npm package.
       # apps/mcp is mounted at /mcp so the built entry point is always available.
       DEV_MCP_PATH: /mcp/build/index.js

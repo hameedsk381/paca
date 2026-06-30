@@ -37,17 +37,22 @@ async def _handle_control(msg: ControlMessage) -> None:
                 "Received stop for conversation %s but no active run found on this replica", cid
             )
     elif msg.control_type == "agent.approval.resolved":
+        # Best-effort fast-path: if a tool on THIS process is blocked on an
+        # in-memory approval event, wake it immediately.  The authoritative
+        # resume path is the tool polling the api for the request status, which
+        # works across the worker/sandbox process boundary; this is only an
+        # optimisation for same-process waiters and a no-op otherwise.
         from .core.registry import approval_events, approval_results
-        status = msg.payload.get("status")
-        if status:
-            approval_results[cid] = status
+        if msg.status:
+            approval_results[cid] = msg.status
         app_event = approval_events.get(cid)
         if app_event is not None:
             logger.info("Resuming conversation %s after approval resolved", cid)
             app_event.set()
         else:
-            logger.warning(
-                "Received approval resolution for conversation %s but no active run waiting on this replica", cid
+            logger.info(
+                "Approval resolved for conversation %s; no in-process waiter "
+                "(tool will observe the resolution via api polling)", cid
             )
     else:
         logger.warning("Unknown control type %r for conversation %s", msg.control_type, cid)

@@ -50,5 +50,15 @@ class Settings(BaseSettings):
     # Worker
     worker_concurrency: int = 10
 
+    # Embeddings — used by the agent's semantic memory tools (store_memory /
+    # search_memory).  A single, consistent model must be used for the whole
+    # agent_memories table (the pgvector column is fixed at 1536 dims), so this
+    # is configured once here rather than per-agent.  Defaults to OpenAI's
+    # text-embedding-3-small, which yields 1536-dim vectors.  When the api key
+    # is empty, litellm falls back to provider keys from the environment.
+    embedding_model: str = "text-embedding-3-small"
+    embedding_api_key: str = ""
+    embedding_base_url: str = ""
+
 
 settings = Settings()

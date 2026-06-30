@@ -429,6 +429,28 @@ type AgentMemorySearchRequest struct {
 	Limit     int       `json:"limit"`
 }
 
+// AgentMemoryResponse is the public view of a stored agent memory. The raw
+// embedding vector is intentionally omitted — it is large and of no use to the
+// agent consuming search results.
+type AgentMemoryResponse struct {
+	ID        uuid.UUID `json:"id"`
+	ProjectID uuid.UUID `json:"project_id"`
+	AgentID   uuid.UUID `json:"agent_id"`
+	Content   string    `json:"content"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+// AgentMemoryFromEntity maps a domain AgentMemory to its response DTO.
+func AgentMemoryFromEntity(m *agentdom.AgentMemory) AgentMemoryResponse {
+	return AgentMemoryResponse{
+		ID:        m.ID,
+		ProjectID: m.ProjectID,
+		AgentID:   m.AgentID,
+		Content:   m.Content,
+		CreatedAt: m.CreatedAt,
+	}
+}
+
 // =========================================================================
 // Approval Request DTOs
 // =========================================================================
@@ -441,4 +463,36 @@ type ApprovalRequestCreate struct {
 
 type ApprovalRequestResolve struct {
 	Status string `json:"status" binding:"required"`
+}
+
+// ApprovalRequestResponse is the public view of a human-in-the-loop approval
+// request. It carries explicit json tags so consumers (including the ai-agent
+// tool that polls for resolution) get a stable snake_case contract.
+type ApprovalRequestResponse struct {
+	ID              uuid.UUID      `json:"id"`
+	ProjectID       uuid.UUID      `json:"project_id"`
+	AgentID         uuid.UUID      `json:"agent_id"`
+	ConversationID  uuid.UUID      `json:"conversation_id"`
+	RequestedAction string         `json:"requested_action"`
+	ActionDetails   map[string]any `json:"action_details,omitempty"`
+	Status          string         `json:"status"`
+	CreatedAt       time.Time      `json:"created_at"`
+	ResolvedAt      *time.Time     `json:"resolved_at,omitempty"`
+	ResolvedBy      *uuid.UUID     `json:"resolved_by,omitempty"`
+}
+
+// ApprovalRequestFromEntity maps a domain ApprovalRequest to its response DTO.
+func ApprovalRequestFromEntity(a *agentdom.ApprovalRequest) ApprovalRequestResponse {
+	return ApprovalRequestResponse{
+		ID:              a.ID,
+		ProjectID:       a.ProjectID,
+		AgentID:         a.AgentID,
+		ConversationID:  a.ConversationID,
+		RequestedAction: a.RequestedAction,
+		ActionDetails:   a.ActionDetails,
+		Status:          string(a.Status),
+		CreatedAt:       a.CreatedAt,
+		ResolvedAt:      a.ResolvedAt,
+		ResolvedBy:      a.ResolvedBy,
+	}
 }

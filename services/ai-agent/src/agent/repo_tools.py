@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import shlex
+import time
 from collections.abc import Sequence
 from urllib.parse import quote as urlquote
 from urllib.parse import urlparse
@@ -272,6 +273,7 @@ class PushBranchExecutor(ToolExecutor[PushBranchAction, PushBranchObservation]):
         api_key: str,
         conversation_id: str = "",
         agent_id: str = "",
+        approval_timeout: float = 3600.0,
     ) -> None:
         self.project_id = project_id
         self.terminal = terminal
@@ -279,6 +281,44 @@ class PushBranchExecutor(ToolExecutor[PushBranchAction, PushBranchObservation]):
         self.api_key = api_key
         self.conversation_id = conversation_id
         self.agent_id = agent_id
+        self.approval_timeout = approval_timeout
+
+    def _await_approval(self, request_id: str, poll_interval: float = 3.0) -> str:
+        """Poll the Paca API until the approval request is resolved.
+
+        This executor runs inside the sandbox container — a different process
+        from the worker — so it cannot observe the worker's in-memory approval
+        event.  The api (backed by the database) is the only state both
+        processes share, so we poll it.
+
+        Returns the final status ("approved" / "rejected").  On timeout we
+        fail closed and return "rejected", since the gated action (a push) is
+        destructive and must not proceed without explicit approval.
+        """
+        list_url = (
+            f"{self.api_base_url}/api/v1/projects/{self.project_id}"
+            f"/agents/{self.agent_id}/approvals"
+        )
+        deadline = time.monotonic() + self.approval_timeout
+        while time.monotonic() < deadline:
+            try:
+                resp = httpx.get(
+                    list_url, headers={"X-API-Key": self.api_key}, timeout=10
+                )
+                resp.raise_for_status()
+                items = resp.json().get("data") or []
+                for item in items:
+                    if item.get("id") == request_id:
+                        status = item.get("status")
+                        if status and status != "pending":
+                            return status
+                        break
+            except Exception:
+                # Transient errors (network blips, restarts) should not abort the
+                # wait; keep polling until the deadline.
+                pass
+            time.sleep(poll_interval)
+        return "rejected"
 
     def __call__(self, action: PushBranchAction, conversation=None) -> PushBranchObservation:
         try:
@@ -313,7 +353,8 @@ class PushBranchExecutor(ToolExecutor[PushBranchAction, PushBranchObservation]):
                     message="Could not determine current branch. Specify branch_name explicitly.",
                 )
 
-            # Create an approval request via the API
+            # Human-in-the-loop gate: create an approval request and wait for a
+            # human to approve before pushing.
             if self.conversation_id and self.agent_id:
                 # The backend router binds this at /projects/:projectId/agents/:agentId/approvals
                 approval_url = f"{self.api_base_url}/api/v1/projects/{self.project_id}/agents/{self.agent_id}/approvals"
@@ -333,21 +374,17 @@ class PushBranchExecutor(ToolExecutor[PushBranchAction, PushBranchObservation]):
                     timeout=10,
                 )
                 resp.raise_for_status()
+                request_id = (resp.json().get("data") or {}).get("id")
+                if not request_id:
+                    return PushBranchObservation(
+                        success=False,
+                        branch=branch,
+                        message="Failed to create approval request for the push.",
+                    )
 
-                # Block and wait for approval
-                # Defer the import to avoid sandbox side-effects
-                from ..core.registry import approval_events, approval_results
-                import threading
-                event = threading.Event()
-                approval_events[self.conversation_id] = event
-                
-                # Wait for the worker to receive the agent.approval.resolved stream event
-                event.wait()
-                
-                # Retrieve the result
-                status = approval_results.pop(self.conversation_id, "rejected")
-                approval_events.pop(self.conversation_id, None)
-                
+                # Poll the api until a human resolves the request (works across
+                # the sandbox/worker process boundary; fails closed on timeout).
+                status = self._await_approval(request_id)
                 if status != "approved":
                     return PushBranchObservation(
                         success=False, branch=branch, message=f"Push branch was {status} by human."
@@ -572,21 +609,28 @@ class PushBranchTool(ToolDefinition[PushBranchAction, PushBranchObservation]):
         project_id: str,
         api_base_url: str,
         api_key: str,
+        conversation_id: str = "",
+        agent_id: str = "",
     ) -> Sequence[ToolDefinition]:
         working_dir = conv_state.workspace.working_dir if conv_state else "/tmp"
         terminal = TerminalExecutor(working_dir=working_dir)
+        # conversation_id and agent_id arrive via make_repository_tool_specs
+        # params (they identify the run for the human-approval gate). Fall back
+        # to conv_state for conversation_id if a param was not supplied.
+        if not conversation_id and conv_state is not None:
+            conversation_id = getattr(conv_state, "conversation_id", "") or ""
         return [
             cls(
                 description=_PUSH_BRANCH_DESC,
                 action_type=PushBranchAction,
                 observation_type=PushBranchObservation,
                 executor=PushBranchExecutor(
-                    project_id, 
-                    terminal, 
-                    api_base_url, 
+                    project_id,
+                    terminal,
+                    api_base_url,
                     api_key,
-                    conversation_id=conv_state.conversation_id if conv_state and hasattr(conv_state, "conversation_id") else "",
-                    agent_id="" # Note: we pass conversation_id and agent_id through params in make_repository_tool_specs
+                    conversation_id=conversation_id,
+                    agent_id=agent_id,
                 ),
             )
         ]

@@ -222,6 +222,13 @@ services:
       # Must match ENCRYPTION_KEY in the api service so that LLM API keys
       # stored encrypted in the database can be decrypted before use.
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:-}
+      # Embeddings for agent semantic memory (store_memory / search_memory).
+      # Must yield 1536-dim vectors to match the agent_memories pgvector column.
+      # EMBEDDING_API_KEY is required for hosted providers (e.g. OpenAI); when
+      # empty, litellm falls back to provider keys from the environment.
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
+      EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-}
+      EMBEDDING_BASE_URL: ${EMBEDDING_BASE_URL:-}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ../services/ai-agent/data:/app/data:ro
